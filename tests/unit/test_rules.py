@@ -104,14 +104,17 @@ def test_week_names_known_day_type() -> None:
 def test_slot_ids_unique() -> None:
     plan = set_at(load_plan(), ("slots", 3, "id"), "lunch")
 
-    with pytest.raises(ValidationError, match="lunch"):
+    with pytest.raises(ValidationError, match="slots: ids must be unique, repeated: lunch"):
         PlanRules.model_validate(plan)
 
 
 def test_day_type_ids_unique() -> None:
-    plan = set_at(load_plan(), ("day_types", 1, "id"), "training")
+    plan = load_plan()
+    plan["day_types"][1]["id"] = "training"
+    # Point the whole week at the surviving id, so the repeated id is the only problem.
+    plan["week"] = dict.fromkeys(plan["week"], "training")
 
-    with pytest.raises(ValidationError, match="training"):
+    with pytest.raises(ValidationError, match="day_types: ids must be unique, repeated: training"):
         PlanRules.model_validate(plan)
 
 
@@ -169,20 +172,38 @@ def test_unknown_field_rejected(path: tuple[str | int, ...]) -> None:
     ],
 )
 def test_bad_value_names_the_field(path: tuple[str | int, ...], value: Any, field: str) -> None:
-    with pytest.raises(ValidationError, match=field):
+    with pytest.raises(ValidationError) as err:
         PlanRules.model_validate(set_at(load_plan(), path, value))
 
+    # Judged by where the error points, not by its text: a rule that runs later can mention
+    # the same word and make a missing bound look guarded.
+    assert any(field in e["loc"] for e in err.value.errors())
 
-def test_too_many_slots_and_day_types_rejected() -> None:
+
+def test_at_most_eight_slots() -> None:
     plan = load_plan()
-    plan["slots"] = [{**plan["slots"][0], "id": f"s{i}", "kcal_share": 1 / 9} for i in range(9)]
-    with pytest.raises(ValidationError, match="slots"):
+    # Shares that add up, so the number of slots is the only problem.
+    plan["slots"] = [
+        {**plan["slots"][0], "id": f"s{i}", "kcal_share": 1 / 9, "protein_share": 1 / 9}
+        for i in range(9)
+    ]
+
+    with pytest.raises(ValidationError, match="at most 8 items") as err:
         PlanRules.model_validate(plan)
 
+    assert [(e["type"], e["loc"]) for e in err.value.errors()] == [("too_long", ("slots",))]
+
+
+def test_at_most_four_day_types() -> None:
     plan = load_plan()
     plan["day_types"] = [{**plan["day_types"][0], "id": f"d{i}"} for i in range(5)]
-    with pytest.raises(ValidationError, match="day_types"):
+    # Every day uses a defined day type, so the number of day types is the only problem.
+    plan["week"] = dict.fromkeys(plan["week"], "d0")
+
+    with pytest.raises(ValidationError, match="at most 4 items") as err:
         PlanRules.model_validate(plan)
+
+    assert [(e["type"], e["loc"]) for e in err.value.errors()] == [("too_long", ("day_types",))]
 
 
 def test_expand_gives_seven_times_slots() -> None:
