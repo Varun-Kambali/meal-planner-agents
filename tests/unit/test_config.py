@@ -1,0 +1,80 @@
+import os
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+
+from meal_planner.config import Settings, get_settings
+
+
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
+        monkeypatch.delenv(name)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+def test_defaults() -> None:
+    s = Settings()
+
+    assert s.model == "gemini/gemini-3.1-flash-lite"
+    assert s.recipe_kcal_tolerance == 0.10
+    assert s.recipe_protein_min_share == 0.90
+    assert s.day_kcal_tolerance == 0.05
+    assert s.max_repair_attempts == 3
+    assert s.variety_jaccard_max == 0.6
+    assert s.no_waste_keeps_days == 7
+    assert s.no_waste_min_pack_share == 0.5
+    assert s.max_meal_text_chars == 500
+    assert s.max_body_bytes == 65536
+    assert s.nutrition_data_dirs == ""
+
+
+def test_catalogue_path_defaults_to_the_repo_data_folder() -> None:
+    path = Settings().catalogue_path
+
+    assert path.is_absolute()
+    assert path.parts[-2:] == ("data", "catalogue.yaml")
+    assert (path.parent.parent / "pyproject.toml").is_file()
+
+
+def test_environment_overrides_use_the_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MEAL_PLANNER_MODEL", "gemini/other")
+    monkeypatch.setenv("MEAL_PLANNER_MAX_REPAIR_ATTEMPTS", "1")
+    monkeypatch.setenv("MEAL_PLANNER_CATALOGUE_PATH", "/srv/catalogue.yaml")
+    monkeypatch.setenv("MODEL", "ignored")
+
+    s = Settings()
+
+    assert s.model == "gemini/other"
+    assert s.max_repair_attempts == 1
+    assert s.catalogue_path == Path("/srv/catalogue.yaml")
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("MEAL_PLANNER_DAY_KCAL_TOLERANCE", "five percent"),
+        ("MEAL_PLANNER_DAY_KCAL_TOLERANCE", "0"),
+        ("MEAL_PLANNER_MAX_REPAIR_ATTEMPTS", "-1"),
+        ("MEAL_PLANNER_MAX_BODY_BYTES", "0"),
+    ],
+)
+def test_bad_environment_value_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError, match=name.removeprefix("MEAL_PLANNER_").lower()):
+        Settings()
+
+
+def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = get_settings()
+    monkeypatch.setenv("MEAL_PLANNER_MODEL", "changed-later")
+
+    assert get_settings() is first
+    assert get_settings().model == "gemini/gemini-3.1-flash-lite"
