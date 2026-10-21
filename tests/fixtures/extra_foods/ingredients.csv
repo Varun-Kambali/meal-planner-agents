@@ -1,0 +1,2 @@
+id,name,aliases,diet,source_id,source_record,kcal,protein_g,fat_g,sat_fat_g,carbs_available_g,sugars_g,fibre_g,sodium_mg,iron_mg,calcium_mg,zinc_mg,folate_ug,vit_a_ug,vit_b12_ug,vit_c_mg,vit_d_ug,gi,gi_ref,density_g_per_ml
+test_quinoa,Test quinoa,,vegan,extra_test_source,Q1,120,4.4,1.9,0.2,21.3,0.9,2.8,7,1.5,17,1.1,42,1,,0,,,,

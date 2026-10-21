@@ -1,0 +1,7 @@
+- id: extra_test_source
+  name: Meal planner test values
+  url: https://example.org/meal-planner-test-values
+  license: CC0-1.0
+  version: "1"
+  retrieved: 2026-10-21
+  attribution: Synthetic values written for the nutrition client tests. They are not real food data.

@@ -12,6 +12,8 @@ license-files = ["LICENSE"]
 authors = [{ name = "Varun Kambali" }]
 requires-python = ">=3.12"
 dependencies = [
+    "mcp>=2.3,<3",
+    "nutrition-mcp",
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
     "pyyaml>=6",
@@ -53,8 +55,17 @@ strict = true
 files = ["src"]
 plugins = ["pydantic.mypy"]
 
+# nutrition-mcp ships no py.typed marker, so mypy reads its source instead of treating it as Any.
+[[tool.mypy.overrides]]
+module = "nutrition_mcp.*"
+follow_untyped_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# The eval and build scripts are not part of the package; tests import them from here.
-pythonpath = ["evals", "scripts"]
+# The eval and build scripts are not part of the package; tests import them from here. Many tests
+# import tests/fakes.py, and importlib mode does not put tests/ on the path by itself.
+pythonpath = ["evals", "scripts", "tests"]
 addopts = "-ra --import-mode=importlib"
+
+[tool.uv.sources]
+nutrition-mcp = { git = "https://github.com/Varun-Kambali/nutrition-mcp", rev = "v1.0.0" }
