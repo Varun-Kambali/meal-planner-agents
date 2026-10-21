@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "name": "Office weekday",
+  "day_types": [
+    {
+      "id": "training",
+      "name": "Training day",
+      "kcal": 2650,
+      "protein_g": 150,
+      "carbs_g": 340,
+      "fat_g": 80,
+      "sat_fat_g_max": 28,
+      "fibre_g_min": 35,
+      "extra": [
+        { "nutrient": "calcium_mg", "kind": "min", "value": 1000 },
+        { "nutrient": "sodium_mg", "kind": "max", "value": 2300 }
+      ]
+    },
+    {
+      "id": "rest",
+      "name": "Rest day",
+      "kcal": 2250,
+      "protein_g": 130,
+      "carbs_g": 270,
+      "fat_g": 75,
+      "sat_fat_g_max": 25,
+      "fibre_g_min": 30,
+      "extra": [{ "nutrient": "iron_mg", "kind": "min", "value": 15 }]
+    }
+  ],
+  "week": {
+    "mon": "training",
+    "tue": "rest",
+    "wed": "training",
+    "thu": "rest",
+    "fri": "training",
+    "sat": "rest",
+    "sun": "rest"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "overnight oats",
+      "cook_when": "night_before",
+      "max_active_min": 10,
+      "max_total_min": 600
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "packed lunch box",
+      "cook_when": "evening_before",
+      "max_active_min": 30,
+      "max_total_min": 60
+    },
+    {
+      "id": "snack",
+      "name": "Evening snack",
+      "eat_at": "17:00",
+      "kcal_share": 0.15,
+      "protein_share": 0.1,
+      "style": "no-cook snack",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 10
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.35,
+      "style": "air-fryer dish",
+      "cook_when": "fresh",
+      "max_active_min": 30,
+      "max_total_min": 45
+    }
+  ],
+  "gear": ["air_fryer", "pressure_cooker", "microwave", "stovetop_pan", "blender", "jar_with_lid"],
+  "food": {
+    "diet": "veg",
+    "exclude_allergens": ["peanut"],
+    "exclude_foods": ["brinjal"],
+    "liked_foods": ["paneer", "moong_dal"],
+    "cuisines": ["South Indian", "Japanese", "Mediterranean"]
+  },
+  "shopping_days": ["sat", "wed"]
+}

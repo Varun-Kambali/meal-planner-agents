@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "DayType": {
+      "additionalProperties": false,
+      "description": "One kind of day, such as a training day, with the daily targets it is held to.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,29}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "kcal": {
+          "exclusiveMinimum": 0,
+          "title": "Kcal",
+          "type": "number"
+        },
+        "protein_g": {
+          "exclusiveMinimum": 0,
+          "title": "Protein G",
+          "type": "number"
+        },
+        "carbs_g": {
+          "exclusiveMinimum": 0,
+          "title": "Carbs G",
+          "type": "number"
+        },
+        "fat_g": {
+          "exclusiveMinimum": 0,
+          "title": "Fat G",
+          "type": "number"
+        },
+        "sat_fat_g_max": {
+          "exclusiveMinimum": 0,
+          "title": "Sat Fat G Max",
+          "type": "number"
+        },
+        "fibre_g_min": {
+          "exclusiveMinimum": 0,
+          "title": "Fibre G Min",
+          "type": "number"
+        },
+        "extra": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NutrientTarget"
+          },
+          "title": "Extra",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kcal",
+        "protein_g",
+        "carbs_g",
+        "fat_g",
+        "sat_fat_g_max",
+        "fibre_g_min"
+      ],
+      "title": "DayType",
+      "type": "object"
+    },
+    "FoodRules": {
+      "additionalProperties": false,
+      "description": "Diet, allergens and foods to avoid or favour, and the cuisines to draw on.",
+      "properties": {
+        "diet": {
+          "enum": [
+            "veg",
+            "egg",
+            "non_veg",
+            "vegan"
+          ],
+          "title": "Diet",
+          "type": "string"
+        },
+        "exclude_allergens": {
+          "items": {
+            "enum": [
+              "gluten",
+              "milk",
+              "egg",
+              "peanut",
+              "tree_nuts",
+              "soy",
+              "fish",
+              "crustaceans",
+              "sesame",
+              "mustard"
+            ],
+            "type": "string"
+          },
+          "title": "Exclude Allergens",
+          "type": "array"
+        },
+        "exclude_foods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude Foods",
+          "type": "array"
+        },
+        "liked_foods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Liked Foods",
+          "type": "array"
+        },
+        "cuisines": {
+          "items": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Cuisines",
+          "type": "array"
+        }
+      },
+      "required": [
+        "diet",
+        "exclude_allergens",
+        "exclude_foods",
+        "liked_foods",
+        "cuisines"
+      ],
+      "title": "FoodRules",
+      "type": "object"
+    },
+    "NutrientTarget": {
+      "additionalProperties": false,
+      "description": "A daily target for one nutrient: at least `value` (min) or at most `value` (max).",
+      "properties": {
+        "nutrient": {
+          "enum": [
+            "kcal",
+            "protein_g",
+            "fat_g",
+            "sat_fat_g",
+            "carbs_available_g",
+            "sugars_g",
+            "fibre_g",
+            "sodium_mg",
+            "iron_mg",
+            "calcium_mg",
+            "zinc_mg",
+            "folate_ug",
+            "vit_a_ug",
+            "vit_b12_ug",
+            "vit_c_mg",
+            "vit_d_ug"
+          ],
+          "title": "Nutrient",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "min",
+            "max"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "nutrient",
+        "kind",
+        "value"
+      ],
+      "title": "NutrientTarget",
+      "type": "object"
+    },
+    "Slot": {
+      "additionalProperties": false,
+      "description": "One meal of the day, with its share of the day's calories and protein.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,29}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "eat_at": {
+          "format": "time",
+          "title": "Eat At",
+          "type": "string"
+        },
+        "kcal_share": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Kcal Share",
+          "type": "number"
+        },
+        "protein_share": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Protein Share",
+          "type": "number"
+        },
+        "style": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Style",
+          "type": "string"
+        },
+        "cook_when": {
+          "enum": [
+            "fresh",
+            "evening_before",
+            "night_before"
+          ],
+          "title": "Cook When",
+          "type": "string"
+        },
+        "max_active_min": {
+          "maximum": 240,
+          "minimum": 1,
+          "title": "Max Active Min",
+          "type": "integer"
+        },
+        "max_total_min": {
+          "maximum": 1440,
+          "minimum": 1,
+          "title": "Max Total Min",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "eat_at",
+        "kcal_share",
+        "protein_share",
+        "style",
+        "cook_when",
+        "max_active_min",
+        "max_total_min"
+      ],
+      "title": "Slot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Everything a user enters about the plan they follow.",
+  "properties": {
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "name": {
+      "maxLength": 60,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "day_types": {
+      "items": {
+        "$ref": "#/$defs/DayType"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Day Types",
+      "type": "array"
+    },
+    "week": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 7,
+      "propertyNames": {
+        "enum": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "title": "Week",
+      "type": "object"
+    },
+    "slots": {
+      "items": {
+        "$ref": "#/$defs/Slot"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Slots",
+      "type": "array"
+    },
+    "gear": {
+      "items": {
+        "enum": [
+          "air_fryer",
+          "pressure_cooker",
+          "microwave",
+          "oven",
+          "stovetop_pan",
+          "kadhai",
+          "blender",
+          "jar_with_lid",
+          "rice_cooker",
+          "steamer",
+          "kettle"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Gear",
+      "type": "array"
+    },
+    "food": {
+      "$ref": "#/$defs/FoodRules"
+    },
+    "shopping_days": {
+      "items": {
+        "enum": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "type": "string"
+      },
+      "maxItems": 7,
+      "minItems": 1,
+      "title": "Shopping Days",
+      "type": "array"
+    }
+  },
+  "required": [
+    "version",
+    "name",
+    "day_types",
+    "week",
+    "slots",
+    "gear",
+    "food",
+    "shopping_days"
+  ],
+  "title": "PlanRules",
+  "type": "object"
+}
