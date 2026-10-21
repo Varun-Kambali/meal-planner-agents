@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fakes import FakeNutrition
+from fakes import UNIT_SPELLINGS, FakeNutrition
 from mcp.types import CallToolResult, TextContent
 from nutrition_mcp.schemas import MealItemIn, MealResult, NutritionResult, SearchResult
 
@@ -194,6 +194,28 @@ async def test_fake_takes_the_units_a_test_gives_it() -> None:
 
     assert result.grams == 240
     assert result.food.units == {"g": 1.0, "katori": 120.0}
+
+
+async def test_fake_reads_unit_spellings_as_the_server_does() -> None:
+    fake = FakeNutrition(
+        {"chapati": {"kcal": 300.0}}, units={"chapati": {"roti": 40.0, "piece": 40.0}}
+    )
+
+    for spelling, canonical in UNIT_SPELLINGS.items():
+        spelled = await fake.nutrition("chapati", 2, spelling)
+        plain = await fake.nutrition("chapati", 2, canonical)
+        assert spelled.grams == plain.grams > 0, spelling
+        assert spelled.nutrients == plain.nutrients, spelling
+        # The result echoes the unit as it was typed, and the note names the unit it meant.
+        assert spelled.unit == spelling
+        assert spelled.measure_assumption == plain.measure_assumption
+
+    meal = await fake.meal([MealItemIn(food_id="chapati", amount=2, unit="Rotis")])
+    assert meal.items[0].grams == 80
+
+    with pytest.raises(NutritionError) as caught:
+        await fake.nutrition("chapati", 1, "Katoris")
+    assert caught.value.valid_units == ["g", "roti", "piece"]
 
 
 async def test_fake_raises_the_same_errors_as_the_client() -> None:

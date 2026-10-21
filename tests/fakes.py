@@ -13,8 +13,30 @@ from nutrition_mcp.schemas import (
     NutritionResult,
     SearchResult,
 )
+from nutrition_mcp.units import normalise_unit
 
 from meal_planner.nutrition import NutritionError
+
+# Spellings of a unit that nutrition-mcp accepts, each with the unit it means: it strips and
+# lowercases, reads gram, grams and gm as g, and tries a plural without its "s". The fake and a
+# live test both run through this table, so they stay in step.
+UNIT_SPELLINGS = {
+    "Rotis": "roti",
+    " ROTI ": "roti",
+    "pieces": "piece",
+    "grams": "g",
+    " G": "g",
+    "Gm": "g",
+}
+
+
+def _find_unit(units: Mapping[str, float], unit: str) -> str | None:
+    """The unit the server would read `unit` as, or None. Mirrors nutrition-mcp's _find_unit."""
+    word = normalise_unit(unit)
+    for candidate in (word, word.removesuffix("s"), word.removesuffix("es")):
+        if candidate in units:
+            return candidate
+    return None
 
 
 class FakeNutrition:
@@ -23,8 +45,9 @@ class FakeNutrition:
     `per_100g` maps a food id to its nutrients per 100 g, using nutrition-mcp's nutrient names
     (kcal, protein_g, carbs_available_g ...). A nutrient a food leaves out is reported as
     missing, the way the server reports one. Every food takes grams; `units` adds the others a
-    test needs, as grams in one of each. A food is a vegetarian ingredient with no glycemic
-    index unless `diets`, `kinds` or `gi` say otherwise.
+    test needs, as grams in one of each. Units are read as the server reads them (see
+    UNIT_SPELLINGS), so a repair path a test exercises is one production can reach. A food is a
+    vegetarian ingredient with no glycemic index unless `diets`, `kinds` or `gi` say otherwise.
     """
 
     def __init__(
@@ -83,12 +106,13 @@ class FakeNutrition:
         if food_id not in self._per_100g:
             raise NutritionError(f"unknown food id '{food_id}'", food_id)
         summary = self._summary(food_id)
-        if unit not in summary.units:
+        name = _find_unit(summary.units, unit)
+        if name is None:
             valid = list(summary.units)
             message = f"unknown unit '{unit}' for {food_id}; valid units: {', '.join(valid)}"
             raise NutritionError(message, food_id, valid)
 
-        grams = amount * summary.units[unit]
+        grams = amount * summary.units[name]
         exact = scale(Nutrients.model_validate(self._per_100g[food_id]), grams)
         shown = Nutrients.model_validate(
             {key: None if value is None else round(value, DECIMALS) for key, value in exact}
@@ -99,7 +123,7 @@ class FakeNutrition:
             amount=amount,
             unit=unit,
             grams=round(grams, DECIMALS),
-            measure_assumption="" if unit == "g" else f"1 {unit} = {summary.units[unit]:g} g",
+            measure_assumption="" if name == "g" else f"1 {name} = {summary.units[name]:g} g",
             nutrients=shown,
             incomplete={},
             raw_ingredient_totals=[],

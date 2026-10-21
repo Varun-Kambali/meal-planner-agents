@@ -8,6 +8,7 @@ from pathlib import Path
 
 import anyio
 import pytest
+from fakes import UNIT_SPELLINGS
 from nutrition_mcp.schemas import MealItemIn, NutritionResult
 
 from meal_planner.nutrition import NutritionClient, NutritionError
@@ -58,6 +59,14 @@ async def test_unknown_unit_lists_valid_units(live: NutritionClient) -> None:
 
     assert caught.value.food_id == "chapati"
     assert {"g", "roti"} <= set(caught.value.valid_units)
+
+
+async def test_unit_spellings_the_fake_accepts_work_live(live: NutritionClient) -> None:
+    # FakeNutrition reads these the way the server does; this keeps the two from drifting.
+    for spelling, canonical in UNIT_SPELLINGS.items():
+        spelled = await live.nutrition("chapati", 2, spelling)
+        plain = await live.nutrition("chapati", 2, canonical)
+        assert spelled.grams == plain.grams > 0, spelling
 
 
 async def test_meal_error_names_the_failing_food(live: NutritionClient) -> None:
