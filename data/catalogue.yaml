@@ -1,0 +1,124 @@
+# Ingredients the recipe writer may use. Each id must be a food in nutrition-mcp (its bundled
+# data, plus data/foods once that exists); startup stops on one it does not know. Nothing in this
+# file is a nutrition value: those come from nutrition-mcp.
+#
+# pack_g, keeps_days_opened and measures are planning facts, typical values for the no-waste check
+# and for turning a household unit into grams, reviewed by hand. A wrong one changes a warning or
+# the grams a typed "2 eggs" counts for. It never changes a nutrient value per 100 g.
+#
+# pack_g: a usual Indian retail pack in grams. A liquid sold by volume is that volume times the
+#   density nutrition-mcp holds for it.
+# keeps_days_opened: how long it keeps once opened or cut.
+# Both are null for what a recipe uses by the pinch, so the no-waste check leaves it out.
+# allergens: the groups in the plan rules. Coconut is not listed under tree_nuts, in line with the
+#   EU allergen list, which names the nuts one by one and leaves coconut out.
+# measures: grams in one household unit, only where nutrition-mcp has no such unit for the food
+#   (loading stops if it has one). The comment above each says where the weight comes from. Weights
+#   are for the edible part, like nutrition-mcp's per-100 g values.
+# category: the shop aisle.
+#
+# baking_soda is in nutrition-mcp's bundled data and left out of this list on purpose.
+
+# Grains, flours and bread. Rice and flours come in 500 g to 1 kg packs. A flour goes stale in
+# a few months in an Indian kitchen, so its shelf life is shorter than a grain's.
+- {id: white_rice, name: White rice, category: grain, allergens: [], pack_g: 1000, keeps_days_opened: 365}
+- {id: rava, name: Rava (semolina), category: grain, allergens: [gluten], pack_g: 500, keeps_days_opened: 180}
+- {id: atta, name: Atta (whole-wheat flour), category: grain, allergens: [gluten], pack_g: 1000, keeps_days_opened: 90}
+- {id: maida, name: Maida (refined wheat flour), category: grain, allergens: [gluten], pack_g: 500, keeps_days_opened: 180}
+- {id: besan, name: Besan (chickpea flour), category: grain, allergens: [], pack_g: 500, keeps_days_opened: 180}
+- {id: sabudana, name: Sabudana (tapioca pearls), category: grain, allergens: [], pack_g: 500, keeps_days_opened: 365}
+# A pack of six rolls.
+- {id: pav, name: Pav (bread roll), category: grain, allergens: [gluten], pack_g: 200, keeps_days_opened: 2}
+
+# Pulses: 500 g packs, dry, so they keep for a year.
+- {id: toor_dal, name: Toor dal, category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: moong_dal, name: Moong dal, category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: urad_dal, name: Urad dal, category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: chana_dal, name: Chana dal, category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: masoor_dal, name: Masoor dal, category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: rajma, name: Rajma (kidney beans), category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: kabuli_chana, name: Kabuli chana (chickpeas), category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: whole_urad, name: Sabut urad (whole black gram), category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: moth_beans, name: Matki (moth beans), category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: dried_peas, name: Sukha matar (dried peas), category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
+
+# Dairy. Ghee is a 500 ml jar (433 g at 0.8665 g/ml) and milk a 500 ml pouch (516 g at 1.0313).
+# Cream is a 200 g pack and paneer a 200 g block.
+- {id: ghee, name: Ghee, category: dairy, allergens: [milk], pack_g: 433, keeps_days_opened: 180}
+# USDA FoodData Central, salted butter: 1 tablespoon is 14.2 g.
+- {id: butter, name: Butter (salted), category: dairy, allergens: [milk], pack_g: 100, keeps_days_opened: 30, measures: {tbsp: 14.2}}
+- {id: cream, name: Fresh cream, category: dairy, allergens: [milk], pack_g: 200, keeps_days_opened: 3}
+- {id: curd, name: Curd (dahi), category: dairy, allergens: [milk], pack_g: 400, keeps_days_opened: 5}
+- {id: paneer, name: Paneer, category: dairy, allergens: [milk], pack_g: 200, keeps_days_opened: 4}
+- {id: whole_milk, name: Whole milk, category: dairy, allergens: [milk], pack_g: 516, keeps_days_opened: 2}
+
+# Eggs come in a box of six, about 300 g. USDA FoodData Central, whole raw egg: one large egg is
+# 50 g without the shell.
+- {id: egg, name: Egg, category: egg, allergens: [egg], pack_g: 300, keeps_days_opened: 21, measures: {piece: 50}}
+
+# Fish is bought fresh by weight, cleaned, and used within a day or two.
+- {id: rohu, name: Rohu, category: fish, allergens: [fish], pack_g: 500, keeps_days_opened: 2}
+- {id: surmai, name: Surmai (king mackerel), category: fish, allergens: [fish], pack_g: 500, keeps_days_opened: 2}
+
+# Oils. A 1 litre pouch is 921 g at 0.9214 g/ml; coconut oil is bought as a 500 ml bottle (461 g).
+# Mustard oil is pressed from mustard seed.
+- {id: sunflower_oil, name: Sunflower oil, category: oil, allergens: [], pack_g: 921, keeps_days_opened: 180}
+- {id: mustard_oil, name: Mustard oil, category: oil, allergens: [mustard], pack_g: 921, keeps_days_opened: 180}
+- {id: coconut_oil, name: Coconut oil, category: oil, allergens: [], pack_g: 461, keeps_days_opened: 180}
+
+# Vegetables. Packs are what a household buys at a time, from 250 g of the quick-to-spoil ones
+# (spinach by the bunch, peas, beans) to 1 kg of onion and potato, which keep for weeks.
+# USDA FoodData Central, raw onion: one medium (2.5 inch) is 110 g.
+- {id: onion, name: Onion, category: veg, allergens: [], pack_g: 1000, keeps_days_opened: 30, measures: {piece: 110}}
+# USDA FoodData Central, raw red tomato: one medium (2.6 inch) is 123 g.
+- {id: tomato, name: Tomato, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5, measures: {piece: 123}}
+# Household estimate for a medium aloo, peeled. USDA's medium potato (213 g, unpeeled) is larger
+# than the ones sold in India.
+- {id: potato, name: Potato, category: veg, allergens: [], pack_g: 1000, keeps_days_opened: 30, measures: {piece: 150}}
+- {id: cauliflower, name: Cauliflower, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 4}
+- {id: spinach, name: Spinach (palak), category: veg, allergens: [], pack_g: 250, keeps_days_opened: 3}
+- {id: brinjal, name: Brinjal (aubergine), category: veg, allergens: [], pack_g: 500, keeps_days_opened: 4}
+- {id: bitter_gourd, name: Bitter gourd (karela), category: veg, allergens: [], pack_g: 250, keeps_days_opened: 4}
+- {id: drumstick, name: Drumstick, category: veg, allergens: [], pack_g: 250, keeps_days_opened: 4}
+- {id: bottle_gourd, name: Bottle gourd (lauki), category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5}
+# USDA FoodData Central, raw carrot: one medium is 61 g.
+- {id: carrot, name: Carrot, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 14, measures: {piece: 61}}
+- {id: green_peas, name: Green peas, category: veg, allergens: [], pack_g: 250, keeps_days_opened: 4}
+# USDA FoodData Central, raw green sweet pepper: one medium is 119 g.
+- {id: capsicum, name: Capsicum, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 7, measures: {piece: 119}}
+- {id: cucumber, name: Cucumber, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5}
+- {id: pumpkin, name: Pumpkin, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5}
+- {id: green_beans, name: French beans, category: veg, allergens: [], pack_g: 250, keeps_days_opened: 4}
+- {id: raw_banana, name: Raw banana, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5}
+- {id: methi_leaves, name: Methi leaves, category: veg, allergens: [], pack_g: 150, keeps_days_opened: 2}
+# Curry and coriander leaves go in as a handful or a garnish.
+- {id: curry_leaves, name: Curry leaves, category: veg, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: coriander_leaves, name: Coriander leaves, category: veg, allergens: [], pack_g: null, keeps_days_opened: null}
+# Household estimate for one Indian green chilli, about 10 cm. USDA's pepper (45 g) is a larger
+# variety.
+- {id: green_chilli, name: Green chilli, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 10, measures: {piece: 6}}
+- {id: ginger, name: Ginger, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 14}
+# USDA FoodData Central, raw garlic: one clove is 3 g.
+- {id: garlic, name: Garlic, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 30, measures: {clove: 3}}
+
+# Coconut, tamarind, nuts and seeds. A fresh coconut gives about 300 g of kernel; coconut milk is
+# a 400 ml can (406 g at 1.0144 g/ml). Lemon juice is squeezed from lemons as needed.
+- {id: lemon_juice, name: Lemon juice, category: fruit, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: fresh_coconut, name: Fresh coconut, category: nut_seed, allergens: [], pack_g: 300, keeps_days_opened: 4}
+- {id: coconut_milk, name: Coconut milk, category: other, allergens: [], pack_g: 406, keeps_days_opened: 4}
+- {id: tamarind, name: Tamarind (imli), category: other, allergens: [], pack_g: 200, keeps_days_opened: 365}
+- {id: peanuts, name: Peanuts (raw), category: nut_seed, allergens: [peanut], pack_g: 500, keeps_days_opened: 90}
+
+# Sugar is a 1 kg pack. USDA FoodData Central, granulated sugar: 1 teaspoon is 4.2 g and 1
+# tablespoon 12.6 g.
+- {id: sugar, name: Sugar, category: sweetener, allergens: [], pack_g: 1000, keeps_days_opened: 365, measures: {tsp: 4.2, tbsp: 12.6}}
+
+# Spices and salt are used by the pinch or spoonful, so they have no pack to waste.
+- {id: poppy_seeds, name: Poppy seeds (khus khus), category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: mustard_seeds, name: Mustard seeds (rai), category: spice, allergens: [mustard], pack_g: null, keeps_days_opened: null}
+- {id: cumin_seeds, name: Cumin seeds (jeera), category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: black_pepper, name: Black pepper, category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: turmeric, name: Turmeric powder, category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: red_chilli_powder, name: Red chilli powder, category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: garam_masala, name: Garam masala, category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
+- {id: salt, name: Salt, category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
