@@ -1,0 +1,37 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  UV_FROZEN: "1"
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+      # With UV_FROZEN set, `uv lock --check` only checks that the lockfile parses, not that
+      # it matches pyproject.toml.
+      - name: Check uv.lock matches pyproject.toml
+        run: uv lock --check
+        env:
+          UV_FROZEN: "0"
+      - run: uv sync --all-groups
+      - run: make lint
+      - run: make test
+      - run: docker build -t meal-planner-agents .
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

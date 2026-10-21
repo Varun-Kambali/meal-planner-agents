@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "meal-planner-agents"
+dynamic = ["version"]
+description = "Writes recipes for the meal plan you already follow, checked in code with nutrition-mcp, and tracks meals against it"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Varun Kambali" }]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+meal-planner = "meal_planner.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Varun-Kambali/meal-planner-agents"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "anyio",
+    "ruff",
+    "mypy",
+    "types-PyYAML",
+    "pre-commit",
+]
+build-data = ["httpx"]
+
+[tool.hatch.version]
+path = "src/meal_planner/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/meal_planner"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The eval and build scripts are not part of the package; tests import them from here.
+pythonpath = ["evals", "scripts"]
+addopts = "-ra --import-mode=importlib"

@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+.worktrees
+docs
+tests
+evals
+frontend/node_modules
