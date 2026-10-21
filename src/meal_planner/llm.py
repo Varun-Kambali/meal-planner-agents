@@ -23,13 +23,7 @@ from typing import Any, Protocol, runtime_checkable
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 import litellm
-from litellm.exceptions import (
-    APIConnectionError,
-    InternalServerError,
-    RateLimitError,
-    ServiceUnavailableError,
-    Timeout,
-)
+from litellm.exceptions import APIConnectionError, RateLimitError, Timeout
 from pydantic import BaseModel, ValidationError
 
 from meal_planner.log import get_logger
@@ -91,12 +85,15 @@ def parse_reply[T: BaseModel](raw: str, schema: type[T]) -> tuple[T | None, str 
 
 def _classify(exc: Exception) -> tuple[str, bool]:
     """The error code for a failed call, and whether trying again can help."""
+    # LiteLLM has a class for some statuses and a generic APIError(status_code=...) for the rest,
+    # and which one a status gets depends on the provider, so the number decides too.
+    status = getattr(exc, "status_code", None)
     # Timeout is a kind of APIConnectionError, so it has to be asked about first.
-    if isinstance(exc, Timeout | TimeoutError):
+    if isinstance(exc, Timeout | TimeoutError) or status == 408:
         return TIMEOUT, True
-    if isinstance(exc, RateLimitError):
+    if isinstance(exc, RateLimitError) or status == 429:
         return RATE_LIMITED, True
-    if isinstance(exc, InternalServerError | ServiceUnavailableError | APIConnectionError):
+    if isinstance(exc, APIConnectionError) or (isinstance(status, int) and status >= 500):
         return SERVER_ERROR, True
     return MODEL_ERROR, False
 

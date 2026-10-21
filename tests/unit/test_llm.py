@@ -53,6 +53,17 @@ def unavailable() -> Exception:
     return litellm.ServiceUnavailableError(message="503", llm_provider="gemini", model=MODEL)
 
 
+def bad_gateway() -> Exception:
+    return litellm.BadGatewayError(message="502", llm_provider="openai", model=MODEL)
+
+
+def api_error(status_code: int) -> Exception:
+    """The generic error LiteLLM raises for a status it has no class for."""
+    return litellm.APIError(
+        status_code=status_code, message=str(status_code), llm_provider="anthropic", model=MODEL
+    )
+
+
 def bad_key() -> Exception:
     return litellm.AuthenticationError(message="bad key", llm_provider="gemini", model=MODEL)
 
@@ -288,7 +299,18 @@ async def test_builtin_timeout_counts_as_timeout() -> None:
     assert len(stub.calls) == 3
 
 
-@pytest.mark.parametrize("make_error", [server_error, unavailable])
+@pytest.mark.parametrize(
+    "make_error",
+    [
+        server_error,
+        unavailable,
+        bad_gateway,
+        lambda: api_error(500),
+        lambda: api_error(504),
+        lambda: api_error(529),
+    ],
+    ids=["500", "503", "502", "api-500", "api-504", "api-529"],
+)
 async def test_server_errors_are_retried_then_reported(make_error: Any) -> None:
     stub = StubCompletion(make_error(), make_error(), make_error())
 
@@ -296,6 +318,28 @@ async def test_server_errors_are_retried_then_reported(make_error: Any) -> None:
 
     assert reply.error == "server_error"
     assert len(stub.calls) == 3
+
+
+@pytest.mark.parametrize(
+    ("status_code", "code"), [(429, "rate_limited"), (408, "timeout"), (599, "server_error")]
+)
+async def test_a_status_with_no_class_is_read_by_its_number(status_code: int, code: str) -> None:
+    stub = StubCompletion(*[api_error(status_code)] * 3)
+
+    reply = await ask(client(stub))
+
+    assert reply.error == code
+    assert len(stub.calls) == 3
+
+
+@pytest.mark.parametrize("status_code", [400, 404, 499])
+async def test_a_status_below_500_is_not_retried(status_code: int) -> None:
+    stub = StubCompletion(api_error(status_code))
+
+    reply = await ask(client(stub))
+
+    assert reply.error == "model_error"
+    assert len(stub.calls) == 1
 
 
 async def test_a_transient_error_then_success_gives_the_value() -> None:
