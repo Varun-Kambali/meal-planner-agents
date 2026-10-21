@@ -358,6 +358,12 @@ async def test_rules_naming_only_known_foods_report_nothing(tmp_path: Path) -> N
 # The shipped file
 
 
+def shipped_rows() -> dict[str, dict[str, Any]]:
+    """The rows of data/catalogue.yaml as written, by id. Includes any a later task adds."""
+    rows = yaml.safe_load(Settings().catalogue_path.read_text(encoding="utf-8"))
+    return {row["id"]: row for row in rows}
+
+
 def bundled_ingredient_ids() -> set[str]:
     path = files("nutrition_mcp") / "data" / "bundled" / "ingredients.csv"
     with path.open(encoding="utf-8", newline="") as handle:
@@ -370,8 +376,58 @@ LEFT_OUT_ON_PURPOSE = {"baking_soda"}
 
 
 def test_shipped_catalogue_covers_nutrition_mcps_bundled_ingredients() -> None:
-    path = Settings().catalogue_path
-    listed = {row["id"] for row in yaml.safe_load(path.read_text(encoding="utf-8"))}
+    listed = shipped_rows().keys()
 
     assert bundled_ingredient_ids() - LEFT_OUT_ON_PURPOSE <= listed
     assert not LEFT_OUT_ON_PURPOSE & listed
+
+
+# Allergen tags are what keeps an excluded allergen out of a recipe, so the shipped file's tags
+# are pinned two ways. A category implies its allergen, which also covers rows added later: a row
+# in one of these categories must carry one of the groups listed (shellfish, if one is added under
+# fish, carries crustaceans instead of fish).
+ALLERGENS_OF_CATEGORY = {
+    "dairy": {"milk"},
+    "egg": {"egg"},
+    "fish": {"fish", "crustaceans"},
+}
+
+# Allergens a category does not imply: wheat foods, peanuts, and mustard as seed and as oil.
+ALLERGENS_BY_ID = {
+    "atta": {"gluten"},
+    "maida": {"gluten"},
+    "rava": {"gluten"},
+    "pav": {"gluten"},
+    "peanuts": {"peanut"},
+    "mustard_seeds": {"mustard"},
+    "mustard_oil": {"mustard"},
+}
+
+
+def test_shipped_rows_carry_the_allergen_their_category_implies() -> None:
+    rows = shipped_rows()
+
+    for category in ALLERGENS_OF_CATEGORY:
+        assert any(row["category"] == category for row in rows.values()), category
+    untagged = [
+        f"{food_id} ({row['category']}) needs one of {sorted(implied)}"
+        for food_id, row in rows.items()
+        if (implied := ALLERGENS_OF_CATEGORY.get(row["category"]))
+        and not implied & set(row["allergens"])
+    ]
+
+    assert untagged == []
+
+
+def test_shipped_rows_carry_the_allergens_their_category_does_not_imply() -> None:
+    rows = shipped_rows()
+
+    # A renamed or dropped id must not leave this table checking nothing.
+    assert ALLERGENS_BY_ID.keys() <= rows.keys()
+    untagged = [
+        f"{food_id} needs {sorted(expected - set(rows[food_id]['allergens']))}"
+        for food_id, expected in ALLERGENS_BY_ID.items()
+        if not expected <= set(rows[food_id]["allergens"])
+    ]
+
+    assert untagged == []
