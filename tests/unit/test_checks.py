@@ -1298,6 +1298,98 @@ def test_cuisine_may_repeat_when_the_plan_lists_one() -> None:
     assert check_variety(recipes, plan_rules(cuisines=["South Indian"]), settings()) == {}
 
 
+def test_a_cuisine_outside_the_plans_list_fails() -> None:
+    recipe = checked(["a"], cuisine="Italian")
+
+    failures = check_variety([recipe], plan_rules(), settings())
+
+    failure = only(failures[("mon", "breakfast")])
+    assert failure.check == "cuisine_not_in_plan"
+    assert "'Italian'" in failure.message
+    assert "South Indian, Japanese, Mediterranean" in failure.message
+
+
+def test_a_cuisine_outside_a_list_of_one_fails() -> None:
+    recipe = checked(["a"], cuisine="Japanese")
+
+    failures = check_variety([recipe], plan_rules(cuisines=["South Indian"]), settings())
+
+    assert checks_of(failures[("mon", "breakfast")]) == ["cuisine_not_in_plan"]
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["South Indian", "south indian", "South-Indian", "  SOUTH   INDIAN. ", "south_indian"],
+)
+def test_a_cuisine_matches_the_plans_list_whatever_its_spelling(written: str) -> None:
+    assert check_variety([checked(["a"], cuisine=written)], plan_rules(), settings()) == {}
+
+
+def test_a_near_synonym_does_not_get_past_the_list() -> None:
+    recipes = pair(["a"], ["x"], cuisines=("South Indian", "Tamil"))
+
+    failures = check_variety(recipes, plan_rules(), settings())
+
+    assert set(failures) == {("tue", "breakfast")}
+    assert only(failures[("tue", "breakfast")]).check == "cuisine_not_in_plan"
+
+
+def test_the_repeat_rule_compares_the_plans_entry_not_the_spelling() -> None:
+    recipes = pair(["a"], ["x"], cuisines=("South Indian", "SOUTH-INDIAN"))
+
+    failure = only(check_variety(recipes, plan_rules(), settings())[("tue", "breakfast")])
+
+    assert failure.check == "variety_cuisine"
+    assert "'South Indian'" in failure.message
+
+
+def test_two_unlisted_cuisines_in_a_row_are_not_a_repeat() -> None:
+    recipes = pair(["a"], ["x"], cuisines=("Italian", "Italian"))
+
+    failures = check_variety(recipes, plan_rules(), settings())
+
+    assert checks_of(failures[("mon", "breakfast")]) == ["cuisine_not_in_plan"]
+    assert checks_of(failures[("tue", "breakfast")]) == ["cuisine_not_in_plan"]
+
+
+def test_a_plan_listing_one_cuisine_twice_does_not_count_as_two() -> None:
+    rules = plan_rules(cuisines=["South Indian", "south-indian"])
+    recipes = pair(["a"], ["x"], cuisines=("South Indian", "South Indian"))
+
+    assert check_variety(recipes, rules, settings()) == {}
+
+
+def test_a_repeat_names_the_first_listing_of_a_cuisine_the_plan_spells_twice() -> None:
+    rules = plan_rules(cuisines=["South Indian", "south-indian", "Japanese"])
+    recipes = pair(["a"], ["x"], cuisines=("south indian", "SOUTH-INDIAN"))
+
+    failure = only(check_variety(recipes, rules, settings())[("tue", "breakfast")])
+
+    assert "'South Indian'" in failure.message
+
+
+def test_punctuation_separates_words_in_a_title_it_does_not_join_them() -> None:
+    recipes = [
+        checked(["a"], day="mon", title="Rice-Bowl", cuisine="South Indian"),
+        checked(["x"], day="wed", title="Ricebowl", cuisine="Japanese"),
+    ]
+
+    assert check_variety(recipes, plan_rules(), settings()) == {}
+
+
+def test_titles_that_differ_in_punctuation_are_the_same_title() -> None:
+    recipes = [
+        checked(["a"], day="mon", title="Masala-Oats", cuisine="South Indian"),
+        checked(["x"], day="wed", title="Masala Oats", cuisine="Japanese"),
+        checked(["y"], day="fri", title="masala, oats!", cuisine="Mediterranean"),
+    ]
+
+    failures = check_variety(recipes, plan_rules(), settings())
+
+    assert checks_of(failures[("wed", "breakfast")]) == ["variety_title"]
+    assert checks_of(failures[("fri", "breakfast")]) == ["variety_title", "variety_title"]
+
+
 def test_a_day_can_fail_on_ingredients_and_cuisine_together() -> None:
     recipes = pair(["a", "b"], ["a", "b"], cuisines=("Japanese", "Japanese"))
 

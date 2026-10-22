@@ -412,15 +412,19 @@ def _blame(recipe: CheckedRecipe, key: str, direction: _Direction) -> float:
 def check_variety(
     recipes: list[CheckedRecipe], rules: PlanRules, s: Settings
 ) -> dict[tuple[DayKey, str], list[Failure]]:
-    """No two recipes of one slot alike, and no cuisine twice in a row.
+    """Cuisines from the plan's list, no two recipes of one slot alike, no cuisine twice in a row.
 
-    A recipe is alike an earlier one in its slot when the titles match (ignoring case and
-    punctuation) or the ingredient ids overlap by a Jaccard similarity at or above
-    `variety_jaccard_fail_at`. When the plan lists more than one cuisine, a recipe may not use
-    the cuisine of the day before. The later recipe of a pair gets the failure, under its
-    (day, slot id), because it is the one to rewrite.
+    A recipe's cuisine must be one of the plan's. Cuisines, like titles, are compared in plain
+    form (see `_plain`), so "South-Indian" is the listed "South Indian". A recipe is alike an
+    earlier one in its slot when the titles match or the ingredient ids overlap by a Jaccard
+    similarity at or above `variety_jaccard_fail_at`. When the plan lists more than one cuisine, a
+    recipe may not use the listed cuisine of the day before. The later recipe of a pair gets the
+    failure, under its (day, slot id), because it is the one to rewrite.
     """
-    spread_cuisines = len(rules.food.cuisines) > 1
+    listed: dict[str, str] = {}
+    for cuisine in rules.food.cuisines:
+        listed.setdefault(_plain(cuisine), cuisine)
+    spread_cuisines = len(listed) > 1
     by_slot: dict[str, list[CheckedRecipe]] = defaultdict(list)
     for recipe in recipes:
         by_slot[recipe.spec.slot.id].append(recipe)
@@ -428,15 +432,29 @@ def check_variety(
     found: dict[tuple[DayKey, str], list[Failure]] = {}
     for slot_id, in_slot in by_slot.items():
         in_week_order = sorted(in_slot, key=lambda r: DAYS.index(r.spec.day))
+        # The plan's spelling of each recipe's cuisine, or None when it is not one of them.
+        matched = [listed.get(_plain(r.draft.cuisine)) for r in in_week_order]
         for position, later in enumerate(in_week_order):
             failures: list[Failure] = []
-            for earlier in in_week_order[:position]:
+            if matched[position] is None:
+                failures.append(_unlisted_cuisine(later, rules.food.cuisines))
+            for before, earlier in enumerate(in_week_order[:position]):
                 failures += _alike(earlier, later, s)
                 if spread_cuisines:
-                    failures += _same_cuisine_next_day(earlier, later)
+                    failures += _same_cuisine_next_day(
+                        earlier, later, matched[before], matched[position]
+                    )
             if failures:
                 found.setdefault((later.spec.day, slot_id), []).extend(failures)
     return found
+
+
+def _unlisted_cuisine(recipe: CheckedRecipe, cuisines: Sequence[str]) -> Failure:
+    return Failure(
+        check="cuisine_not_in_plan",
+        message=f"cuisine '{recipe.draft.cuisine}' is not one of the plan's cuisines "
+        f"({', '.join(cuisines)}); use one of them",
+    )
 
 
 def _alike(earlier: CheckedRecipe, later: CheckedRecipe, s: Settings) -> list[Failure]:
@@ -466,13 +484,19 @@ def _alike(earlier: CheckedRecipe, later: CheckedRecipe, s: Settings) -> list[Fa
     return failures
 
 
-def _same_cuisine_next_day(earlier: CheckedRecipe, later: CheckedRecipe) -> list[Failure]:
+def _same_cuisine_next_day(
+    earlier: CheckedRecipe,
+    later: CheckedRecipe,
+    earlier_cuisine: str | None,
+    later_cuisine: str | None,
+) -> list[Failure]:
+    """The cuisines are the plan's spellings; two cuisines outside the list are not a repeat."""
     day_before = DAYS.index(later.spec.day) - DAYS.index(earlier.spec.day) == 1
-    if day_before and _plain(earlier.draft.cuisine) == _plain(later.draft.cuisine):
+    if day_before and earlier_cuisine is not None and earlier_cuisine == later_cuisine:
         return [
             Failure(
                 check="variety_cuisine",
-                message=f"cuisine '{earlier.draft.cuisine}' repeats the day before "
+                message=f"cuisine '{earlier_cuisine}' repeats the day before "
                 f"({earlier.spec.day}); the plan lists other cuisines, so use a different one",
             )
         ]
@@ -480,9 +504,12 @@ def _same_cuisine_next_day(earlier: CheckedRecipe, later: CheckedRecipe) -> list
 
 
 def _plain(text: str) -> str:
-    """Lowercase, punctuation dropped and spaces collapsed, so near-identical titles match."""
-    kept = "".join(c for c in text.lower() if c.isalnum() or c.isspace())
-    return " ".join(kept.split())
+    """Lowercase, punctuation turned into spaces and runs of spaces collapsed.
+
+    "Masala-Oats" and "masala oats!" are then the same title, and "South-Indian" the listed
+    "South Indian". Nothing is joined: "dal-tadka" is two words, as written.
+    """
+    return " ".join("".join(c if c.isalnum() else " " for c in text.lower()).split())
 
 
 def check_no_waste(
