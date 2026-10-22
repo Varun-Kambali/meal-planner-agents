@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal, Protocol, Self, runtime_checkable
 
-from mcp import Client, StdioServerParameters
+from mcp import Client, MCPError, StdioServerParameters
 from mcp.types import CallToolResult, TextContent
 from nutrition_mcp.schemas import MealItemIn, MealResult, NutritionResult, SearchResult
 
@@ -33,7 +33,11 @@ _VALID_UNITS = re.compile(r"valid units: ([^;]+)")
 
 
 class NutritionError(Exception):
-    """nutrition-mcp refused a call. The message is nutrition-mcp's own."""
+    """nutrition-mcp refused a call, or could not be asked. The message says which.
+
+    A refusal carries nutrition-mcp's own message, and `food_id` when one food is to blame. When
+    the connection failed there is no food to blame, so `food_id` is None.
+    """
 
     def __init__(
         self,
@@ -137,7 +141,14 @@ class NutritionClient:
     async def _call(
         self, tool: str, arguments: dict[str, Any], food_id: str | None = None
     ) -> dict[str, Any]:
-        result = await self._session.call_tool(tool, arguments)
+        try:
+            result = await self._session.call_tool(tool, arguments)
+        except (MCPError, OSError, TimeoutError) as exc:
+            # A request that timed out, or a connection that closed: the SDK raises these instead
+            # of returning a result. The arguments are left out of the message because they can
+            # hold what the user typed. Cancellation is a BaseException and passes through.
+            detail = str(exc) or type(exc).__name__
+            raise NutritionError(f"nutrition-mcp could not answer {tool}: {detail}") from exc
         if result.is_error:
             message = _message(result)
             if food_id is None and (item := _ITEM_FOOD.match(message)):

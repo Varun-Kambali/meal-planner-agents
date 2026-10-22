@@ -17,7 +17,7 @@ from pydantic import BaseModel, TypeAdapter
 from meal_planner.catalogue import Catalogue, CatalogueItem
 from meal_planner.config import Settings
 from meal_planner.llm import FakeModel, ModelPort, ModelReply
-from meal_planner.nutrition import NutritionPort
+from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.recipes import CheckedRecipe, SlotDraft
 from meal_planner.rules import DayKey, PlanRules
 from meal_planner.week import (
@@ -626,6 +626,26 @@ async def test_nutrition_mcp_refusing_a_recipe_is_a_failure_not_a_crash() -> Non
     )
     assert [f.check for f in first.failures] == ["nutrition_failed"]
     assert "mystery" in first.failures[0].message
+
+
+class DownNutrition(SpyNutrition):
+    """nutrition-mcp when its connection is gone: every call is refused the way the client does."""
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        raise NutritionError("nutrition-mcp could not answer compute_meal: Connection closed")
+
+
+async def test_nutrition_mcp_going_away_fails_the_recipes_and_still_ends_the_week() -> None:
+    events, week = await run(model_for(), nutrition=DownNutrition(), max_repair_attempts=0)
+
+    assert len(week.recipes) == 28
+    assert all(r.nutrition is None for r in week.recipes)
+    for recipe in week.recipes:
+        assert [f.check for f in recipe.failures] == ["nutrition_failed"]
+        assert "Connection closed" in recipe.failures[0].message
+    assert all(day.failures for day in week.days)
+    assert week.calls == 4
+    assert kinds(events)[-1] == "week_done"
 
 
 async def test_rate_limited_slot_reported_unwritten() -> None:

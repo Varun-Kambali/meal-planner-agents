@@ -12,6 +12,7 @@ from nutrition_mcp.models import Diet as NutritionDiet
 
 from meal_planner.catalogue import Catalogue, CatalogueError, check_rules_against, load_catalogue
 from meal_planner.config import Settings
+from meal_planner.nutrition import NutritionError
 from meal_planner.rules import PlanRules
 
 pytestmark = pytest.mark.anyio
@@ -102,6 +103,17 @@ async def test_every_unknown_id_is_named(tmp_path: Path) -> None:
     assert "rolld_oats" in str(caught.value)
     assert "paner" in str(caught.value)
     assert "'atta'" not in str(caught.value)
+
+
+async def test_a_server_fault_is_not_reported_as_unknown_ids(tmp_path: Path) -> None:
+    """A dead connection must not read as every id being a typo."""
+
+    class Down(FakeNutrition):
+        async def nutrition(self, food_id: str, amount: float, unit: str) -> Any:
+            raise NutritionError("nutrition-mcp could not answer get_nutrition: Connection closed")
+
+    with pytest.raises(NutritionError, match="Connection closed"):
+        await load(tmp_path, [entry("atta"), entry("besan")], Down({"atta": {}, "besan": {}}))
 
 
 async def test_bad_value_names_the_id_and_field(tmp_path: Path) -> None:

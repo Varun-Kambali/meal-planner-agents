@@ -139,7 +139,11 @@ async def load_catalogue(path: Path, nutrition: NutritionPort) -> Catalogue:
         try:
             # 100 g is a valid amount for every food, so a refusal here means the id is unknown.
             food = (await nutrition.nutrition(entry.id, 100, "g")).food
-        except NutritionError:
+        except NutritionError as exc:
+            if exc.food_id is None:
+                # The server could not be asked: that is not a wrong id, and saying so for
+                # every row would hide the real fault.
+                raise
             problems.append(f"'{entry.id}' is not a food id in nutrition-mcp")
             continue
         duplicated = [unit for unit in entry.measures if unit in food.units]

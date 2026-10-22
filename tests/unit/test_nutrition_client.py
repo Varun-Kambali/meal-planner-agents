@@ -1,10 +1,12 @@
 """NutritionClient against a stand-in session, and FakeNutrition, which later tests build on."""
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fakes import UNIT_SPELLINGS, FakeNutrition
+from mcp import MCPError
 from mcp.types import CallToolResult, TextContent
 from nutrition_mcp.schemas import MealItemIn, MealResult, NutritionResult, SearchResult
 
@@ -76,6 +78,59 @@ async def test_error_without_text_still_raises() -> None:
     client = NutritionClient(StandInSession(CallToolResult(content=[], is_error=True)))
 
     with pytest.raises(NutritionError, match="no text"):
+        await client.search("rajma")
+
+
+class BrokenSession:
+    """A session whose calls fail the way a dead or stuck connection does."""
+
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+
+    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> CallToolResult:
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    ("error", "shown"),
+    [
+        (MCPError(-32000, "Connection closed"), "Connection closed"),
+        (MCPError(-32001, "Timed out while waiting for response"), "Timed out"),
+        (TimeoutError(), "TimeoutError"),
+        (BrokenPipeError("pipe closed"), "pipe closed"),
+    ],
+    ids=["closed", "request_timeout", "send_timeout", "os_error"],
+)
+async def test_transport_failure_maps_to_nutrition_error(error: Exception, shown: str) -> None:
+    client = NutritionClient(BrokenSession(error))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.meal([MealItemIn(food_id="rajma", amount=100, unit="g")])
+
+    assert "compute_meal" in str(caught.value)
+    assert shown in str(caught.value)
+    # No food is to blame and no unit would help, unlike a refusal of one item.
+    assert caught.value.food_id is None
+    assert caught.value.valid_units == []
+    assert caught.value.__cause__ is error
+    # What the user asked about is not repeated in the message.
+    assert "rajma" not in str(caught.value)
+
+
+async def test_every_call_names_its_tool_when_the_connection_fails() -> None:
+    client = NutritionClient(BrokenSession(MCPError(-32000, "Connection closed")))
+
+    with pytest.raises(NutritionError, match="search_food"):
+        await client.search("rajma")
+    with pytest.raises(NutritionError, match="get_nutrition") as caught:
+        await client.nutrition("rajma", 1, "g")
+    assert caught.value.food_id is None
+
+
+async def test_cancelling_a_call_is_not_turned_into_an_error() -> None:
+    client = NutritionClient(BrokenSession(asyncio.CancelledError()))
+
+    with pytest.raises(asyncio.CancelledError):
         await client.search("rajma")
 
 
