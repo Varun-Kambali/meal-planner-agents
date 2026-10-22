@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     no_waste_keeps_days: int = Field(default=7, ge=1)
     no_waste_min_pack_share: float = Field(default=0.5, gt=0, le=1)
 
+    # Writing a week: the most model calls in flight at once. Every slot is written in parallel,
+    # and without a cap they would all hit a free-tier rate limit together and retry in step.
+    max_concurrent_model_calls: int = Field(default=4, ge=1)
+    # Seconds one slot's call may take. A slot is seven recipes, so this is longer than a chat turn.
+    slot_call_timeout_s: float = Field(default=120, gt=0)
+
     # Input bounds.
     max_meal_text_chars: int = Field(default=500, ge=1)
     max_body_bytes: int = Field(default=65536, ge=1)
