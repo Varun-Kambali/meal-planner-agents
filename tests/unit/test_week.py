@@ -835,6 +835,122 @@ async def test_replacement_that_repeats_another_recipe_is_repaired() -> None:
     assert [(e.slot_id, e.days) for e in repairs] == [("lunch", ["wed"])]
 
 
+async def test_replacement_that_takes_the_next_days_cuisine_is_repaired() -> None:
+    """Thursday's lunch is South Indian. The clash is the new recipe's, not Thursday's."""
+    _, week = await run(model_for())
+    clash = recipe_of("lunch", "wed") | {"cuisine": "South Indian"}
+    model = SlotModel(
+        {
+            "lunch": {
+                "write_slot": [raw({"slot_id": "lunch", "recipes": [clash]})],
+                "repair_slot": [repair_reply("lunch", "wed")],
+            }
+        }
+    )
+
+    events, replaced = await replace_events(week, model, "wed", "lunch")
+
+    recipes = by_key(replaced)
+    assert recipes[("wed", "lunch")].attempts == 2
+    assert recipes[("wed", "lunch")].failures == []
+    assert recipes[("thu", "lunch")] == by_key(week)[("thu", "lunch")]
+    assert replaced.calls == 2
+    checked = [e for e in events if isinstance(e, RecipeChecked)]
+    assert (checked[0].day, [f.check for f in checked[0].failures]) == ("wed", ["variety_cuisine"])
+    assert "the day after (thu)" in checked[0].failures[0].message
+    assert "thu" not in [e.day for e in checked]
+    ((_, user),) = model.of_task("repair_slot")
+    assert "the day after (thu)" in user
+
+
+async def test_replacement_that_copies_a_later_days_dish_is_repaired() -> None:
+    """Friday's lunch is the one that looks alike, but Friday is not what gets rewritten."""
+    _, week = await run(model_for())
+    copy = recipe_of("lunch", "fri") | {"day": "wed", "cuisine": "Mediterranean"}
+    model = SlotModel(
+        {
+            "lunch": {
+                "write_slot": [raw({"slot_id": "lunch", "recipes": [copy]})],
+                "repair_slot": [repair_reply("lunch", "wed")],
+            }
+        }
+    )
+
+    events, replaced = await replace_events(week, model, "wed", "lunch")
+
+    recipes = by_key(replaced)
+    assert recipes[("wed", "lunch")].attempts == 2
+    assert recipes[("fri", "lunch")] == by_key(week)[("fri", "lunch")]
+    assert all(r.failures == [] for r in replaced.recipes)
+    checked = [e for e in events if isinstance(e, RecipeChecked)]
+    assert [e.day for e in checked] == ["wed", "wed"]
+    first = checked[0].failures
+    assert [f.check for f in first] == ["variety_title", "variety_ingredients"]
+    # Worded for the new recipe: the Friday recipe is the one it must differ from.
+    assert "the fri recipe 'Soya chunks rice box'" in first[0].message
+    assert "the fri recipe 'Soya chunks rice box'" in first[1].message
+
+
+async def test_a_clash_the_week_already_had_stays_where_it_was() -> None:
+    """Thursday copies Monday. Replacing Wednesday does not take that on, or rewrite Thursday."""
+    mon, thu = recipe_of("lunch", "mon"), recipe_of("lunch", "thu")
+    # Monday's dish and title in Thursday's amounts, which are the right size for a rest day.
+    twin = thu | {
+        "title": mon["title"],
+        "ingredients": [
+            {"id": m["id"], "grams": t["grams"]}
+            for m, t in zip(mon["ingredients"], thu["ingredients"], strict=True)
+        ],
+    }
+    lunches = [r for r in canned("lunch")["recipes"] if r["day"] != "thu"] + [twin]
+    _, week = await run(
+        model_for(writes={"lunch": [raw({"slot_id": "lunch", "recipes": lunches})]}),
+        max_repair_attempts=0,
+    )
+    before = [f.check for f in by_key(week)[("thu", "lunch")].failures]
+    assert before == ["variety_title", "variety_ingredients"]
+    model = SlotModel({"lunch": {"write_slot": [repair_reply("lunch", "wed")]}})
+
+    _, replaced = await replace_events(week, model, "wed", "lunch")
+
+    recipes = by_key(replaced)
+    assert recipes[("wed", "lunch")].failures == []
+    assert recipes[("wed", "lunch")].attempts == 1
+    assert [f.check for f in recipes[("thu", "lunch")].failures] == before
+    assert replaced.calls == 1
+
+
+async def test_day_failure_after_a_replacement_goes_to_the_replacement() -> None:
+    """Monday is over its calories. Dinner is furthest over, but only the new lunch can change."""
+    _, week = await run(overshoot_monday(), max_repair_attempts=0)
+    assert [f.check for f in by_key(week)[("mon", "dinner")].failures] == ["day_kcal"]
+    over = scaled(recipe_of("lunch", "mon"), 1.05)
+    model = SlotModel(
+        {
+            "lunch": {
+                "write_slot": [raw({"slot_id": "lunch", "recipes": [over]})],
+                "repair_slot": [repair_reply("lunch", "mon")],
+            }
+        }
+    )
+
+    events, replaced = await replace_events(week, model, "mon", "lunch")
+
+    recipes = by_key(replaced)
+    assert recipes[("mon", "lunch")].attempts == 2
+    assert recipes[("mon", "lunch")].failures == []
+    assert recipes[("mon", "dinner")].attempts == 1
+    assert recipes[("mon", "dinner")].failures == []
+    assert replaced.days[0].failures == []
+    assert replaced.calls == 2
+    first = next(e for e in events if isinstance(e, RecipeChecked))
+    assert (first.day, first.slot_id, [f.check for f in first.failures]) == (
+        "mon",
+        "lunch",
+        ["day_kcal"],
+    )
+
+
 async def test_failed_replacement_keeps_the_old_recipe() -> None:
     _, week = await run(model_for())
     model = SlotModel({"lunch": {}}, errors={"lunch": "rate_limited"})
