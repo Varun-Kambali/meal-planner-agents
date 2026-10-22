@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     # How many times a failing recipe goes back to the model.
     max_repair_attempts: int = Field(default=3, ge=0)
     # Variety: two recipes in one slot whose ingredient sets overlap by this Jaccard similarity
-    # or more fail.
-    variety_jaccard_max: float = Field(default=0.6, gt=0, le=1)
+    # or more fail. The value is the lowest similarity that fails, not the highest that passes.
+    variety_jaccard_fail_at: float = Field(default=0.6, gt=0, le=1)
     # No waste: an ingredient that keeps fewer than this many days once opened, and of which the
     # week uses less than this share of a usual pack, is flagged.
     no_waste_keeps_days: int = Field(default=7, ge=1)

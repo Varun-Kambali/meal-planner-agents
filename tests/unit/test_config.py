@@ -25,7 +25,7 @@ def test_defaults() -> None:
     assert s.recipe_protein_min_share == 0.90
     assert s.day_kcal_tolerance == 0.05
     assert s.max_repair_attempts == 3
-    assert s.variety_jaccard_max == 0.6
+    assert s.variety_jaccard_fail_at == 0.6
     assert s.no_waste_keeps_days == 7
     assert s.no_waste_min_pack_share == 0.5
     assert s.max_meal_text_chars == 500
