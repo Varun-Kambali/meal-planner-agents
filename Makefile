@@ -1,4 +1,4 @@
-COV_MIN ?= 0
+COV_MIN ?= 80
 
 .PHONY: setup lint test eval eval-smoke run docker foods
 
