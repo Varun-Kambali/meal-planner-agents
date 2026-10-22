@@ -707,9 +707,9 @@ def _repair_jobs(
             for day in DAYS
             if (day, slot.id) in evaluation.recipes and (day, slot.id) not in fixing
         ]
-        # If the last call for these recipes was refused, the next one hears why.
-        refusal = state["refused"].get((failing[0].spec.day, slot.id))
-        rejected = refusal.reason if refusal and refusal.attempt == attempt - 1 else None
+        # If the last call for this slot was refused, the next one hears why.
+        refusals = (state["refused"].get((r.spec.day, slot.id)) for r in failing)
+        rejected = next((f.reason for f in refusals if f and f.attempt == attempt - 1), None)
         jobs.append(_Job(slot.id, [r.spec for r in failing], attempt, rejected, failing, others))
     return jobs
 

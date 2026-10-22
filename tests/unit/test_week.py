@@ -647,6 +647,20 @@ async def test_rate_limited_slot_reported_unwritten() -> None:
     assert kinds(events)[-1] == "week_done"
 
 
+async def test_every_slot_unwritten_still_ends_with_week_done() -> None:
+    model = model_for(errors=dict.fromkeys(SLOTS, "timeout"))
+
+    events, week = await run(model)
+
+    assert week.recipes == []
+    assert len(week.unwritten) == 28
+    assert {reason for _, _, reason in week.unwritten} == {"timeout"}
+    assert week.calls == 4
+    assert [d.day for d in week.days] == ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    assert kinds(events).count("slot_failed") == 4
+    assert kinds(events)[-1] == "week_done"
+
+
 # Day failures
 
 
