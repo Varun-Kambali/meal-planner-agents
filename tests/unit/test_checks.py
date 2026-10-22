@@ -42,12 +42,16 @@ def settings(**changes: Any) -> Settings:
     return Settings(**changes)
 
 
-def plan_rules(*, gear: list[str] | None = None, **food: Any) -> PlanRules:
+def plan_rules(
+    *, gear: list[str] | None = None, shopping: list[str] | None = None, **food: Any
+) -> PlanRules:
     """The fixture plan (veg, peanut and brinjal excluded, three cuisines) with changes."""
     plan = json.loads(PLAN.read_text(encoding="utf-8"))
     plan["food"] = {**plan["food"], **food}
     if gear is not None:
         plan["gear"] = gear
+    if shopping is not None:
+        plan["shopping_days"] = shopping
     return PlanRules.model_validate(plan)
 
 
@@ -1414,7 +1418,8 @@ def test_a_varied_week_has_no_failures() -> None:
     assert check_variety(recipes, plan_rules(), settings()) == {}
 
 
-# No waste
+# No waste. A shopping window runs from a shopping day to the day before the next one, wrapping
+# past Sunday, and its failures are keyed by (ingredient id, first day of the window).
 
 
 def spinach_cat() -> Catalogue:
@@ -1425,24 +1430,33 @@ def spinach_cat() -> Catalogue:
     )
 
 
+def one_trip() -> PlanRules:
+    """One shopping day, Monday: the whole week is a single window."""
+    return plan_rules(shopping=["mon"])
+
+
+def on(day: DayKey, food_id: str, grams: float) -> CheckedRecipe:
+    recipe = checked([food_id], day=day, title=f"{food_id} on {day}")
+    recipe.draft.ingredients = [DraftIngredient(id=food_id, grams=grams)]
+    return recipe
+
+
 def week_using(**grams: float) -> list[CheckedRecipe]:
-    """One recipe per ingredient, so the week's total for an id is the grams given."""
+    """One recipe per ingredient from Monday on, so a week's total for an id is the grams given."""
     days: list[DayKey] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    recipes = []
-    for day, (food_id, total) in zip(days, grams.items(), strict=False):
-        recipe = checked([food_id], day=day, title=f"Dish {food_id}")
-        recipe.draft.ingredients = [DraftIngredient(id=food_id, grams=total)]
-        recipes.append(recipe)
-    return recipes
+    return [
+        on(day, food_id, total) for day, (food_id, total) in zip(days, grams.items(), strict=False)
+    ]
 
 
 def test_no_waste_flags_half_used_spinach() -> None:
-    failures = check_no_waste(week_using(spinach=100), spinach_cat(), plan_rules(), settings())
+    failures = check_no_waste(week_using(spinach=100), spinach_cat(), one_trip(), settings())
 
-    assert set(failures) == {"spinach"}
-    failure = failures["spinach"]
+    assert set(failures) == {("spinach", "mon")}
+    failure = failures[("spinach", "mon")]
     assert failure.check == "no_waste"
     assert "Spinach" in failure.message
+    assert "mon to sun" in failure.message
     assert "100 g" in failure.message
     assert "250 g" in failure.message
     assert "3 days" in failure.message
@@ -1450,27 +1464,22 @@ def test_no_waste_flags_half_used_spinach() -> None:
 
 
 def test_no_waste_ignores_long_life_jar() -> None:
-    assert check_no_waste(week_using(rice=50), spinach_cat(), plan_rules(), settings()) == {}
+    assert check_no_waste(week_using(rice=50), spinach_cat(), one_trip(), settings()) == {}
 
 
 @pytest.mark.parametrize(
     ("grams", "flagged"), [(124, True), (124.9, True), (125, False), (400, False)]
 )
 def test_no_waste_at_half_a_pack(grams: float, flagged: bool) -> None:
-    failures = check_no_waste(week_using(spinach=grams), spinach_cat(), plan_rules(), settings())
+    failures = check_no_waste(week_using(spinach=grams), spinach_cat(), one_trip(), settings())
 
     assert (failures != {}) is flagged
 
 
-def test_no_waste_adds_the_week_up_across_recipes() -> None:
-    recipes = [
-        checked(["spinach"], day="mon", title="One"),
-        checked(["spinach"], day="thu", title="Two"),
-    ]
-    recipes[0].draft.ingredients = [DraftIngredient(id="spinach", grams=60)]
-    recipes[1].draft.ingredients = [DraftIngredient(id="spinach", grams=70)]
+def test_no_waste_adds_a_window_up_across_recipes() -> None:
+    recipes = [on("mon", "spinach", 60), on("thu", "spinach", 70)]
 
-    assert check_no_waste(recipes, spinach_cat(), plan_rules(), settings()) == {}
+    assert check_no_waste(recipes, spinach_cat(), one_trip(), settings()) == {}
 
 
 def test_no_waste_adds_up_an_id_listed_twice_in_one_recipe() -> None:
@@ -1480,15 +1489,15 @@ def test_no_waste_adds_up_an_id_listed_twice_in_one_recipe() -> None:
         DraftIngredient(id="spinach", grams=70),
     ]
 
-    assert check_no_waste([recipe], spinach_cat(), plan_rules(), settings()) == {}
+    assert check_no_waste([recipe], spinach_cat(), one_trip(), settings()) == {}
 
 
 def test_no_waste_shelf_life_edge() -> None:
     keeps_6 = catalogue(item("herb", pack_g=100, keeps_days_opened=6))
     keeps_7 = catalogue(item("herb", pack_g=100, keeps_days_opened=7))
 
-    assert "herb" in check_no_waste(week_using(herb=10), keeps_6, plan_rules(), settings())
-    assert check_no_waste(week_using(herb=10), keeps_7, plan_rules(), settings()) == {}
+    assert ("herb", "mon") in check_no_waste(week_using(herb=10), keeps_6, one_trip(), settings())
+    assert check_no_waste(week_using(herb=10), keeps_7, one_trip(), settings()) == {}
 
 
 def test_no_waste_leaves_out_items_with_no_pack_or_shelf_life() -> None:
@@ -1497,17 +1506,13 @@ def test_no_waste_leaves_out_items_with_no_pack_or_shelf_life() -> None:
         item("no_pack", keeps_days_opened=2),
         item("no_life", pack_g=100),
     )
+    recipes = week_using(pinch_spice=1, no_pack=1, no_life=1)
 
-    assert (
-        check_no_waste(
-            week_using(pinch_spice=1, no_pack=1, no_life=1), cat, plan_rules(), settings()
-        )
-        == {}
-    )
+    assert check_no_waste(recipes, cat, one_trip(), settings()) == {}
 
 
 def test_no_waste_leaves_out_ids_the_catalogue_does_not_have() -> None:
-    assert check_no_waste(week_using(ghost=5), spinach_cat(), plan_rules(), settings()) == {}
+    assert check_no_waste(week_using(ghost=5), spinach_cat(), one_trip(), settings()) == {}
 
 
 def test_no_waste_thresholds_come_from_settings() -> None:
@@ -1516,8 +1521,8 @@ def test_no_waste_thresholds_come_from_settings() -> None:
     wider = settings(no_waste_keeps_days=3)
     stricter = settings(no_waste_min_pack_share=0.4)
 
-    assert check_no_waste(recipes, spinach_cat(), plan_rules(), wider) == {}
-    assert check_no_waste(recipes, spinach_cat(), plan_rules(), stricter) == {}
+    assert check_no_waste(recipes, spinach_cat(), one_trip(), wider) == {}
+    assert check_no_waste(recipes, spinach_cat(), one_trip(), stricter) == {}
 
 
 def test_no_waste_reports_every_ingredient_it_flags() -> None:
@@ -1526,18 +1531,104 @@ def test_no_waste_reports_every_ingredient_it_flags() -> None:
         item("curd", pack_g=400, keeps_days_opened=5),
     )
 
-    failures = check_no_waste(week_using(spinach=50, curd=100), cat, plan_rules(), settings())
+    failures = check_no_waste(week_using(spinach=50, curd=100), cat, one_trip(), settings())
 
-    assert set(failures) == {"spinach", "curd"}
+    assert set(failures) == {("spinach", "mon"), ("curd", "mon")}
 
 
 def test_no_waste_message_says_how_much_to_use() -> None:
-    failure = check_no_waste(week_using(spinach=100), spinach_cat(), plan_rules(), settings())[
-        "spinach"
-    ]
+    failures = check_no_waste(week_using(spinach=100), spinach_cat(), one_trip(), settings())
 
-    assert "at least 125 g" in failure.message
+    assert "at least 125 g" in failures[("spinach", "mon")].message
 
 
 def test_an_empty_week_wastes_nothing() -> None:
-    assert check_no_waste([], spinach_cat(), plan_rules(), settings()) == {}
+    assert check_no_waste([], spinach_cat(), one_trip(), settings()) == {}
+
+
+def test_one_shopping_day_makes_the_whole_week_one_window_starting_that_day() -> None:
+    """Monday and Sunday both fall in the window that starts on Wednesday, 7 days long."""
+    rules = plan_rules(shopping=["wed"])
+
+    enough = check_no_waste(
+        [on("mon", "spinach", 60), on("sun", "spinach", 70)], spinach_cat(), rules, settings()
+    )
+    short = check_no_waste(
+        [on("mon", "spinach", 50), on("sun", "spinach", 50)], spinach_cat(), rules, settings()
+    )
+
+    assert enough == {}
+    assert set(short) == {("spinach", "wed")}
+    assert "wed to tue" in short[("spinach", "wed")].message
+
+
+def test_two_shopping_days_judge_each_window_on_its_own() -> None:
+    """Shopping on Tuesday and Sunday: Tue to Sat uses 200 g and passes, Sun to Mon uses 100 g."""
+    rules = plan_rules(shopping=["sun", "tue"])
+    recipes = [
+        on("sun", "spinach", 50),
+        on("mon", "spinach", 50),
+        on("wed", "spinach", 100),
+        on("fri", "spinach", 100),
+    ]
+
+    failures = check_no_waste(recipes, spinach_cat(), rules, settings())
+
+    assert set(failures) == {("spinach", "sun")}
+    message = failures[("spinach", "sun")].message
+    assert "sun to mon" in message
+    assert "100 g" in message
+    assert "250 g" in message
+
+
+def test_the_days_before_the_first_shopping_day_belong_to_the_last_window() -> None:
+    """Shopping on Wednesday and Saturday: Saturday's window runs Sat, Sun, Mon, Tue."""
+    rules = plan_rules(shopping=["wed", "sat"])
+
+    carried = check_no_waste(
+        [on("sat", "spinach", 30), on("tue", "spinach", 100)], spinach_cat(), rules, settings()
+    )
+    short = check_no_waste(
+        [on("sun", "spinach", 40), on("mon", "spinach", 40)], spinach_cat(), rules, settings()
+    )
+
+    assert carried == {}
+    assert set(short) == {("spinach", "sat")}
+    assert "sat to tue" in short[("spinach", "sat")].message
+
+
+def test_an_ingredient_can_fail_in_two_windows() -> None:
+    rules = plan_rules(shopping=["mon", "thu"])
+    recipes = [on("tue", "spinach", 50), on("fri", "spinach", 50)]
+
+    failures = check_no_waste(recipes, spinach_cat(), rules, settings())
+
+    assert set(failures) == {("spinach", "mon"), ("spinach", "thu")}
+    assert "mon to wed" in failures[("spinach", "mon")].message
+    assert "thu to sun" in failures[("spinach", "thu")].message
+
+
+def test_a_window_that_uses_none_of_an_ingredient_is_not_flagged() -> None:
+    rules = plan_rules(shopping=["mon", "thu"])
+
+    assert check_no_waste([on("tue", "spinach", 200)], spinach_cat(), rules, settings()) == {}
+
+
+def test_the_order_and_repeats_of_shopping_days_do_not_matter() -> None:
+    recipes = [on("sun", "spinach", 50), on("wed", "spinach", 100)]
+    plain = check_no_waste(recipes, spinach_cat(), plan_rules(shopping=["tue", "sun"]), settings())
+
+    shuffled = check_no_waste(
+        recipes, spinach_cat(), plan_rules(shopping=["sun", "tue", "sun"]), settings()
+    )
+
+    assert set(plain) == set(shuffled) == {("spinach", "sun"), ("spinach", "tue")}
+
+
+def test_a_window_of_one_day_is_named_by_that_day() -> None:
+    rules = plan_rules(shopping=["mon", "tue"])
+
+    failures = check_no_waste([on("mon", "spinach", 100)], spinach_cat(), rules, settings())
+
+    message = failures[("spinach", "mon")].message
+    assert "window mon uses" in message

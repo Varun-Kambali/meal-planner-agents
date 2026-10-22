@@ -514,24 +514,29 @@ def _plain(text: str) -> str:
 
 def check_no_waste(
     week: Sequence[CheckedRecipe], catalogue: Catalogue, rules: PlanRules, s: Settings
-) -> dict[str, Failure]:
-    """Flag a short-lived ingredient the week uses too little of to finish a pack.
+) -> dict[tuple[str, DayKey], Failure]:
+    """Flag a short-lived ingredient that a shopping window uses too little of to finish a pack.
 
-    The grams of each ingredient are added up over the whole week and set against its pack. Only
-    an ingredient that keeps fewer than `no_waste_keeps_days` once opened counts, and only one
-    the catalogue gives a pack size and shelf life for, since the rest are used by the pinch or
-    keep. The result is keyed by ingredient id.
+    The plan's shopping days split the week into windows. One runs from a shopping day to the day
+    before the next, and the days before the first shopping day belong to the last window, which
+    wraps past Sunday. Whatever is bought on the first day of a window has to be used inside it,
+    so each window is judged on its own: the grams of an ingredient in its recipes are set
+    against the ingredient's pack. A window that uses none of it buys none and is not flagged.
 
-    `rules` is taken for the plan's shopping days, which do not change the arithmetic yet: the
-    week is treated as one shopping period.
+    Only an ingredient that keeps fewer than `no_waste_keeps_days` once opened counts, and only
+    one the catalogue gives a pack size and shelf life for, since the rest are used by the pinch
+    or keep. The result is keyed by (ingredient id, first day of the window), so one ingredient
+    can fail in more than one window.
     """
-    used: dict[str, float] = defaultdict(float)
+    window_of = _shopping_windows(rules.shopping_days)
+    used: dict[tuple[str, DayKey], float] = defaultdict(float)
     for recipe in week:
+        start = window_of[recipe.spec.day]
         for ingredient in recipe.draft.ingredients:
-            used[ingredient.id] += ingredient.grams
+            used[(ingredient.id, start)] += ingredient.grams
 
-    found: dict[str, Failure] = {}
-    for food_id, grams in used.items():
+    found: dict[tuple[str, DayKey], Failure] = {}
+    for (food_id, start), grams in used.items():
         item = catalogue.items.get(food_id)
         if item is None or item.pack_g is None or item.keeps_days_opened is None:
             continue
@@ -540,11 +545,32 @@ def check_no_waste(
         enough = item.pack_g * s.no_waste_min_pack_share
         if grams < enough - _EPS:
             days = item.keeps_days_opened
-            found[food_id] = Failure(
+            found[(food_id, start)] = Failure(
                 check="no_waste",
-                message=f"week uses {_down(grams)} g of {item.name} ({food_id}), "
+                message=f"{item.name} ({food_id}): the shopping window "
+                f"{_window_text(window_of, start)} uses {_down(grams)} g, "
                 f"{_down(grams / item.pack_g * 100)}% of a {_n(item.pack_g)} g pack that keeps "
                 f"{days} day{'' if days == 1 else 's'} once opened; use at least {_up(enough)} g "
-                "across the week or pick an ingredient that keeps longer",
+                "in those days or pick an ingredient that keeps longer",
             )
     return found
+
+
+def _shopping_windows(shopping_days: Iterable[DayKey]) -> dict[DayKey, DayKey]:
+    """The first day of the shopping window each day of the week falls in."""
+    starts = sorted(set(shopping_days), key=DAYS.index)
+    window_of: dict[DayKey, DayKey] = {}
+    for position, day in enumerate(DAYS):
+        began = [start for start in starts if DAYS.index(start) <= position]
+        window_of[day] = began[-1] if began else starts[-1]
+    return window_of
+
+
+def _window_text(window_of: dict[DayKey, DayKey], start: DayKey) -> str:
+    """The days of a window in the order they come, such as "sat to tue" or a single "mon"."""
+    first = DAYS.index(start)
+    days = sorted(
+        (day for day in DAYS if window_of[day] == start),
+        key=lambda day: (DAYS.index(day) - first) % len(DAYS),
+    )
+    return days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
