@@ -72,12 +72,17 @@ def slot(**changes: Any) -> Slot:
 
 
 def spec(
-    *, day: DayKey = "mon", kcal: float = 500, protein_g: float = 40, slot_id: str = "breakfast"
+    *,
+    day: DayKey = "mon",
+    kcal: float = 500,
+    protein_g: float = 40,
+    slot_id: str = "breakfast",
+    eat_at: int = 8,
 ) -> SlotSpec:
     return SlotSpec(
         day=day,
         day_type="training",
-        slot=slot(id=slot_id, name=slot_id.capitalize()),
+        slot=slot(id=slot_id, name=slot_id.capitalize(), eat_at=time(eat_at, 0)),
         kcal=kcal,
         protein_g=protein_g,
     )
@@ -134,10 +139,11 @@ def checked(
     cuisine: str = "South Indian",
     kcal: float = 500,
     protein_g: float = 40,
+    eat_at: int = 8,
     nutrition: MealResult | None = None,
 ) -> CheckedRecipe:
     return CheckedRecipe(
-        spec=spec(day=day, kcal=kcal, protein_g=protein_g, slot_id=slot_id),
+        spec=spec(day=day, kcal=kcal, protein_g=protein_g, slot_id=slot_id, eat_at=eat_at),
         draft=draft(ids, day=day, title=title, cuisine=cuisine),
         nutrition=nutrition,
         failures=[],
@@ -916,105 +922,234 @@ def test_check_day_with_no_recipes_knows_nothing() -> None:
 
 # Which recipe to blame for a day
 
+# Breakfast, lunch and dinner share a 1000 kcal day. Each dish has a share of the day's calories
+# and protein and an actual amount; what a test does not set is on target, so one check fails.
+BLAME_DAY = day_type(kcal=1000, protein_g=100, sat_fat_g_max=20, fibre_g_min=35)
+HOURS = {"breakfast": 8, "lunch": 13, "dinner": 20}
+SHARE = {"breakfast": 200, "lunch": 300, "dinner": 500}
 
-def kcal_recipe(
-    kcal: float, protein: float = 40, *, target: float = 500, share: float = 40, **where: Any
+
+def dish(
+    slot_id: str,
+    *,
+    share: float | None = None,
+    kcal: float | None = None,
+    protein_share: float = 34,
+    incomplete: Mapping[str, list[str]] | None = None,
+    **nutrients: float | None,
 ) -> CheckedRecipe:
+    """A recipe of `slot_id` on Monday whose numbers are on target unless changed."""
+    planned = SHARE[slot_id] if share is None else share
+    totals: dict[str, float | None] = {
+        "kcal": planned if kcal is None else kcal,
+        "protein_g": 34,
+        "sat_fat_g": 1,
+        "fibre_g": 12,
+    } | nutrients
     return checked(
-        nutrition=meal({"kcal": kcal, "protein_g": protein}),
-        kcal=target,
-        protein_g=share,
-        **where,
+        [f"{slot_id}_food"],
+        slot_id=slot_id,
+        title=f"Dish {slot_id}",
+        kcal=planned,
+        protein_g=protein_share,
+        eat_at=HOURS.get(slot_id, 17),
+        nutrition=meal(totals, incomplete),
     )
 
 
-def report_for(day: DayKey = "mon") -> DayReport:
-    return DayReport(day=day, totals={}, failures=[], soft={})
+def blamed(
+    dishes: list[CheckedRecipe], first_failure: str, day: DayType = BLAME_DAY
+) -> CheckedRecipe:
+    report = check_day("mon", dishes, day, settings())
+    assert report.failures[0].check == first_failure
+    return worst_recipe_for_day(report, dishes, day)
 
 
-def test_worst_recipe_is_furthest_from_its_kcal_share() -> None:
-    near = kcal_recipe(520, slot_id="lunch")
-    far = kcal_recipe(640, slot_id="dinner")
-    mid = kcal_recipe(450, slot_id="snack")
+def test_over_on_calories_blames_the_most_kcal_above_share_not_the_biggest_percentage() -> None:
+    """The snack is 10% over its 50 kcal share and the dinner 9% over its 800: the dinner holds
+    72 kcal of the excess and the snack 5, so rewriting the dinner is what brings the day down."""
+    snack = dish("snack", share=50, kcal=55)
+    dinner = dish("dinner", share=800, kcal=872)
+    breakfast = dish("breakfast", share=150)
 
-    assert worst_recipe_for_day(report_for(), [near, far, mid]) is far
-
-
-def test_worst_recipe_counts_the_miss_against_its_own_share() -> None:
-    """10 kcal off a 50 kcal share is further out than 40 kcal off a 800 kcal share."""
-    small = kcal_recipe(60, target=50, slot_id="snack")
-    big = kcal_recipe(840, target=800, slot_id="dinner")
-
-    assert worst_recipe_for_day(report_for(), [big, small]) is small
+    assert blamed([breakfast, snack, dinner], "day_kcal") is dinner
 
 
-def test_worst_recipe_is_found_below_the_share_too() -> None:
-    low = kcal_recipe(300, slot_id="lunch")
-    high = kcal_recipe(560, slot_id="dinner")
+def test_over_on_calories_ignores_a_recipe_furthest_under_its_share() -> None:
+    breakfast = dish("breakfast", share=100, kcal=10)
+    dinner = dish("dinner", share=800, kcal=960)
+    lunch = dish("lunch", share=100)
 
-    assert worst_recipe_for_day(report_for(), [high, low]) is low
-
-
-def test_a_kcal_tie_goes_to_the_larger_protein_shortfall() -> None:
-    short = kcal_recipe(500, protein=20, slot_id="lunch")
-    fine = kcal_recipe(500, protein=40, slot_id="dinner")
-    over = kcal_recipe(500, protein=90, slot_id="snack")
-
-    assert worst_recipe_for_day(report_for(), [fine, over, short]) is short
+    assert blamed([breakfast, lunch, dinner], "day_kcal") is dinner
 
 
-def test_protein_above_the_share_is_no_shortfall() -> None:
-    a = kcal_recipe(500, protein=80, slot_id="lunch")
-    b = kcal_recipe(500, protein=39, slot_id="dinner")
+def test_under_on_calories_blames_the_most_kcal_below_share() -> None:
+    breakfast = dish("breakfast", share=100, kcal=20)
+    dinner = dish("dinner", share=800, kcal=650)
+    lunch = dish("lunch", share=100, kcal=100)
 
-    assert worst_recipe_for_day(report_for(), [a, b]) is b
+    assert blamed([breakfast, lunch, dinner], "day_kcal") is dinner
 
 
-def test_a_full_tie_goes_to_the_first_recipe() -> None:
-    first = kcal_recipe(500, slot_id="lunch")
-    second = kcal_recipe(500, slot_id="dinner")
+def test_under_on_calories_ignores_a_recipe_over_its_share() -> None:
+    breakfast = dish("breakfast", share=200, kcal=400)
+    lunch = dish("lunch", share=300, kcal=100)
+    dinner = dish("dinner", share=500, kcal=380)
 
-    assert worst_recipe_for_day(report_for(), [first, second]) is first
+    assert blamed([breakfast, lunch, dinner], "day_kcal") is lunch
+
+
+def test_under_on_protein_blames_the_most_grams_below_its_protein_share() -> None:
+    """The breakfast has the least protein (5 g), the dinner the largest gap to its share."""
+    breakfast = dish("breakfast", protein_share=10, protein_g=5)
+    lunch = dish("lunch", protein_share=45, protein_g=30)
+    dinner = dish("dinner", protein_share=45, protein_g=25)
+
+    assert blamed([breakfast, lunch, dinner], "day_protein_g") is dinner
+
+
+def test_over_on_saturated_fat_blames_the_recipe_holding_the_most() -> None:
+    """Breakfast is first in the day and on its calories, but the ghee is in the lunch."""
+    breakfast = dish("breakfast", sat_fat_g=1)
+    lunch = dish("lunch", sat_fat_g=30)
+    dinner = dish("dinner", sat_fat_g=5)
+
+    assert blamed([breakfast, lunch, dinner], "day_sat_fat_g") is lunch
+
+
+def test_under_on_fibre_blames_the_recipe_holding_the_least() -> None:
+    breakfast = dish("breakfast", fibre_g=12)
+    lunch = dish("lunch", fibre_g=3)
+    dinner = dish("dinner", fibre_g=8)
+
+    assert blamed([breakfast, lunch, dinner], "day_fibre_g") is lunch
+
+
+@pytest.mark.parametrize(
+    ("target", "amounts", "expected"),
+    [
+        (NutrientTarget(nutrient="iron_mg", kind="min", value=18), (8, 2, 5), "lunch"),
+        (NutrientTarget(nutrient="sodium_mg", kind="max", value=2000), (900, 700, 1200), "dinner"),
+    ],
+)
+def test_an_extra_target_blames_by_its_own_direction(
+    target: NutrientTarget, amounts: tuple[float, float, float], expected: str
+) -> None:
+    day = day_type(kcal=1000, protein_g=100, extra=[target])
+    key = target.nutrient
+    dishes = [
+        dish(slot_id, **{key: amount})
+        for slot_id, amount in zip(("breakfast", "lunch", "dinner"), amounts, strict=True)
+    ]
+
+    assert blamed(dishes, f"day_{key}", day).spec.slot.id == expected
+
+
+def test_a_recipe_with_no_numbers_is_blamed_when_the_day_is_short() -> None:
+    breakfast = dish("breakfast")
+    lunch = dish("lunch")
+    dinner = checked(["ghost"], slot_id="dinner", kcal=500, eat_at=20)
+
+    assert blamed([breakfast, lunch, dinner], "day_kcal") is dinner
+
+
+def test_a_recipe_with_an_unknown_amount_is_not_blamed_when_the_day_is_over() -> None:
+    breakfast = dish("breakfast", sat_fat_g=1)
+    lunch = dish("lunch", sat_fat_g=None)
+    dinner = dish("dinner", sat_fat_g=30)
+
+    assert blamed([breakfast, lunch, dinner], "day_sat_fat_g") is dinner
+
+
+def test_a_day_that_cannot_be_confirmed_blames_the_recipe_with_no_value() -> None:
+    """11 g of saturated fat is known, under the 20 g cap, but the lunch has no value."""
+    breakfast = dish("breakfast", sat_fat_g=5)
+    lunch = dish("lunch", sat_fat_g=None)
+    dinner = dish("dinner", sat_fat_g=6)
+
+    assert blamed([breakfast, lunch, dinner], "day_sat_fat_g") is lunch
+
+
+def test_a_day_that_cannot_be_confirmed_blames_the_recipe_nutrition_mcp_marks_incomplete() -> None:
+    breakfast = dish("breakfast", sat_fat_g=5)
+    lunch = dish("lunch", sat_fat_g=4, incomplete={"sat_fat_g": ["mystery_flour"]})
+    dinner = dish("dinner", sat_fat_g=6)
+
+    assert blamed([breakfast, lunch, dinner], "day_sat_fat_g") is lunch
+
+
+def test_a_day_with_no_value_for_a_nutrient_blames_the_earliest_slot() -> None:
+    breakfast = dish("breakfast", share=500, protein_g=60, fibre_g=None)
+    lunch = dish("lunch", share=500, protein_g=60, fibre_g=None)
+
+    assert blamed([lunch, breakfast], "day_fibre_g") is breakfast
+
+
+def test_calories_on_the_target_but_not_confirmed_still_get_a_recipe() -> None:
+    """Exactly 1000 kcal known with a recipe missing: neither over nor under, so the one with no
+    numbers is blamed."""
+    breakfast = dish("breakfast", share=200, kcal=1000)
+    dinner = checked(["ghost"], slot_id="dinner", kcal=500, eat_at=20)
+
+    assert blamed([breakfast, dinner], "day_kcal") is dinner
+
+
+def test_a_tie_goes_to_the_earlier_slot_whatever_the_list_order() -> None:
+    breakfast = dish("breakfast", sat_fat_g=15)
+    lunch = dish("lunch", sat_fat_g=1)
+    dinner = dish("dinner", sat_fat_g=15)
+
+    assert blamed([dinner, lunch, breakfast], "day_sat_fat_g") is breakfast
+
+
+def test_slots_at_the_same_time_tie_in_list_order() -> None:
+    first = dish("snack", share=500, protein_g=60, sat_fat_g=30)
+    second = dish("tea", share=500, protein_g=60, sat_fat_g=30)
+
+    assert blamed([second, first], "day_sat_fat_g") is second
+
+
+def test_the_first_failing_check_in_nutrient_order_decides() -> None:
+    """Calories and fibre both fail. Calories come first, so the recipe 150 kcal under its share
+    is blamed, not the breakfast that ties the dinner for the least fibre."""
+    breakfast = dish("breakfast", share=200, kcal=200, fibre_g=0)
+    lunch = dish("lunch", share=300, kcal=250, fibre_g=10)
+    dinner = dish("dinner", share=500, kcal=350, fibre_g=0)
+    dishes = [breakfast, lunch, dinner]
+
+    report = check_day("mon", dishes, BLAME_DAY, settings())
+
+    assert checks_of(report.failures) == ["day_kcal", "day_fibre_g"]
+    assert worst_recipe_for_day(report, dishes, BLAME_DAY) is dinner
 
 
 def test_worst_recipe_is_chosen_from_the_reports_day_only() -> None:
-    other_day = kcal_recipe(900, day="tue")
-    this_day = kcal_recipe(510, day="mon")
+    other_day = checked(["x"], day="tue", slot_id="lunch", kcal=300, nutrition=meal({"kcal": 900}))
+    this_day = dish("dinner", share=500, kcal=900)
+    report = DayReport(
+        day="mon",
+        totals={"kcal": 1500},
+        failures=[Failure(check="day_kcal", message="calories 1500 kcal")],
+        soft={},
+    )
 
-    assert worst_recipe_for_day(report_for("mon"), [other_day, this_day]) is this_day
-
-
-def test_a_recipe_without_numbers_is_the_one_to_blame() -> None:
-    off = kcal_recipe(900, slot_id="lunch")
-    unknown = checked(["ghost"], slot_id="dinner")
-
-    assert worst_recipe_for_day(report_for(), [off, unknown]) is unknown
-
-
-def test_a_recipe_with_unknown_kcal_ranks_furthest() -> None:
-    off = kcal_recipe(900, slot_id="lunch")
-    unknown = checked(["x"], slot_id="dinner", nutrition=meal({"protein_g": 40}))
-
-    assert worst_recipe_for_day(report_for(), [off, unknown]) is unknown
-
-
-def test_unknown_protein_counts_as_the_whole_share_missing() -> None:
-    known = kcal_recipe(500, protein=1, slot_id="lunch")
-    unknown = checked(["x"], slot_id="dinner", nutrition=meal({"kcal": 500}))
-
-    assert worst_recipe_for_day(report_for(), [known, unknown]) is unknown
-
-
-def test_a_slot_with_no_protein_share_has_no_protein_shortfall() -> None:
-    no_share = kcal_recipe(500, protein=0, share=0, slot_id="snack")
-    short = kcal_recipe(500, protein=39, slot_id="dinner")
-
-    assert worst_recipe_for_day(report_for(), [no_share, short]) is short
+    assert worst_recipe_for_day(report, [other_day, this_day], BLAME_DAY) is this_day
 
 
 def test_worst_recipe_needs_a_recipe_on_that_day() -> None:
+    report = DayReport(day="wed", totals={}, failures=[], soft={})
+
     with pytest.raises(ValueError, match="wed"):
-        worst_recipe_for_day(report_for("wed"), [kcal_recipe(500, day="mon")])
+        worst_recipe_for_day(report, [dish("lunch")], BLAME_DAY)
+
+
+def test_worst_recipe_needs_a_failing_day_check() -> None:
+    dishes = [dish("breakfast"), dish("lunch"), dish("dinner")]
+    report = check_day("mon", dishes, BLAME_DAY, settings())
+
+    assert report.failures == []
+    with pytest.raises(ValueError, match="mon"):
+        worst_recipe_for_day(report, dishes, BLAME_DAY)
 
 
 # Variety

@@ -18,6 +18,7 @@ Two conventions run through the nutrition checks:
 import math
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from typing import Literal
 
 from nutrition_mcp.models import DIET_SUITABLE_FOR, Nutrients
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
@@ -28,6 +29,8 @@ from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure
 from meal_planner.rules import DAYS, DayKey, DayType, PlanRules, Slot, SlotSpec
+
+_Direction = Literal["over", "under", "unknown"]
 
 # Slack for floating point, so a value exactly on a limit passes whatever the last bit of
 # `target * tolerance` is. nutrition-mcp reports two decimals, far coarser than this.
@@ -333,32 +336,74 @@ def _add_names(into: dict[str, list[str]], key: str, names: Iterable[str]) -> No
     known.extend(new)
 
 
-def worst_recipe_for_day(report: DayReport, recipes: list[CheckedRecipe]) -> CheckedRecipe:
-    """The recipe of the report's day to rewrite when the day misses a target.
+def worst_recipe_for_day(
+    report: DayReport, recipes: list[CheckedRecipe], day_type: DayType
+) -> CheckedRecipe:
+    """The recipe of the report's day whose rewrite is most likely to fix its first failing check.
 
-    That is the one furthest from its slot's calories, as a fraction of the share, so a snack
-    10% off ranks above a dinner 5% off. A tie goes to the larger protein shortfall, as a
-    fraction of the share, and a full tie to the first. A recipe with no numbers is furthest of
-    all, as it is what keeps the day from being known.
+    The first failing check, in nutrient order, sets the nutrient and the direction. A recipe is
+    ranked by how many units it is above its slot's share when the day is over, and below its
+    share when the day is under: kcal and protein have a share per slot, so a 5 kcal miss on a
+    50 kcal snack ranks below a 72 kcal miss on a dinner. A nutrient with no share per slot
+    (saturated fat, fibre, an extra target) counts as a share of 0, so a day over its cap blames
+    the recipe holding the most of it and a day under its floor the recipe holding the least.
+
+    An amount that is not known (a recipe with no numbers, or no value for the nutrient) never
+    ranks first when the day is over, because it cannot be shown to cause the excess, and always
+    does when the day is under. A day that is within its limits as far as is known but cannot be
+    confirmed, because a recipe lacks a value, blames a recipe that lacks it.
+
+    A tie goes to the earlier slot of the day, then to the first in `recipes`.
     """
-    todays = [r for r in recipes if r.spec.day == report.day]
+    todays = sorted(
+        (r for r in recipes if r.spec.day == report.day), key=lambda r: r.spec.slot.eat_at
+    )
     if not todays:
         raise ValueError(f"no recipes for {report.day} to choose from")
-    return max(todays, key=_distance_from_share)
+    if not report.failures:
+        raise ValueError(f"{report.day} passes every day check, so no recipe is to blame")
+    key = report.failures[0].check.removeprefix("day_")
+    direction = _direction(key, report.totals.get(key), day_type)
+    return max(todays, key=lambda r: _blame(r, key, direction))
 
 
-def _distance_from_share(recipe: CheckedRecipe) -> tuple[float, float]:
+def _direction(key: str, total: float | None, day_type: DayType) -> _Direction:
+    """Whether a day's total is over a maximum, under a minimum, or neither (or not known).
+
+    Calories are held to their target here, not to the tolerance around it: a day that failed on
+    calories is outside the band, so the side of the target it is on is the side it missed on.
+    """
+    if total is None:
+        return "unknown"
+    limits: list[tuple[str, float]] = []
+    match key:
+        case "kcal":
+            limits = [("min", day_type.kcal), ("max", day_type.kcal)]
+        case "protein_g":
+            limits = [("min", day_type.protein_g)]
+        case "sat_fat_g":
+            limits = [("max", day_type.sat_fat_g_max)]
+        case "fibre_g":
+            limits = [("min", day_type.fibre_g_min)]
+    limits += [(t.kind, t.value) for t in day_type.extra if t.nutrient == key]
+    if any(kind == "max" and total > value for kind, value in limits):
+        return "over"
+    if any(kind == "min" and total < value for kind, value in limits):
+        return "under"
+    return "unknown"
+
+
+def _blame(recipe: CheckedRecipe, key: str, direction: _Direction) -> float:
+    """How much of the miss in `key` the recipe is, larger meaning more to blame."""
     meal = recipe.nutrition
-    if meal is None:
-        return math.inf, math.inf
-    spec = recipe.spec
-    kcal = meal.total.kcal
-    protein = meal.total.protein_g
-    off = math.inf if kcal is None else abs(kcal - spec.kcal) / spec.kcal
-    short = 0.0
-    if spec.protein_g > 0:
-        short = 1.0 if protein is None else max(0.0, spec.protein_g - protein) / spec.protein_g
-    return off, short
+    held = None if meal is None else meal.total.get(key)
+    if direction == "unknown":
+        lacks = meal is None or held is None or key in meal.total_incomplete
+        return 1.0 if lacks else 0.0
+    if held is None:
+        return -math.inf if direction == "over" else math.inf
+    share = {"kcal": recipe.spec.kcal, "protein_g": recipe.spec.protein_g}.get(key, 0.0)
+    return held - share if direction == "over" else share - held
 
 
 # Week checks
