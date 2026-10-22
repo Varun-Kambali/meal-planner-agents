@@ -161,7 +161,8 @@ class SlotModel:
     """Answers each slot from its own queue of replies, whatever order the slots call in.
 
     `replies` maps a slot id to the raw replies for each task. A slot in `errors` gets that
-    error code on every call, as a model that was rate limited does. A slot in `gates` does not
+    error code on every call, as a model that was rate limited does; "slot/task" as the key
+    limits it to one task. A slot in `gates` does not
     answer until its event is set. `peak` is the most calls that were in flight together.
     """
 
@@ -198,8 +199,9 @@ class SlotModel:
             await asyncio.sleep(0.005)
             if slot_id in self._gates:
                 await self._gates[slot_id].wait()
-            if slot_id in self._errors:
-                return ModelReply(value=None, raw="", error=self._errors[slot_id])
+            error = self._errors.get(f"{slot_id}/{task}") or self._errors.get(slot_id)
+            if error:
+                return ModelReply(value=None, raw="", error=error)
             reply = await self._queues[slot_id].structured(
                 task=task, system=system, user=user, schema=schema, timeout_s=timeout_s
             )
@@ -522,6 +524,28 @@ async def test_repair_reply_that_cannot_be_used_costs_an_attempt_and_is_explaine
     first, second = [user for _, user in model.of_task("repair_slot")]
     assert "rejected" not in first
     assert failed.reason in second
+
+
+async def test_a_rate_limited_repair_is_not_asked_again() -> None:
+    """The transport already retried, so the recipes keep their failures and the slot is left."""
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        errors={"breakfast/repair_slot": "rate_limited"},
+    )
+
+    events, week = await run(model)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert [f.check for f in mon.failures] == ["slot_protein_g"]
+    assert mon.attempts == 2
+    assert week.unwritten == []
+    assert week.calls == 5
+    assert kinds(events).count("repair_started") == 1
+    (failed,) = [e for e in events if isinstance(e, SlotFailed)]
+    assert (failed.slot_id, failed.reason, failed.final) == ("breakfast", "rate_limited", True)
+    assert kinds(events)[-1] == "week_done"
+    # Slots that were not limited are not held back by it.
+    assert all(r.failures == [] for k, r in by_key(week).items() if k[1] != "breakfast")
 
 
 async def test_a_slot_that_is_never_right_is_reported_unwritten() -> None:

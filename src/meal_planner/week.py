@@ -699,7 +699,10 @@ def _repair_jobs(
             for key in sorted(repairable, key=rank)
             if key[1] == slot.id and key in evaluation.recipes and evaluation.recipes[key].failures
         ]
-        if slot.id in busy or not failing:
+        # A call that gave nothing because the model could not be reached was already retried
+        # by the model client: leave the slot, and its recipes keep the failures they have.
+        gave_out = any(r.final for key, r in state["refused"].items() if key[1] == slot.id)
+        if slot.id in busy or gave_out or not failing:
             continue
         fixing = {(r.spec.day, slot.id) for r in failing}
         others = [
@@ -707,7 +710,7 @@ def _repair_jobs(
             for day in DAYS
             if (day, slot.id) in evaluation.recipes and (day, slot.id) not in fixing
         ]
-        # If the last call for this slot was refused, the next one hears why.
+        # If the last call for this slot was refused for what it said, the next one hears why.
         refusals = (state["refused"].get((r.spec.day, slot.id)) for r in failing)
         rejected = next((f.reason for f in refusals if f and f.attempt == attempt - 1), None)
         jobs.append(_Job(slot.id, [r.spec for r in failing], attempt, rejected, failing, others))
