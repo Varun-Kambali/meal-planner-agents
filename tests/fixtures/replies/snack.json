@@ -1,0 +1,103 @@
+{
+  "slot_id": "snack",
+  "recipes": [
+   {
+    "day": "mon",
+    "title": "Cucumber chaat",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "cucumber", "grams": 109.31}, {"id": "roasted_chana", "grams": 59.62}, {"id": "curd", "grams": 29.81}],
+    "steps": ["Chop the cucumber into small pieces.", "Toss with the roasted chana and curd."],
+    "active_min": 5,
+    "total_min": 5,
+    "gear": [],
+    "cook_when": "fresh",
+    "store": "Eat fresh.",
+    "swap": "Use sprouts in place of the chana.",
+    "fits": "A no-cook snack that needs nothing but a knife."
+   },
+   {
+    "day": "tue",
+    "title": "Carrot chaat",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "carrot", "grams": 92.81}, {"id": "roasted_chana", "grams": 50.62}, {"id": "curd", "grams": 25.31}],
+    "steps": ["Chop the carrot into small pieces.", "Toss with the roasted chana and curd."],
+    "active_min": 5,
+    "total_min": 5,
+    "gear": [],
+    "cook_when": "fresh",
+    "store": "Eat fresh.",
+    "swap": "Use sprouts in place of the chana.",
+    "fits": "A no-cook snack that needs nothing but a knife."
+   },
+   {
+    "day": "wed",
+    "title": "Sprouts chaat",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "sprouts", "grams": 109.31}, {"id": "roasted_chana", "grams": 59.62}, {"id": "curd", "grams": 29.81}],
+    "steps": ["Chop the sprouts into small pieces.", "Toss with the roasted chana and curd."],
+    "active_min": 5,
+    "total_min": 5,
+    "gear": [],
+    "cook_when": "fresh",
+    "store": "Eat fresh.",
+    "swap": "Use sprouts in place of the chana.",
+    "fits": "A no-cook snack that needs nothing but a knife."
+   },
+   {
+    "day": "thu",
+    "title": "Makhana chaat",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "makhana", "grams": 92.81}, {"id": "roasted_chana", "grams": 50.62}, {"id": "curd", "grams": 25.31}],
+    "steps": ["Chop the makhana into small pieces.", "Toss with the roasted chana and curd."],
+    "active_min": 5,
+    "total_min": 5,
+    "gear": [],
+    "cook_when": "fresh",
+    "store": "Eat fresh.",
+    "swap": "Use sprouts in place of the chana.",
+    "fits": "A no-cook snack that needs nothing but a knife."
+   },
+   {
+    "day": "fri",
+    "title": "Pomegranate chaat",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "pomegranate", "grams": 109.31}, {"id": "roasted_chana", "grams": 59.62}, {"id": "curd", "grams": 29.81}],
+    "steps": ["Chop the pomegranate into small pieces.", "Toss with the roasted chana and curd."],
+    "active_min": 5,
+    "total_min": 5,
+    "gear": [],
+    "cook_when": "fresh",
+    "store": "Eat fresh.",
+    "swap": "Use sprouts in place of the chana.",
+    "fits": "A no-cook snack that needs nothing but a knife."
+   },
+   {
+    "day": "sat",
+    "title": "Guava chaat",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "guava", "grams": 92.81}, {"id": "roasted_chana", "grams": 50.62}, {"id": "curd", "grams": 25.31}],
+    "steps": ["Chop the guava into small pieces.", "Toss with the roasted chana and curd."],
+    "active_min": 5,
+    "total_min": 5,
+    "gear": [],
+    "cook_when": "fresh",
+    "store": "Eat fresh.",
+    "swap": "Use sprouts in place of the chana.",
+    "fits": "A no-cook snack that needs nothing but a knife."
+   },
+   {
+    "day": "sun",
+    "title": "Papaya chaat",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "papaya", "grams": 92.81}, {"id": "roasted_chana", "grams": 50.62}, {"id": "curd", "grams": 25.31}],
+    "steps": ["Chop the papaya into small pieces.", "Toss with the roasted chana and curd."],
+    "active_min": 5,
+    "total_min": 5,
+    "gear": [],
+    "cook_when": "fresh",
+    "store": "Eat fresh.",
+    "swap": "Use sprouts in place of the chana.",
+    "fits": "A no-cook snack that needs nothing but a knife."
+   }
+  ]
+}

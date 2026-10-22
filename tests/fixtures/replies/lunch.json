@@ -1,0 +1,103 @@
+{
+  "slot_id": "lunch",
+  "recipes": [
+   {
+    "day": "mon",
+    "title": "Paneer rice box",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "paneer", "grams": 218.63}, {"id": "white_rice", "grams": 119.25}, {"id": "toor_dal", "grams": 59.62}],
+    "steps": ["Pressure cook the rice and dal together.", "Saute the paneer and pack it beside the rice."],
+    "active_min": 20,
+    "total_min": 45,
+    "gear": ["pressure_cooker", "stovetop_pan"],
+    "cook_when": "evening_before",
+    "store": "Fridge in a lunch box, reheat in the office microwave.",
+    "swap": "Swap the rice for roti if you prefer.",
+    "fits": "A packed lunch that carries its share of the day's protein."
+   },
+   {
+    "day": "tue",
+    "title": "Tofu rice box",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "tofu", "grams": 185.63}, {"id": "white_rice", "grams": 101.25}, {"id": "toor_dal", "grams": 50.62}],
+    "steps": ["Pressure cook the rice and dal together.", "Saute the tofu and pack it beside the rice."],
+    "active_min": 20,
+    "total_min": 45,
+    "gear": ["pressure_cooker", "stovetop_pan"],
+    "cook_when": "evening_before",
+    "store": "Fridge in a lunch box, reheat in the office microwave.",
+    "swap": "Swap the rice for roti if you prefer.",
+    "fits": "A packed lunch that carries its share of the day's protein."
+   },
+   {
+    "day": "wed",
+    "title": "Rajma rice box",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "rajma", "grams": 218.63}, {"id": "white_rice", "grams": 119.25}, {"id": "toor_dal", "grams": 59.62}],
+    "steps": ["Pressure cook the rice and dal together.", "Saute the rajma and pack it beside the rice."],
+    "active_min": 20,
+    "total_min": 45,
+    "gear": ["pressure_cooker", "stovetop_pan"],
+    "cook_when": "evening_before",
+    "store": "Fridge in a lunch box, reheat in the office microwave.",
+    "swap": "Swap the rice for roti if you prefer.",
+    "fits": "A packed lunch that carries its share of the day's protein."
+   },
+   {
+    "day": "thu",
+    "title": "Kabuli chana rice box",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "kabuli_chana", "grams": 185.63}, {"id": "white_rice", "grams": 101.25}, {"id": "toor_dal", "grams": 50.62}],
+    "steps": ["Pressure cook the rice and dal together.", "Saute the kabuli chana and pack it beside the rice."],
+    "active_min": 20,
+    "total_min": 45,
+    "gear": ["pressure_cooker", "stovetop_pan"],
+    "cook_when": "evening_before",
+    "store": "Fridge in a lunch box, reheat in the office microwave.",
+    "swap": "Swap the rice for roti if you prefer.",
+    "fits": "A packed lunch that carries its share of the day's protein."
+   },
+   {
+    "day": "fri",
+    "title": "Soya chunks rice box",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "soya_chunks", "grams": 218.63}, {"id": "white_rice", "grams": 119.25}, {"id": "toor_dal", "grams": 59.62}],
+    "steps": ["Pressure cook the rice and dal together.", "Saute the soya chunks and pack it beside the rice."],
+    "active_min": 20,
+    "total_min": 45,
+    "gear": ["pressure_cooker", "stovetop_pan"],
+    "cook_when": "evening_before",
+    "store": "Fridge in a lunch box, reheat in the office microwave.",
+    "swap": "Swap the rice for roti if you prefer.",
+    "fits": "A packed lunch that carries its share of the day's protein."
+   },
+   {
+    "day": "sat",
+    "title": "Mushroom rice box",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "mushroom", "grams": 185.63}, {"id": "white_rice", "grams": 101.25}, {"id": "toor_dal", "grams": 50.62}],
+    "steps": ["Pressure cook the rice and dal together.", "Saute the mushroom and pack it beside the rice."],
+    "active_min": 20,
+    "total_min": 45,
+    "gear": ["pressure_cooker", "stovetop_pan"],
+    "cook_when": "evening_before",
+    "store": "Fridge in a lunch box, reheat in the office microwave.",
+    "swap": "Swap the rice for roti if you prefer.",
+    "fits": "A packed lunch that carries its share of the day's protein."
+   },
+   {
+    "day": "sun",
+    "title": "Spinach rice box",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "spinach", "grams": 185.63}, {"id": "white_rice", "grams": 101.25}, {"id": "toor_dal", "grams": 50.62}],
+    "steps": ["Pressure cook the rice and dal together.", "Saute the spinach and pack it beside the rice."],
+    "active_min": 20,
+    "total_min": 45,
+    "gear": ["pressure_cooker", "stovetop_pan"],
+    "cook_when": "evening_before",
+    "store": "Fridge in a lunch box, reheat in the office microwave.",
+    "swap": "Swap the rice for roti if you prefer.",
+    "fits": "A packed lunch that carries its share of the day's protein."
+   }
+  ]
+}
