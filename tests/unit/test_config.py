@@ -28,6 +28,8 @@ def test_defaults() -> None:
     assert s.variety_jaccard_fail_at == 0.6
     assert s.no_waste_keeps_days == 7
     assert s.no_waste_min_pack_share == 0.5
+    assert s.max_concurrent_model_calls == 4
+    assert s.slot_call_timeout_s == 120
     assert s.max_meal_text_chars == 500
     assert s.max_body_bytes == 65536
     assert s.nutrition_data_dirs == ""
@@ -61,6 +63,8 @@ def test_environment_overrides_use_the_prefix(monkeypatch: pytest.MonkeyPatch) -
         ("MEAL_PLANNER_DAY_KCAL_TOLERANCE", "0"),
         ("MEAL_PLANNER_MAX_REPAIR_ATTEMPTS", "-1"),
         ("MEAL_PLANNER_MAX_BODY_BYTES", "0"),
+        ("MEAL_PLANNER_MAX_CONCURRENT_MODEL_CALLS", "0"),
+        ("MEAL_PLANNER_SLOT_CALL_TIMEOUT_S", "0"),
     ],
 )
 def test_bad_environment_value_is_rejected(

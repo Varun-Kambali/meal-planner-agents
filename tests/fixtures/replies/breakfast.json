@@ -1,0 +1,103 @@
+{
+  "slot_id": "breakfast",
+  "recipes": [
+   {
+    "day": "mon",
+    "title": "Banana overnight oats",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "banana", "grams": 182.19}, {"id": "oats", "grams": 99.38}, {"id": "curd", "grams": 49.69}],
+    "steps": ["Layer the oats, curd and banana in a jar.", "Close the lid and chill overnight."],
+    "active_min": 5,
+    "total_min": 480,
+    "gear": ["jar_with_lid"],
+    "cook_when": "night_before",
+    "store": "Fridge, eat within two days.",
+    "swap": "Use any other fruit or nut from the list.",
+    "fits": "A no-cook breakfast that carries a quarter of the day."
+   },
+   {
+    "day": "tue",
+    "title": "Apple overnight oats",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "apple", "grams": 154.69}, {"id": "oats", "grams": 84.38}, {"id": "curd", "grams": 42.19}],
+    "steps": ["Layer the oats, curd and apple in a jar.", "Close the lid and chill overnight."],
+    "active_min": 5,
+    "total_min": 480,
+    "gear": ["jar_with_lid"],
+    "cook_when": "night_before",
+    "store": "Fridge, eat within two days.",
+    "swap": "Use any other fruit or nut from the list.",
+    "fits": "A no-cook breakfast that carries a quarter of the day."
+   },
+   {
+    "day": "wed",
+    "title": "Dates overnight oats",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "dates", "grams": 182.19}, {"id": "oats", "grams": 99.38}, {"id": "curd", "grams": 49.69}],
+    "steps": ["Layer the oats, curd and dates in a jar.", "Close the lid and chill overnight."],
+    "active_min": 5,
+    "total_min": 480,
+    "gear": ["jar_with_lid"],
+    "cook_when": "night_before",
+    "store": "Fridge, eat within two days.",
+    "swap": "Use any other fruit or nut from the list.",
+    "fits": "A no-cook breakfast that carries a quarter of the day."
+   },
+   {
+    "day": "thu",
+    "title": "Almonds overnight oats",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "almonds", "grams": 154.69}, {"id": "oats", "grams": 84.38}, {"id": "curd", "grams": 42.19}],
+    "steps": ["Layer the oats, curd and almonds in a jar.", "Close the lid and chill overnight."],
+    "active_min": 5,
+    "total_min": 480,
+    "gear": ["jar_with_lid"],
+    "cook_when": "night_before",
+    "store": "Fridge, eat within two days.",
+    "swap": "Use any other fruit or nut from the list.",
+    "fits": "A no-cook breakfast that carries a quarter of the day."
+   },
+   {
+    "day": "fri",
+    "title": "Walnuts overnight oats",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "walnuts", "grams": 182.19}, {"id": "oats", "grams": 99.38}, {"id": "curd", "grams": 49.69}],
+    "steps": ["Layer the oats, curd and walnuts in a jar.", "Close the lid and chill overnight."],
+    "active_min": 5,
+    "total_min": 480,
+    "gear": ["jar_with_lid"],
+    "cook_when": "night_before",
+    "store": "Fridge, eat within two days.",
+    "swap": "Use any other fruit or nut from the list.",
+    "fits": "A no-cook breakfast that carries a quarter of the day."
+   },
+   {
+    "day": "sat",
+    "title": "Flax seeds overnight oats",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "flax_seeds", "grams": 154.69}, {"id": "oats", "grams": 84.38}, {"id": "curd", "grams": 42.19}],
+    "steps": ["Layer the oats, curd and flax seeds in a jar.", "Close the lid and chill overnight."],
+    "active_min": 5,
+    "total_min": 480,
+    "gear": ["jar_with_lid"],
+    "cook_when": "night_before",
+    "store": "Fridge, eat within two days.",
+    "swap": "Use any other fruit or nut from the list.",
+    "fits": "A no-cook breakfast that carries a quarter of the day."
+   },
+   {
+    "day": "sun",
+    "title": "Cocoa powder overnight oats",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "cocoa_powder", "grams": 154.69}, {"id": "oats", "grams": 84.38}, {"id": "curd", "grams": 42.19}],
+    "steps": ["Layer the oats, curd and cocoa powder in a jar.", "Close the lid and chill overnight."],
+    "active_min": 5,
+    "total_min": 480,
+    "gear": ["jar_with_lid"],
+    "cook_when": "night_before",
+    "store": "Fridge, eat within two days.",
+    "swap": "Use any other fruit or nut from the list.",
+    "fits": "A no-cook breakfast that carries a quarter of the day."
+   }
+  ]
+}

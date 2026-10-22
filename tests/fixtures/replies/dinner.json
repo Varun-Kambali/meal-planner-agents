@@ -1,0 +1,103 @@
+{
+  "slot_id": "dinner",
+  "recipes": [
+   {
+    "day": "mon",
+    "title": "Air-fried cauliflower plate",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "cauliflower", "grams": 218.63}, {"id": "atta", "grams": 119.25}, {"id": "moong_dal", "grams": 59.62}],
+    "steps": ["Air fry the cauliflower until the edges brown.", "Serve with rotis and a bowl of moong dal."],
+    "active_min": 20,
+    "total_min": 35,
+    "gear": ["air_fryer"],
+    "cook_when": "fresh",
+    "store": "Best fresh; the dal keeps a day in the fridge.",
+    "swap": "Use tofu in place of the dal.",
+    "fits": "A hot dinner with the day's largest protein share."
+   },
+   {
+    "day": "tue",
+    "title": "Air-fried broccoli plate",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "broccoli", "grams": 185.63}, {"id": "atta", "grams": 101.25}, {"id": "moong_dal", "grams": 50.62}],
+    "steps": ["Air fry the broccoli until the edges brown.", "Serve with rotis and a bowl of moong dal."],
+    "active_min": 20,
+    "total_min": 35,
+    "gear": ["air_fryer"],
+    "cook_when": "fresh",
+    "store": "Best fresh; the dal keeps a day in the fridge.",
+    "swap": "Use tofu in place of the dal.",
+    "fits": "A hot dinner with the day's largest protein share."
+   },
+   {
+    "day": "wed",
+    "title": "Air-fried capsicum plate",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "capsicum", "grams": 218.63}, {"id": "atta", "grams": 119.25}, {"id": "moong_dal", "grams": 59.62}],
+    "steps": ["Air fry the capsicum until the edges brown.", "Serve with rotis and a bowl of moong dal."],
+    "active_min": 20,
+    "total_min": 35,
+    "gear": ["air_fryer"],
+    "cook_when": "fresh",
+    "store": "Best fresh; the dal keeps a day in the fridge.",
+    "swap": "Use tofu in place of the dal.",
+    "fits": "A hot dinner with the day's largest protein share."
+   },
+   {
+    "day": "thu",
+    "title": "Air-fried peas plate",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "peas", "grams": 185.63}, {"id": "atta", "grams": 101.25}, {"id": "moong_dal", "grams": 50.62}],
+    "steps": ["Air fry the peas until the edges brown.", "Serve with rotis and a bowl of moong dal."],
+    "active_min": 20,
+    "total_min": 35,
+    "gear": ["air_fryer"],
+    "cook_when": "fresh",
+    "store": "Best fresh; the dal keeps a day in the fridge.",
+    "swap": "Use tofu in place of the dal.",
+    "fits": "A hot dinner with the day's largest protein share."
+   },
+   {
+    "day": "fri",
+    "title": "Air-fried beans plate",
+    "cuisine": "Japanese",
+    "ingredients": [{"id": "beans", "grams": 218.63}, {"id": "atta", "grams": 119.25}, {"id": "moong_dal", "grams": 59.62}],
+    "steps": ["Air fry the beans until the edges brown.", "Serve with rotis and a bowl of moong dal."],
+    "active_min": 20,
+    "total_min": 35,
+    "gear": ["air_fryer"],
+    "cook_when": "fresh",
+    "store": "Best fresh; the dal keeps a day in the fridge.",
+    "swap": "Use tofu in place of the dal.",
+    "fits": "A hot dinner with the day's largest protein share."
+   },
+   {
+    "day": "sat",
+    "title": "Air-fried zucchini plate",
+    "cuisine": "Mediterranean",
+    "ingredients": [{"id": "zucchini", "grams": 185.63}, {"id": "atta", "grams": 101.25}, {"id": "moong_dal", "grams": 50.62}],
+    "steps": ["Air fry the zucchini until the edges brown.", "Serve with rotis and a bowl of moong dal."],
+    "active_min": 20,
+    "total_min": 35,
+    "gear": ["air_fryer"],
+    "cook_when": "fresh",
+    "store": "Best fresh; the dal keeps a day in the fridge.",
+    "swap": "Use tofu in place of the dal.",
+    "fits": "A hot dinner with the day's largest protein share."
+   },
+   {
+    "day": "sun",
+    "title": "Air-fried sweet potato plate",
+    "cuisine": "South Indian",
+    "ingredients": [{"id": "sweet_potato", "grams": 185.63}, {"id": "atta", "grams": 101.25}, {"id": "moong_dal", "grams": 50.62}],
+    "steps": ["Air fry the sweet potato until the edges brown.", "Serve with rotis and a bowl of moong dal."],
+    "active_min": 20,
+    "total_min": 35,
+    "gear": ["air_fryer"],
+    "cook_when": "fresh",
+    "store": "Best fresh; the dal keeps a day in the fridge.",
+    "swap": "Use tofu in place of the dal.",
+    "fits": "A hot dinner with the day's largest protein share."
+   }
+  ]
+}

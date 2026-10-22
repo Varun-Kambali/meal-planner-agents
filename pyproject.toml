@@ -12,6 +12,8 @@ license-files = ["LICENSE"]
 authors = [{ name = "Varun Kambali" }]
 requires-python = ">=3.12"
 dependencies = [
+    # Exact: LangGraph's streaming and runtime APIs change between minor releases.
+    "langgraph==1.2.16",
     # Exact: LiteLLM ships several releases a week, so a bump is a deliberate change.
     "litellm==1.105.1",
     "mcp>=2.3,<3",
