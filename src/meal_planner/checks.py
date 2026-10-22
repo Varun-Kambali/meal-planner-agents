@@ -53,10 +53,6 @@ _LABELS: dict[str, tuple[str, str]] = {
     "vit_d_ug": ("vitamin D", "ug"),
 }
 
-# The nutrients a day reports against a target without failing on it.
-_SOFT_TARGETS = (("carbs_available_g", "carbs_g"), ("fat_g", "fat_g"))
-
-
 # Rounding for messages. Messages show whole numbers, rounded so a miss never reads as a pass
 # ("550 kcal, at most 550") and so the number the writer is asked to reach is one it can aim at.
 
@@ -291,10 +287,9 @@ def check_day_totals(
     ]
 
     soft: dict[str, float] = {}
-    for key, target_field in _SOFT_TARGETS:
+    for key, target in (("carbs_available_g", day_type.carbs_g), ("fat_g", day_type.fat_g)):
         value = total.get(key)
         if value is not None and key not in incomplete:
-            target = getattr(day_type, target_field)
             soft[key] = (value - target) / target
     return [f for f in found if f is not None], soft
 
