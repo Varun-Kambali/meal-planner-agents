@@ -555,15 +555,30 @@ async def _repair_slot(send: _Send, *, runtime: Runtime[_Deps]) -> dict[str, Any
     return {"recipes": rewritten, "fresh": list(rewritten), "usage": usage}
 
 
-async def _with_numbers(deps: _Deps, recipe: CheckedRecipe) -> CheckedRecipe:
+async def with_numbers(
+    recipe: CheckedRecipe,
+    *,
+    nutrition: NutritionPort,
+    catalogue: Catalogue,
+    raise_if_unreachable: bool = False,
+) -> CheckedRecipe:
+    """The recipe with its numbers from nutrition-mcp, or with the reason it has none.
+
+    A recipe nutrition-mcp refuses gets no numbers and a `nutrition_failed` failure. When
+    nutrition-mcp could not be asked at all (the error names no food), the graph treats that the
+    same way, so one bad moment fails recipes and not the week. A caller that has no week to
+    protect passes `raise_if_unreachable` to get the error instead.
+    """
     ingredients = recipe.draft.ingredients
-    if any(i.id not in deps.catalogue.items for i in ingredients):
+    if any(i.id not in catalogue.items for i in ingredients):
         # The catalogue check names the id; nutrition-mcp is not asked about it.
         return recipe
     items = [MealItemIn(food_id=i.id, amount=i.grams, unit="g") for i in ingredients]
     try:
-        meal = await deps.nutrition.meal(items)
+        meal = await nutrition.meal(items)
     except NutritionError as exc:
+        if raise_if_unreachable and exc.food_id is None:
+            raise
         failure = Failure(
             check=NUTRITION_FAILED, message=f"nutrition-mcp could not work out this recipe: {exc}"
         )
@@ -573,8 +588,12 @@ async def _with_numbers(deps: _Deps, recipe: CheckedRecipe) -> CheckedRecipe:
 
 async def _compute(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     keys = state["fresh"]
+    deps = runtime.context
     numbered = await asyncio.gather(
-        *(_with_numbers(runtime.context, state["recipes"][key]) for key in keys)
+        *(
+            with_numbers(state["recipes"][key], nutrition=deps.nutrition, catalogue=deps.catalogue)
+            for key in keys
+        )
     )
     return {"recipes": dict(zip(keys, numbered, strict=True))}
 
