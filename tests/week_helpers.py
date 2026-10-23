@@ -124,8 +124,8 @@ def foods() -> dict[str, dict[str, float]]:
 class SpyNutrition(FakeNutrition):
     """FakeNutrition that remembers the food ids of every meal it was asked about."""
 
-    def __init__(self) -> None:
-        super().__init__(foods())
+    def __init__(self, *extra_ids: str) -> None:
+        super().__init__(foods() | {food_id: PROFILE for food_id in extra_ids})
         self.meals: list[list[str]] = []
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
@@ -209,8 +209,11 @@ def model_for(
     )
 
 
-def write_catalogue_file(folder: Path) -> Path:
-    """`catalogue()` as a catalogue.yaml, for tests that load it the way the app does."""
+def write_catalogue_file(folder: Path, *extra_ids: str) -> Path:
+    """`catalogue()` as a catalogue.yaml, for tests that load it the way the app does.
+
+    `extra_ids` adds foods the fixture recipes do not use, such as one the plan excludes.
+    """
     rows = [
         {
             "id": food_id,
@@ -220,7 +223,7 @@ def write_catalogue_file(folder: Path) -> Path:
             "pack_g": None,
             "keeps_days_opened": None,
         }
-        for food_id in FOOD_IDS
+        for food_id in [*FOOD_IDS, *extra_ids]
     ]
     path = folder / "catalogue.yaml"
     path.write_text(yaml.safe_dump(rows), encoding="utf-8")

@@ -24,7 +24,7 @@ import json
 import math
 import operator
 import re
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Sequence
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
@@ -930,10 +930,11 @@ async def run_week(
     nutrition: NutritionPort,
     catalogue: Catalogue,
     settings: Settings,
-) -> AsyncIterator[WeekEvent]:
+) -> AsyncGenerator[WeekEvent]:
     """Write, check and repair a week for the plan, yielding progress events.
 
-    The last event is always `week_done`, also when slots could not be written.
+    The last event is always `week_done`, also when slots could not be written. Closing the
+    generator stops the run, so a caller that stops reading closes it.
     """
     async for event in _stream(
         rules, {}, None, model=model, nutrition=nutrition, catalogue=catalogue, settings=settings
@@ -951,7 +952,7 @@ async def replace_recipe(
     nutrition: NutritionPort,
     catalogue: Catalogue,
     settings: Settings,
-) -> AsyncIterator[WeekEvent]:
+) -> AsyncGenerator[WeekEvent]:
     """Write one recipe again inside the rest of the week, yielding progress events.
 
     The other recipes are not sent to the model or changed. They are there for the day and

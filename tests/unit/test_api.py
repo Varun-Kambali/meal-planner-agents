@@ -1,5 +1,8 @@
 """The HTTP API, driven through Starlette's test client with a scripted model and fake services."""
 
+import asyncio
+import json
+import logging
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -11,13 +14,26 @@ import yaml
 from fakes import FakeNutrition
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from week_helpers import SpyNutrition, model_for, write_catalogue_file
+from pydantic import BaseModel
+from week_helpers import (
+    PLAN,
+    SLOTS,
+    SlotModel,
+    SpyNutrition,
+    good,
+    model_for,
+    write_catalogue_file,
+)
 
 from meal_planner.api import create_app
 from meal_planner.config import Settings
-from meal_planner.llm import ModelPort
+from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.nutrition import NutritionPort
 from meal_planner.startup import StartupError
+from meal_planner.week import WeekResult
+
+# The fixture plan excludes brinjal, and the app refuses a plan that names a food it lacks.
+EXTRA_FOODS = ("brinjal",)
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +45,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def settings_for(folder: Path, **changes: Any) -> Settings:
     # The limit is high so that a test that is not about it does not trip over it.
     values: dict[str, Any] = {
-        "catalogue_path": write_catalogue_file(folder),
+        "catalogue_path": write_catalogue_file(folder, *EXTRA_FOODS),
         "rate_limit_per_minute": 1000,
     }
     return Settings(**(values | changes))
@@ -45,7 +61,7 @@ def make_app(
     return create_app(
         settings_for(folder, **changes),
         model=model or model_for(),
-        nutrition=nutrition or SpyNutrition(),
+        nutrition=nutrition or SpyNutrition(*EXTRA_FOODS),
     )
 
 
@@ -77,7 +93,7 @@ def test_the_app_does_not_start_when_the_catalogue_cannot_be_loaded(tmp_path: Pa
     app = create_app(
         Settings(catalogue_path=tmp_path / "missing.yaml"),
         model=model_for(),
-        nutrition=SpyNutrition(),
+        nutrition=SpyNutrition(*EXTRA_FOODS),
     )
 
     with pytest.raises(StartupError, match="catalogue"), TestClient(app):
@@ -216,3 +232,363 @@ def test_a_preflight_for_the_week_route_is_answered(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
     assert "POST" in response.headers["access-control-allow-methods"]
+
+
+# Writing a week
+
+MARK = "ZXQ-MARKER-7731"
+
+
+def plan_json() -> dict[str, Any]:
+    plan: dict[str, Any] = json.loads(PLAN.read_text(encoding="utf-8"))
+    return plan
+
+
+def parse_stream(text: str) -> list[tuple[str, dict[str, Any]]]:
+    """The messages of an event stream as (event name, data), each data a complete JSON object."""
+    found: list[tuple[str, dict[str, Any]]] = []
+    for block in text.split("\n\n"):
+        if not block.strip() or block.startswith(":"):
+            continue
+        fields = dict(line.split(": ", 1) for line in block.split("\n"))
+        assert set(fields) == {"event", "data"}, block[:200]
+        data = json.loads(fields["data"])
+        assert isinstance(data, dict)
+        found.append((fields["event"], data))
+    return found
+
+
+def week_of(events: list[tuple[str, dict[str, Any]]]) -> WeekResult:
+    name, data = events[-1]
+    assert name == "week_done"
+    return WeekResult.model_validate(data["week"])
+
+
+def test_week_streams_events_and_done(tmp_path: Path) -> None:
+    with serving(tmp_path) as client:
+        response = client.post("/v1/week", json=plan_json())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = parse_stream(response.text)
+    kinds = [name for name, _ in events]
+    assert kinds[0] == "slot_started"
+    assert kinds[-1] == "week_done"
+    assert kinds.count("slot_started") == 4
+    assert kinds.count("slot_written") == 4
+    assert kinds.count("recipe_checked") == 28
+    assert kinds.count("week_done") == 1
+    assert all(data["kind"] == name for name, data in events)
+    week = week_of(events)
+    assert len(week.recipes) == 28
+    assert week.unwritten == []
+    # A tuple-keyed dict cannot be JSON, so the warnings travel as rows.
+    assert isinstance(events[-1][1]["week"]["no_waste"], list)
+
+
+def test_stream_ends_cleanly_after_rate_limited_slot(tmp_path: Path) -> None:
+    model = model_for(errors={"lunch": "rate_limited"})
+
+    with serving(tmp_path, model=model) as client:
+        response = client.post("/v1/week", json=plan_json())
+
+    assert response.status_code == 200
+    events = parse_stream(response.text)
+    names = [name for name, _ in events]
+    assert names[-1] == "week_done"
+    assert "slot_failed" in names
+    assert "error" not in names
+    week = week_of(events)
+    assert len(week.recipes) == 21
+    assert [(slot, reason) for _, slot, reason in week.unwritten] == [("lunch", "rate_limited")] * 7
+    assert len({day for day, _, _ in week.unwritten}) == 7
+
+
+def test_invalid_rules_422_names_field(tmp_path: Path) -> None:
+    plan = plan_json()
+    plan["slots"][1]["kcal_share"] = 7
+
+    with serving(tmp_path) as client:
+        response = client.post("/v1/week", json=plan)
+
+    assert response.status_code == 422
+    problems = response.json()["detail"]
+    assert any(p["loc"] == ["body", "slots", 1, "kcal_share"] for p in problems)
+    assert all(set(p) == {"loc", "msg"} for p in problems)
+    assert "input" not in response.text
+    assert "url" not in response.text
+
+
+def test_a_rejected_value_is_never_echoed(tmp_path: Path) -> None:
+    plan = plan_json()
+    plan["slots"][0]["max_active_min"] = f"about {MARK}"
+    plan["extra_field"] = MARK
+
+    with serving(tmp_path) as client:
+        response = client.post("/v1/week", json=plan)
+
+    assert response.status_code == 422
+    assert MARK not in response.text
+
+
+def test_a_body_that_is_not_json_is_422_without_an_echo(tmp_path: Path) -> None:
+    with serving(tmp_path) as client:
+        response = client.post(
+            "/v1/week", content=f"{{{MARK}".encode(), headers={"content-type": "application/json"}
+        )
+
+    assert response.status_code == 422
+    assert MARK not in response.text
+    assert set(response.json()["detail"][0]) == {"loc", "msg"}
+
+
+def test_a_food_the_catalogue_lacks_is_422_naming_the_field(tmp_path: Path) -> None:
+    plan = plan_json()
+    plan["food"]["liked_foods"] = ["paneer", "unobtainium"]
+
+    with serving(tmp_path) as client:
+        response = client.post("/v1/week", json=plan)
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "food", "liked_foods"]
+    assert "unobtainium" in problem["msg"]
+
+
+def test_body_over_64kb_413(tmp_path: Path) -> None:
+    body = json.dumps(plan_json()).encode() + b" " * 65536
+
+    with serving(tmp_path) as client:
+        response = client.post(
+            "/v1/week", content=body, headers={"content-type": "application/json"}
+        )
+
+    assert response.status_code == 413
+    assert "65536" in response.json()["detail"]
+
+
+def test_rate_limit_429(tmp_path: Path) -> None:
+    with serving(tmp_path, rate_limit_per_minute=2) as client:
+        first = client.get("/v1/catalogue")
+        second = client.get("/v1/catalogue")
+        third = client.post("/v1/week", json=plan_json())
+        health = client.get("/healthz")
+
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert third.status_code == 429
+    assert 1 <= int(third.headers["retry-after"]) <= 60
+    assert health.status_code == 200
+
+
+class ExplodingModel:
+    """A model that fails with text the user must never see in a log."""
+
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        raise RuntimeError(f"provider echoed the request: {MARK}")
+
+
+def log_entries(captured: str) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in captured.splitlines() if line.startswith("{")]
+
+
+def test_a_failure_after_the_stream_starts_ends_with_one_error_event(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    with serving(tmp_path, model=ExplodingModel()) as client:
+        response = client.post("/v1/week", json=plan_json())
+
+    assert response.status_code == 200
+    events = parse_stream(response.text)
+    name, data = events[-1]
+    assert name == "error"
+    assert data == {"kind": "error", "step": "week", "message": data["message"]}
+    assert MARK not in data["message"]
+    assert [n for n, _ in events].count("error") == 1
+    assert "week_done" not in [n for n, _ in events]
+    captured = capfd.readouterr()
+    assert MARK not in captured.err + captured.out
+    (failed,) = [e for e in log_entries(captured.err) if e["event"] == "run_failed"]
+    assert failed["error_type"] == "RuntimeError"
+    assert failed["task"] == "week"
+
+
+def test_log_lines_written_while_the_stream_runs_carry_its_request_id(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    with serving(tmp_path) as client:
+        response = client.post("/v1/week", json=plan_json())
+
+    request_id = response.headers["x-request-id"]
+    entries = log_entries(capfd.readouterr().err)
+    (done,) = [e for e in entries if e["event"] == "run_done"]
+    assert done["request_id"] == request_id
+    assert done["task"] == "week"
+    assert done["input_tokens"] == 0
+
+
+# Rules and typed text stay out of the logs
+
+
+def marked_plan() -> dict[str, Any]:
+    plan = plan_json()
+    plan["name"] = f"Plan {MARK}"
+    plan["slots"][0] = plan["slots"][0] | {"style": f"style {MARK}", "name": f"Breakfast {MARK}"}
+    plan["food"]["cuisines"] = [f"South {MARK}", f"Japan {MARK}", f"Med {MARK}"]
+    return plan
+
+
+def renamed_replies() -> SlotModel:
+    names = {
+        "South Indian": f"South {MARK}",
+        "Japanese": f"Japan {MARK}",
+        "Mediterranean": f"Med {MARK}",
+    }
+
+    def renamed(text: str) -> str:
+        for old, new in names.items():
+            text = text.replace(old, new)
+        return text
+
+    return SlotModel({s: {"write_slot": [renamed(good(s))]} for s in SLOTS})
+
+
+class Collector(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@pytest.fixture
+def records() -> Iterator[list[logging.LogRecord]]:
+    """Every logging record, including those of our own loggers, which do not propagate."""
+    collector = Collector()
+    loggers = [logging.getLogger()] + [
+        logging.getLogger(name)
+        for name in list(logging.root.manager.loggerDict)
+        if name.startswith("meal_planner")
+    ]
+    root_level = logging.getLogger().level
+    logging.getLogger().setLevel(logging.DEBUG)
+    for logger in loggers:
+        logger.addHandler(collector)
+    yield collector.records
+    for logger in loggers:
+        logger.removeHandler(collector)
+    logging.getLogger().setLevel(root_level)
+
+
+def assert_no_marker(records: list[logging.LogRecord], captured: Any) -> None:
+    """`captured` is what capfd.readouterr() returned: the process's own stdout and stderr."""
+    assert MARK not in captured.err
+    assert MARK not in captured.out
+    for record in records:
+        assert MARK not in record.getMessage()
+        assert MARK not in json.dumps(vars(record), default=str), record.name
+
+
+def test_no_rules_text_in_logs(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    with serving(tmp_path, model=renamed_replies()) as client:
+        response = client.post("/v1/week", json=marked_plan())
+
+    assert MARK in response.text  # the plan's own words do come back to the person who sent them
+    assert response.status_code == 200
+    assert parse_stream(response.text)[-1][0] == "week_done"
+    assert records
+    assert_no_marker(records, capfd.readouterr())
+
+
+def test_no_rules_text_in_logs_when_the_rules_are_rejected(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    plan = marked_plan()
+    plan["food"]["liked_foods"] = [f"liked_{MARK}"]
+    plan["slots"][1]["max_active_min"] = f"soon {MARK}"
+
+    with serving(tmp_path) as client:
+        bad_values = client.post("/v1/week", json=plan)
+        not_json = client.post(
+            "/v1/week", content=MARK.encode(), headers={"content-type": "application/json"}
+        )
+
+    assert bad_values.status_code == 422
+    assert not_json.status_code == 422
+    assert_no_marker(records, capfd.readouterr())
+
+
+def test_no_rules_text_in_logs_when_the_run_fails(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    with serving(tmp_path, model=ExplodingModel()) as client:
+        client.post("/v1/week", json=marked_plan())
+
+    assert_no_marker(records, capfd.readouterr())
+
+
+# A client that goes away
+
+
+@pytest.mark.anyio
+async def test_a_client_that_goes_away_stops_the_run(tmp_path: Path) -> None:
+    """The ASGI app is driven by hand: the test client cannot disconnect part way through."""
+    release = asyncio.Event()
+    model = model_for(gates={slot: release for slot in SLOTS})
+    app = make_app(tmp_path, model=model)
+    body = json.dumps(plan_json()).encode()
+    disconnect = asyncio.Event()
+    pending = [{"type": "http.request", "body": body, "more_body": False}]
+    sent: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        if pending:
+            return pending.pop(0)
+        await disconnect.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/v1/week",
+        "raw_path": b"/v1/week",
+        "root_path": "",
+        "query_string": b"",
+        "headers": [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode()),
+        ],
+        "client": ("203.0.113.9", 4000),
+        "server": ("testserver", 80),
+    }
+
+    async with app.router.lifespan_context(app), asyncio.timeout(10):
+        run = asyncio.create_task(app(scope, receive, send))  # type: ignore[arg-type]
+        while model.in_flight < len(SLOTS):
+            await asyncio.sleep(0)
+        disconnect.set()
+        await run
+        # The calls are cancelled with the run, each at its next step in the loop.
+        while model.in_flight:
+            await asyncio.sleep(0)
+        release.set()
+        await asyncio.sleep(0)
+
+    assert len(model.calls) == len(SLOTS)
+    assert not any(b"week_done" in m.get("body", b"") for m in sent)
