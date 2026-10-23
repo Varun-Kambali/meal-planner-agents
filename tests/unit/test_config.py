@@ -32,6 +32,9 @@ def test_defaults() -> None:
     assert s.slot_call_timeout_s == 120
     assert s.max_meal_text_chars == 500
     assert s.max_body_bytes == 65536
+    assert s.max_replace_body_bytes == 131072
+    assert s.rate_limit_per_minute == 10
+    assert s.cors_origins == []
 
 
 def test_catalogue_path_defaults_to_the_repo_data_folder() -> None:
@@ -80,6 +83,8 @@ def test_environment_overrides_use_the_prefix(monkeypatch: pytest.MonkeyPatch) -
         ("MEAL_PLANNER_DAY_KCAL_TOLERANCE", "0"),
         ("MEAL_PLANNER_MAX_REPAIR_ATTEMPTS", "-1"),
         ("MEAL_PLANNER_MAX_BODY_BYTES", "0"),
+        ("MEAL_PLANNER_MAX_REPLACE_BODY_BYTES", "0"),
+        ("MEAL_PLANNER_RATE_LIMIT_PER_MINUTE", "0"),
         ("MEAL_PLANNER_MAX_CONCURRENT_MODEL_CALLS", "0"),
         ("MEAL_PLANNER_SLOT_CALL_TIMEOUT_S", "0"),
     ],
@@ -91,6 +96,26 @@ def test_bad_environment_value_is_rejected(
 
     with pytest.raises(ValidationError, match=name.removeprefix("MEAL_PLANNER_").lower()):
         Settings()
+
+
+@pytest.mark.parametrize(
+    ("value", "origins"),
+    [
+        ("http://localhost:5173", ["http://localhost:5173"]),
+        (
+            "http://localhost:5173, https://meals.example.org ,",
+            ["http://localhost:5173", "https://meals.example.org"],
+        ),
+        ("", []),
+        (" , ", []),
+    ],
+)
+def test_cors_origins_are_a_comma_separated_list(
+    monkeypatch: pytest.MonkeyPatch, value: str, origins: list[str]
+) -> None:
+    monkeypatch.setenv("MEAL_PLANNER_CORS_ORIGINS", value)
+
+    assert Settings().cors_origins == origins
 
 
 def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:

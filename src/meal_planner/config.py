@@ -2,9 +2,10 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,6 +41,13 @@ class Settings(BaseSettings):
     # Input bounds.
     max_meal_text_chars: int = Field(default=500, ge=1)
     max_body_bytes: int = Field(default=65536, ge=1)
+    # Replacing a recipe sends the rest of the week back (up to 28 drafts), so its bound is larger.
+    max_replace_body_bytes: int = Field(default=131072, ge=1)
+
+    # Requests one client address may make to the /v1 routes in a minute; over it, 429.
+    rate_limit_per_minute: int = Field(default=10, ge=1)
+    # Browser origins allowed to call the API, separated by commas. Empty adds no CORS headers.
+    cors_origins: Annotated[list[str], NoDecode] = []
 
     # Extra nutrition-mcp dataset folders, separated as in PATH, as nutrition-mcp reads them.
     # The default is this project's food file, which the catalogue needs; empty means
@@ -48,6 +56,14 @@ class Settings(BaseSettings):
     # The ingredients the writer may use. Both paths are relative to a source checkout; set the
     # variables where the repository is not on disk.
     catalogue_path: Path = REPO_ROOT / "data" / "catalogue.yaml"
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        # NoDecode keeps pydantic-settings from reading the variable as JSON.
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
 
 @lru_cache
