@@ -394,6 +394,20 @@ def test_shipped_catalogue_covers_nutrition_mcps_bundled_ingredients() -> None:
     assert not LEFT_OUT_ON_PURPOSE & listed
 
 
+def food_file_ids() -> set[str]:
+    path = Path(Settings().nutrition_data_dirs) / "ingredients.csv"
+    with path.open(encoding="utf-8", newline="") as handle:
+        return {row["id"] for row in csv.DictReader(handle)}
+
+
+def test_shipped_catalogue_covers_the_food_file() -> None:
+    # The food file exists for the writer, so a food in it without a row is a food nobody uses.
+    food_file = food_file_ids()
+
+    assert food_file
+    assert food_file <= shipped_rows().keys()
+
+
 # Allergen tags are what keeps an excluded allergen out of a recipe, so the shipped file's tags
 # are pinned two ways. A category implies its allergen, which also covers rows added later: a row
 # in one of these categories must carry that tag. A row may carry more, so a shellfish row under
@@ -401,13 +415,21 @@ def test_shipped_catalogue_covers_nutrition_mcps_bundled_ingredients() -> None:
 # food through, so no other tag stands in for the one the category implies.
 ALLERGEN_OF_CATEGORY = {"dairy": "milk", "egg": "egg", "fish": "fish"}
 
-# Allergens a category does not imply: wheat foods, peanuts, and mustard as seed and as oil.
+# Allergens a category does not imply: wheat and oat foods, peanuts, tree nuts, soy, sesame, and
+# mustard as seed and as oil. Oats are listed with gluten, as the EU allergen list does.
 ALLERGENS_BY_ID = {
     "atta": {"gluten"},
     "maida": {"gluten"},
     "rava": {"gluten"},
     "pav": {"gluten"},
+    "rolled_oats": {"gluten"},
     "peanuts": {"peanut"},
+    "peanut_butter": {"peanut"},
+    "almonds": {"tree_nuts"},
+    "walnuts": {"tree_nuts"},
+    "tofu": {"soy"},
+    "soy_sauce": {"soy", "gluten"},
+    "sesame_seeds": {"sesame"},
     "mustard_seeds": {"mustard"},
     "mustard_oil": {"mustard"},
 }

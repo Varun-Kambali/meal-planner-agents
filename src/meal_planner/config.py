@@ -41,11 +41,12 @@ class Settings(BaseSettings):
     max_meal_text_chars: int = Field(default=500, ge=1)
     max_body_bytes: int = Field(default=65536, ge=1)
 
-    # Extra nutrition-mcp dataset folders, as nutrition-mcp reads them. Empty means its bundled
-    # data only.
-    nutrition_data_dirs: str = ""
-    # The ingredients the writer may use. Relative to a source checkout; set the variable
-    # where the repository is not on disk.
+    # Extra nutrition-mcp dataset folders, separated as in PATH, as nutrition-mcp reads them.
+    # The default is this project's food file, which the catalogue needs; empty means
+    # nutrition-mcp's bundled data only.
+    nutrition_data_dirs: str = str(REPO_ROOT / "data" / "foods")
+    # The ingredients the writer may use. Both paths are relative to a source checkout; set the
+    # variables where the repository is not on disk.
     catalogue_path: Path = REPO_ROOT / "data" / "catalogue.yaml"
 
 

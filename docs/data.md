@@ -87,6 +87,28 @@ Values are mapped exactly as nutrition-mcp maps its bundled USDA rows, because t
 
 **Density.** `density_g_per_ml` is set only for foods poured or spooned as liquids: honey, olive oil, skimmed milk and soy sauce. It is the record's cup portion (or tablespoon, when there is no cup) divided by its volume, so nutrition-mcp gives these foods ml, tbsp, tsp, cup and glass. Other foods take grams from nutrition-mcp, plus any household measure in `data/catalogue.yaml`.
 
+## Household measures
+
+`data/catalogue.yaml` turns a household unit into grams where nutrition-mcp has no such unit for a food, so "2 bananas" or "1 tbsp chia" can be counted. nutrition-mcp has no per-piece measures for ingredients, and gives spoons and cups only to foods with a density, so the four liquids above list none in the catalogue (the catalogue refuses a unit nutrition-mcp already has).
+
+Each measure is an FDC portion weight, and the comment above it names the record and the portion. `data_build/portions_review.csv` lists every portion of every record the build reads, so a measure can be checked without the API. Where a record lists a cup but not the spoon a recipe uses, a tablespoon is a sixteenth of the cup (pumpkin and sunflower seeds) and the comment says so. Two records were fetched only for a portion, because the food's own record lacks one: the survey record for chia seeds (2707590, built from 170554, for its cup) and the one for whey powder (2710742, built from 173180, for its scoop). Whey scoops differ by brand: the same record lists 20.5 g, 26 g and 32 g, and the catalogue uses the 26 g scoop it does not tie to a brand.
+
+The measures that were in the catalogue before the food file were checked against their records' portions:
+
+| Food and unit | Grams | FDC portion | Result |
+|---|---|---|---|
+| `egg`, piece | 50 | 171287: 1 large, 50 g | Matches |
+| `butter`, tbsp | 14.2 | 173410: 1 tbsp, 14.2 g | Matches |
+| `onion`, piece | 110 | 170000: 1 medium (2-1/2" dia), 110 g | Matches |
+| `tomato`, piece | 123 | 170457: 1 medium whole (2-3/5" dia), 123 g | Matches |
+| `carrot`, piece | 61 | 170393: 1 medium, 61 g | Matches |
+| `capsicum`, piece | 119 | 170427: 1 medium, 119 g | Matches |
+| `garlic`, clove | 3 | 169230: 1 clove, 3 g | Matches |
+| `sugar`, tsp | 4.2 | 169655: 1 tsp, 4.2 g | Matches |
+| `sugar`, tbsp | 12.6 | None; the record lists tsp, cup, cube and packet | Kept as three of its teaspoons, marked as such |
+| `green_chilli`, piece | 6 | 170497: 1 pepper, 45 g | Kept as a household estimate: the record's pepper is a larger variety than an Indian green chilli |
+| `potato`, piece | 150 | None; the bundled row is from CoFID | Kept as a household estimate |
+
 ## What is missing
 
 **No glycemic index.** USDA has no GI, so no row here has one, and a meal with any of these foods has no glycemic load. nutrition-mcp reports it as missing, and the day view says so instead of estimating it.
