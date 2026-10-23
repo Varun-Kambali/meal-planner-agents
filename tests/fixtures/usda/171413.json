@@ -1,0 +1,171 @@
+{
+ "fdcId": 171413,
+ "description": "Oil, olive, salad or cooking",
+ "dataType": "SR Legacy",
+ "publicationDate": "4/1/2019",
+ "foodNutrients": [
+  {
+   "nutrient": {
+    "id": 1008,
+    "name": "Energy",
+    "unitName": "kcal"
+   },
+   "amount": 884.0
+  },
+  {
+   "nutrient": {
+    "id": 1003,
+    "name": "Protein",
+    "unitName": "g"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1004,
+    "name": "Total lipid (fat)",
+    "unitName": "g"
+   },
+   "amount": 100.0
+  },
+  {
+   "nutrient": {
+    "id": 1005,
+    "name": "Carbohydrate, by difference",
+    "unitName": "g"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1079,
+    "name": "Fiber, total dietary",
+    "unitName": "g"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 2000,
+    "name": "Total Sugars",
+    "unitName": "g"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1087,
+    "name": "Calcium, Ca",
+    "unitName": "mg"
+   },
+   "amount": 1.0
+  },
+  {
+   "nutrient": {
+    "id": 1089,
+    "name": "Iron, Fe",
+    "unitName": "mg"
+   },
+   "amount": 0.56
+  },
+  {
+   "nutrient": {
+    "id": 1093,
+    "name": "Sodium, Na",
+    "unitName": "mg"
+   },
+   "amount": 2.0
+  },
+  {
+   "nutrient": {
+    "id": 1095,
+    "name": "Zinc, Zn",
+    "unitName": "mg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1162,
+    "name": "Vitamin C, total ascorbic acid",
+    "unitName": "mg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1177,
+    "name": "Folate, total",
+    "unitName": "µg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1178,
+    "name": "Vitamin B-12",
+    "unitName": "µg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1106,
+    "name": "Vitamin A, RAE",
+    "unitName": "µg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1114,
+    "name": "Vitamin D (D2 + D3)",
+    "unitName": "µg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1258,
+    "name": "Fatty acids, total saturated",
+    "unitName": "g"
+   },
+   "amount": 13.808
+  }
+ ],
+ "foodPortions": [
+  {
+   "amount": 1.0,
+   "modifier": "tablespoon",
+   "measureUnit": {
+    "id": 9999,
+    "name": "undetermined",
+    "abbreviation": "undetermined"
+   },
+   "gramWeight": 13.5,
+   "sequenceNumber": 1
+  },
+  {
+   "amount": 1.0,
+   "modifier": "tsp",
+   "measureUnit": {
+    "id": 9999,
+    "name": "undetermined",
+    "abbreviation": "undetermined"
+   },
+   "gramWeight": 4.5,
+   "sequenceNumber": 3
+  },
+  {
+   "amount": 1.0,
+   "modifier": "cup",
+   "measureUnit": {
+    "id": 9999,
+    "name": "undetermined",
+    "abbreviation": "undetermined"
+   },
+   "gramWeight": 216.0,
+   "sequenceNumber": 2
+  }
+ ]
+}

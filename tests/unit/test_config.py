@@ -32,7 +32,6 @@ def test_defaults() -> None:
     assert s.slot_call_timeout_s == 120
     assert s.max_meal_text_chars == 500
     assert s.max_body_bytes == 65536
-    assert s.nutrition_data_dirs == ""
 
 
 def test_catalogue_path_defaults_to_the_repo_data_folder() -> None:
@@ -43,10 +42,27 @@ def test_catalogue_path_defaults_to_the_repo_data_folder() -> None:
     assert (path.parent.parent / "pyproject.toml").is_file()
 
 
+def test_nutrition_data_dirs_defaults_to_the_repo_food_file() -> None:
+    folder = Path(Settings().nutrition_data_dirs)
+
+    assert folder.is_absolute()
+    assert folder.parts[-2:] == ("data", "foods")
+    assert (folder / "ingredients.csv").is_file()
+    assert folder.parent == Settings().catalogue_path.parent
+
+
+def test_nutrition_data_dirs_can_be_set_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Empty means nutrition-mcp's bundled data only.
+    monkeypatch.setenv("MEAL_PLANNER_NUTRITION_DATA_DIRS", "")
+
+    assert Settings().nutrition_data_dirs == ""
+
+
 def test_environment_overrides_use_the_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MEAL_PLANNER_MODEL", "gemini/other")
     monkeypatch.setenv("MEAL_PLANNER_MAX_REPAIR_ATTEMPTS", "1")
     monkeypatch.setenv("MEAL_PLANNER_CATALOGUE_PATH", "/srv/catalogue.yaml")
+    monkeypatch.setenv("MEAL_PLANNER_NUTRITION_DATA_DIRS", "/srv/foods:/srv/more")
     monkeypatch.setenv("MODEL", "ignored")
 
     s = Settings()
@@ -54,6 +70,7 @@ def test_environment_overrides_use_the_prefix(monkeypatch: pytest.MonkeyPatch) -
     assert s.model == "gemini/other"
     assert s.max_repair_attempts == 1
     assert s.catalogue_path == Path("/srv/catalogue.yaml")
+    assert s.nutrition_data_dirs == "/srv/foods:/srv/more"
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,11 @@
+# Every source_id used in ingredients.csv must be listed here. nutrition-mcp's bundled data
+# already has a source "usda_fdc", and a source id must be unique across every loaded folder.
+- id: usda_fdc_sr_legacy
+  name: USDA FoodData Central, SR Legacy
+  url: https://fdc.nal.usda.gov
+  license: Public domain
+  version: SR Legacy 2018-04, published in FoodData Central 2019-04-01
+  retrieved: 2026-10-23
+  attribution: >-
+    U.S. Department of Agriculture, Agricultural Research Service. FoodData Central.
+    fdc.nal.usda.gov.

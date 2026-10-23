@@ -1,0 +1,160 @@
+{
+ "fdcId": 173904,
+ "description": "Cereals, oats, regular and quick, not fortified, dry",
+ "dataType": "SR Legacy",
+ "publicationDate": "4/1/2019",
+ "foodNutrients": [
+  {
+   "nutrient": {
+    "id": 1008,
+    "name": "Energy",
+    "unitName": "kcal"
+   },
+   "amount": 379.0
+  },
+  {
+   "nutrient": {
+    "id": 1003,
+    "name": "Protein",
+    "unitName": "g"
+   },
+   "amount": 13.15
+  },
+  {
+   "nutrient": {
+    "id": 1004,
+    "name": "Total lipid (fat)",
+    "unitName": "g"
+   },
+   "amount": 6.52
+  },
+  {
+   "nutrient": {
+    "id": 1005,
+    "name": "Carbohydrate, by difference",
+    "unitName": "g"
+   },
+   "amount": 67.7
+  },
+  {
+   "nutrient": {
+    "id": 1079,
+    "name": "Fiber, total dietary",
+    "unitName": "g"
+   },
+   "amount": 10.1
+  },
+  {
+   "nutrient": {
+    "id": 2000,
+    "name": "Total Sugars",
+    "unitName": "g"
+   },
+   "amount": 0.99
+  },
+  {
+   "nutrient": {
+    "id": 1087,
+    "name": "Calcium, Ca",
+    "unitName": "mg"
+   },
+   "amount": 52.0
+  },
+  {
+   "nutrient": {
+    "id": 1089,
+    "name": "Iron, Fe",
+    "unitName": "mg"
+   },
+   "amount": 4.25
+  },
+  {
+   "nutrient": {
+    "id": 1093,
+    "name": "Sodium, Na",
+    "unitName": "mg"
+   },
+   "amount": 6.0
+  },
+  {
+   "nutrient": {
+    "id": 1095,
+    "name": "Zinc, Zn",
+    "unitName": "mg"
+   },
+   "amount": 3.64
+  },
+  {
+   "nutrient": {
+    "id": 1162,
+    "name": "Vitamin C, total ascorbic acid",
+    "unitName": "mg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1177,
+    "name": "Folate, total",
+    "unitName": "µg"
+   },
+   "amount": 32.0
+  },
+  {
+   "nutrient": {
+    "id": 1178,
+    "name": "Vitamin B-12",
+    "unitName": "µg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1106,
+    "name": "Vitamin A, RAE",
+    "unitName": "µg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1114,
+    "name": "Vitamin D (D2 + D3)",
+    "unitName": "µg"
+   },
+   "amount": 0.0
+  },
+  {
+   "nutrient": {
+    "id": 1258,
+    "name": "Fatty acids, total saturated",
+    "unitName": "g"
+   },
+   "amount": 1.11
+  }
+ ],
+ "foodPortions": [
+  {
+   "amount": 1.0,
+   "modifier": "cup",
+   "measureUnit": {
+    "id": 9999,
+    "name": "undetermined",
+    "abbreviation": "undetermined"
+   },
+   "gramWeight": 81.0,
+   "sequenceNumber": 1
+  },
+  {
+   "amount": 0.33,
+   "modifier": "cup",
+   "measureUnit": {
+    "id": 9999,
+    "name": "undetermined",
+    "abbreviation": "undetermined"
+   },
+   "gramWeight": 27.0,
+   "sequenceNumber": 2
+  }
+ ]
+}

@@ -1,10 +1,13 @@
-# Ingredients the recipe writer may use. Each id must be a food in nutrition-mcp (its bundled
-# data, plus data/foods once that exists); startup stops on one it does not know. Nothing in this
+# Ingredients the recipe writer may use. Each id must be a food in nutrition-mcp: its bundled data
+# or this project's food file in data/foods. Startup stops on one it does not know. Nothing in this
 # file is a nutrition value: those come from nutrition-mcp.
 #
-# pack_g, keeps_days_opened and measures are planning facts, typical values for the no-waste check
-# and for turning a household unit into grams, reviewed by hand. A wrong one changes a warning or
-# the grams a typed "2 eggs" counts for. It never changes a nutrient value per 100 g.
+# pack_g, keeps_days_opened and measures are planning facts, for the no-waste check and for
+# turning a household unit into grams. The measures are FoodData Central (FDC) portion weights,
+# and the comment above each names the record; data_build/portions_review.csv lists every portion
+# of those records. A measure FDC has no portion for says so. Pack sizes and shelf lives are
+# typical values awaiting Varun's review. A wrong one changes a warning or the grams a typed
+# "2 eggs" counts for. It never changes a nutrient value per 100 g.
 #
 # pack_g: a usual Indian retail pack in grams. A liquid sold by volume is that volume times the
 #   density nutrition-mcp holds for it.
@@ -13,8 +16,9 @@
 # allergens: the groups in the plan rules. Coconut is not listed under tree_nuts, in line with the
 #   EU allergen list, which names the nuts one by one and leaves coconut out.
 # measures: grams in one household unit, only where nutrition-mcp has no such unit for the food
-#   (loading stops if it has one). The comment above each says where the weight comes from. Weights
-#   are for the edible part, like nutrition-mcp's per-100 g values.
+#   (loading stops if it has one, so a food with a density in nutrition-mcp lists no ml, tbsp,
+#   tsp, cup or glass here). Weights are for the edible part, like nutrition-mcp's per-100 g
+#   values; FDC portion weights are too.
 # category: the shop aisle.
 #
 # baking_soda is in nutrition-mcp's bundled data and left out of this list on purpose.
@@ -29,6 +33,14 @@
 - {id: sabudana, name: Sabudana (tapioca pearls), category: grain, allergens: [], pack_g: 500, keeps_days_opened: 365}
 # A pack of six rolls.
 - {id: pav, name: Pav (bread roll), category: grain, allergens: [gluten], pack_g: 200, keeps_days_opened: 2}
+# FDC 173904 (Cereals, oats, regular and quick, not fortified, dry): 1 cup is 81 g. Oats are
+# tagged gluten, as the EU allergen list names them among the cereals containing gluten.
+- {id: rolled_oats, name: Rolled oats, category: grain, allergens: [gluten], pack_g: 1000, keeps_days_opened: 180, measures: {cup: 81}}
+# FDC 169703 (Rice, brown, long-grain, raw): 1 cup is 185 g. The oil in the bran goes stale
+# sooner than white rice does.
+- {id: brown_rice, name: Brown rice, category: grain, allergens: [], pack_g: 1000, keeps_days_opened: 180, measures: {cup: 185}}
+# FDC 168874 (Quinoa, uncooked): 1 cup is 170 g.
+- {id: quinoa, name: Quinoa, category: grain, allergens: [], pack_g: 500, keeps_days_opened: 365, measures: {cup: 170}}
 
 # Pulses: 500 g packs, dry, so they keep for a year.
 - {id: toor_dal, name: Toor dal, category: pulse, allergens: [], pack_g: 500, keeps_days_opened: 365}
@@ -45,16 +57,35 @@
 # Dairy. Ghee is a 500 ml jar (433 g at 0.8665 g/ml) and milk a 500 ml pouch (516 g at 1.0313).
 # Cream is a 200 g pack and paneer a 200 g block.
 - {id: ghee, name: Ghee, category: dairy, allergens: [milk], pack_g: 433, keeps_days_opened: 180}
-# USDA FoodData Central, salted butter: 1 tablespoon is 14.2 g.
+# FDC 173410 (Butter, salted): 1 tbsp is 14.2 g.
 - {id: butter, name: Butter (salted), category: dairy, allergens: [milk], pack_g: 100, keeps_days_opened: 30, measures: {tbsp: 14.2}}
 - {id: cream, name: Fresh cream, category: dairy, allergens: [milk], pack_g: 200, keeps_days_opened: 3}
 - {id: curd, name: Curd (dahi), category: dairy, allergens: [milk], pack_g: 400, keeps_days_opened: 5}
 - {id: paneer, name: Paneer, category: dairy, allergens: [milk], pack_g: 200, keeps_days_opened: 4}
 - {id: whole_milk, name: Whole milk, category: dairy, allergens: [milk], pack_g: 516, keeps_days_opened: 2}
+# Skimmed milk is a 500 ml pouch (518 g at 1.0356 g/ml) and Greek yogurt a 400 g tub.
+- {id: skimmed_milk, name: Skimmed milk, category: dairy, allergens: [milk], pack_g: 518, keeps_days_opened: 2}
+- {id: greek_yogurt, name: Greek yogurt (low fat), category: dairy, allergens: [milk], pack_g: 400, keeps_days_opened: 5}
+# FDC 171244 (Cheese, mozzarella, low moisture, part-skim): 1 cup shredded is 113 g and one
+# slice 28 g. A 200 g block.
+- {id: mozzarella, name: Mozzarella, category: dairy, allergens: [milk], pack_g: 200, keeps_days_opened: 14, measures: {cup: 113, slice: 28}}
+# FDC 2710742 (Nutritional powder mix, whey based, NFS), the survey record built from the whey
+# powder in data/foods: one scoop, not further specified, is 26 g. The same record lists brand
+# scoops of 20.5 g and 32 g, so a pack's own scoop weight is better typed in grams. A 1 kg tub.
+# Tagged soy as well as milk: many whey powders add soy lecithin and declare soy, and a missing
+# tag would let one through for someone avoiding soy.
+- {id: whey_protein, name: Whey protein powder, category: dairy, allergens: [milk, soy], pack_g: 1000, keeps_days_opened: 90, measures: {scoop: 26}}
 
-# Eggs come in a box of six, about 300 g. USDA FoodData Central, whole raw egg: one large egg is
+# Eggs come in a box of six, about 300 g. FDC 171287 (Egg, whole, raw, fresh): one large egg is
 # 50 g without the shell.
 - {id: egg, name: Egg, category: egg, allergens: [egg], pack_g: 300, keeps_days_opened: 21, measures: {piece: 50}}
+# FDC 172183 (Egg, white, raw, fresh): the white of one large egg is 33 g. Whites are separated
+# from a box of six as needed, so the pack is six whites (198 g) and keeps as the eggs do.
+- {id: egg_white, name: Egg white, category: egg, allergens: [egg], pack_g: 198, keeps_days_opened: 21, measures: {piece: 33}}
+
+# Meat. Boneless chicken breast comes in 500 g packs, is weighed rather than counted, and is used
+# within two days.
+- {id: chicken_breast, name: Chicken breast (boneless), category: meat, allergens: [], pack_g: 500, keeps_days_opened: 2}
 
 # Fish is bought fresh by weight, cleaned, and used within a day or two.
 - {id: rohu, name: Rohu, category: fish, allergens: [fish], pack_g: 500, keeps_days_opened: 2}
@@ -65,15 +96,17 @@
 - {id: sunflower_oil, name: Sunflower oil, category: oil, allergens: [], pack_g: 921, keeps_days_opened: 180}
 - {id: mustard_oil, name: Mustard oil, category: oil, allergens: [mustard], pack_g: 921, keeps_days_opened: 180}
 - {id: coconut_oil, name: Coconut oil, category: oil, allergens: [], pack_g: 461, keeps_days_opened: 180}
+# Olive oil is a 1 litre bottle (913 g at 0.913 g/ml).
+- {id: olive_oil, name: Olive oil, category: oil, allergens: [], pack_g: 913, keeps_days_opened: 180}
 
 # Vegetables. Packs are what a household buys at a time, from 250 g of the quick-to-spoil ones
 # (spinach by the bunch, peas, beans) to 1 kg of onion and potato, which keep for weeks.
-# USDA FoodData Central, raw onion: one medium (2.5 inch) is 110 g.
+# FDC 170000 (Onions, raw): one medium (2.5 inch) is 110 g.
 - {id: onion, name: Onion, category: veg, allergens: [], pack_g: 1000, keeps_days_opened: 30, measures: {piece: 110}}
-# USDA FoodData Central, raw red tomato: one medium (2.6 inch) is 123 g.
+# FDC 170457 (Tomatoes, red, ripe, raw): one medium (2.6 inch) is 123 g.
 - {id: tomato, name: Tomato, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5, measures: {piece: 123}}
-# Household estimate for a medium aloo, peeled. USDA's medium potato (213 g, unpeeled) is larger
-# than the ones sold in India.
+# Household estimate for a medium aloo, peeled: the bundled row is from CoFID, which lists no
+# portions. USDA's medium potato (213 g, unpeeled) is larger than the ones sold in India.
 - {id: potato, name: Potato, category: veg, allergens: [], pack_g: 1000, keeps_days_opened: 30, measures: {piece: 150}}
 - {id: cauliflower, name: Cauliflower, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 4}
 - {id: spinach, name: Spinach (palak), category: veg, allergens: [], pack_g: 250, keeps_days_opened: 3}
@@ -81,10 +114,10 @@
 - {id: bitter_gourd, name: Bitter gourd (karela), category: veg, allergens: [], pack_g: 250, keeps_days_opened: 4}
 - {id: drumstick, name: Drumstick, category: veg, allergens: [], pack_g: 250, keeps_days_opened: 4}
 - {id: bottle_gourd, name: Bottle gourd (lauki), category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5}
-# USDA FoodData Central, raw carrot: one medium is 61 g.
+# FDC 170393 (Carrots, raw): one medium is 61 g.
 - {id: carrot, name: Carrot, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 14, measures: {piece: 61}}
 - {id: green_peas, name: Green peas, category: veg, allergens: [], pack_g: 250, keeps_days_opened: 4}
-# USDA FoodData Central, raw green sweet pepper: one medium is 119 g.
+# FDC 170427 (Peppers, sweet, green, raw): one medium is 119 g.
 - {id: capsicum, name: Capsicum, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 7, measures: {piece: 119}}
 - {id: cucumber, name: Cucumber, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5}
 - {id: pumpkin, name: Pumpkin, category: veg, allergens: [], pack_g: 500, keeps_days_opened: 5}
@@ -94,12 +127,25 @@
 # Curry and coriander leaves go in as a handful or a garnish.
 - {id: curry_leaves, name: Curry leaves, category: veg, allergens: [], pack_g: null, keeps_days_opened: null}
 - {id: coriander_leaves, name: Coriander leaves, category: veg, allergens: [], pack_g: null, keeps_days_opened: null}
-# Household estimate for one Indian green chilli, about 10 cm. USDA's pepper (45 g) is a larger
-# variety.
+# Household estimate for one Indian green chilli, about 10 cm. FDC 170497 (Peppers, hot chili,
+# green, raw) gives one pepper as 45 g, which is a larger variety, so it is not used.
 - {id: green_chilli, name: Green chilli, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 10, measures: {piece: 6}}
 - {id: ginger, name: Ginger, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 14}
-# USDA FoodData Central, raw garlic: one clove is 3 g.
+# FDC 169230 (Garlic, raw): one clove is 3 g.
 - {id: garlic, name: Garlic, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 30, measures: {clove: 3}}
+# FDC 168482 (Sweet potato, raw): one sweet potato, 5 inch long, is 130 g. The record is
+# orange-fleshed, so the name says so: pale-fleshed shakarkandi has far less vitamin A.
+- {id: sweet_potato, name: Sweet potato (orange-fleshed), category: veg, allergens: [], pack_g: 500, keeps_days_opened: 14, measures: {piece: 130}}
+# FDC 170379 (Broccoli, raw): 1 cup chopped is 91 g. One head of about 400 g.
+- {id: broccoli, name: Broccoli, category: veg, allergens: [], pack_g: 400, keeps_days_opened: 5, measures: {cup: 91}}
+# FDC 169251 (Mushrooms, white, raw): one medium is 18 g and 1 cup sliced 70 g. A 200 g punnet.
+- {id: mushrooms, name: Mushrooms (button), category: veg, allergens: [], pack_g: 200, keeps_days_opened: 3, measures: {piece: 18, cup: 70}}
+# FDC 169248 (Lettuce, iceberg, raw): a medium leaf is 8 g and 1 cup shredded 72 g. The pack is
+# one small head, 324 g in the same record.
+- {id: lettuce, name: Iceberg lettuce, category: veg, allergens: [], pack_g: 324, keeps_days_opened: 5, measures: {leaf: 8, cup: 72}}
+# FDC 169975 (Cabbage, raw): 1 cup shredded is 70 g. The pack is one small head, 714 g in the
+# same record.
+- {id: cabbage, name: Cabbage, category: veg, allergens: [], pack_g: 714, keeps_days_opened: 14, measures: {cup: 70}}
 
 # Coconut, tamarind, nuts and seeds. A fresh coconut gives about 300 g of kernel; coconut milk is
 # a 400 ml can (406 g at 1.0144 g/ml). Lemon juice is squeezed from lemons as needed.
@@ -108,10 +154,61 @@
 - {id: coconut_milk, name: Coconut milk, category: other, allergens: [], pack_g: 406, keeps_days_opened: 4}
 - {id: tamarind, name: Tamarind (imli), category: other, allergens: [], pack_g: 200, keeps_days_opened: 365}
 - {id: peanuts, name: Peanuts (raw), category: nut_seed, allergens: [peanut], pack_g: 500, keeps_days_opened: 90}
+# FDC 174266 (Peanut butter, smooth style, with salt): 2 tbsp are 32 g. A 500 g jar.
+- {id: peanut_butter, name: Peanut butter, category: nut_seed, allergens: [peanut], pack_g: 500, keeps_days_opened: 90, measures: {tbsp: 16}}
+# Nuts and seeds come in 200 g to 250 g packs and keep for months in a closed jar.
+# FDC 170567 (Nuts, almonds): one almond is 1.2 g.
+- {id: almonds, name: Almonds, category: nut_seed, allergens: [tree_nuts], pack_g: 250, keeps_days_opened: 180, measures: {piece: 1.2}}
+# FDC 170187 (Nuts, walnuts, english): 7 walnuts in the shell give 28 g of kernel, so one walnut,
+# two halves, is 4 g.
+- {id: walnuts, name: Walnuts, category: nut_seed, allergens: [tree_nuts], pack_g: 250, keeps_days_opened: 90, measures: {piece: 4}}
+# FDC 2707590 (Chia seeds), the survey record built from the chia record in data/foods: 1 cup is
+# 168 g, so a tablespoon, a sixteenth of a cup, is 10.5 g. The chia record itself lists only 1 oz.
+- {id: chia_seeds, name: Chia seeds, category: nut_seed, allergens: [], pack_g: 200, keeps_days_opened: 365, measures: {tbsp: 10.5}}
+# FDC 169414 (Seeds, flaxseed): 1 tbsp ground is 7 g and 1 tsp ground 2.5 g. These are the ground
+# weights, because flax is eaten ground; a tablespoon of whole seed is 10.3 g.
+- {id: flax_seeds, name: Ground flax seeds (alsi), category: nut_seed, allergens: [], pack_g: 250, keeps_days_opened: 180, measures: {tbsp: 7, tsp: 2.5}}
+# FDC 170556 (Seeds, pumpkin and squash seed kernels, dried): 1 cup is 129 g, so a tablespoon is
+# 8.1 g.
+- {id: pumpkin_seeds, name: Pumpkin seeds, category: nut_seed, allergens: [], pack_g: 200, keeps_days_opened: 90, measures: {cup: 129, tbsp: 8.1}}
+# FDC 170562 (Seeds, sunflower seed kernels, dried): 1 cup is 140 g, so a tablespoon is 8.8 g.
+- {id: sunflower_seeds, name: Sunflower seeds, category: nut_seed, allergens: [], pack_g: 200, keeps_days_opened: 90, measures: {cup: 140, tbsp: 8.8}}
+# FDC 170150 (Seeds, sesame seeds, whole, dried): 1 tbsp is 9 g.
+- {id: sesame_seeds, name: Sesame seeds (til), category: nut_seed, allergens: [sesame], pack_g: 200, keeps_days_opened: 180, measures: {tbsp: 9}}
 
-# Sugar is a 1 kg pack. USDA FoodData Central, granulated sugar: 1 teaspoon is 4.2 g and 1
-# tablespoon 12.6 g.
+# Fruit. Packs are what a household buys at a time. Ripe bananas keep a few days, and cut papaya
+# and pomegranate arils a few days in the fridge.
+# FDC 173944 (Bananas, raw): one medium (7 to 7 7/8 inch) is 118 g. The pack is half a dozen.
+- {id: banana, name: Banana (ripe), category: fruit, allergens: [], pack_g: 708, keeps_days_opened: 4, measures: {piece: 118}}
+# FDC 171688 (Apples, raw, with skin): one medium (3 inch) is 182 g.
+- {id: apple, name: Apple, category: fruit, allergens: [], pack_g: 1000, keeps_days_opened: 30, measures: {piece: 182}}
+# FDC 169105 (Tangerines, mandarin oranges, raw): one medium (2.5 inch) is 88 g.
+- {id: orange, name: Orange (santra), category: fruit, allergens: [], pack_g: 1000, keeps_days_opened: 14, measures: {piece: 88}}
+# FDC 173950 (Blueberries, frozen, unsweetened): 1 cup unthawed is 155 g. A frozen pack keeps for
+# months in the freezer.
+- {id: frozen_blueberries, name: Frozen blueberries, category: fruit, allergens: [], pack_g: 500, keeps_days_opened: 90, measures: {cup: 155}}
+# FDC 169134 (Pomegranates, raw): one pomegranate (4 inch) gives 282 g of arils, and half a cup of
+# arils is 87 g, so a cup is 174 g. The pack is two.
+- {id: pomegranate, name: Pomegranate (anar), category: fruit, allergens: [], pack_g: 564, keeps_days_opened: 5, measures: {piece: 282, cup: 174}}
+# FDC 169926 (Papayas, raw): 1 cup of 1 inch pieces is 145 g. The pack is one large papaya,
+# 781 g in the same record.
+- {id: papaya, name: Papaya, category: fruit, allergens: [], pack_g: 781, keeps_days_opened: 3, measures: {cup: 145}}
+
+# Tofu is a 200 g block, kept in water in the fridge once opened.
+- {id: tofu, name: Tofu (firm), category: other, allergens: [soy], pack_g: 200, keeps_days_opened: 4}
+# FDC 170392 (Cabbage, kimchi): 1 cup is 150 g. A 250 g jar keeps for weeks in the fridge. The
+# record does not say whether it holds fish sauce or salted shrimp, and most kimchi on sale holds
+# one or both, so the row is tagged fish and crustaceans and the food non_veg in data/foods. A
+# vegan kimchi would need its own row.
+- {id: kimchi, name: Kimchi, category: other, allergens: [fish, crustaceans], pack_g: 250, keeps_days_opened: 30, measures: {cup: 150}}
+
+# Sugar is a 1 kg pack. FDC 169655 (Sugars, granulated): 1 tsp is 4.2 g. It lists no tablespoon,
+# so 12.6 g is three of those teaspoons.
 - {id: sugar, name: Sugar, category: sweetener, allergens: [], pack_g: 1000, keeps_days_opened: 365, measures: {tsp: 4.2, tbsp: 12.6}}
+# Honey is a 500 g jar. Soy sauce is a 200 ml bottle (216 g at 1.0778 g/ml), brewed from soy and
+# wheat. Both keep a year once opened, and nutrition-mcp gives both their spoons from a density.
+- {id: honey, name: Honey, category: sweetener, allergens: [], pack_g: 500, keeps_days_opened: 365}
+- {id: soy_sauce, name: Soy sauce, category: sauce, allergens: [soy, gluten], pack_g: 216, keeps_days_opened: 365}
 
 # Spices and salt are used by the pinch or spoonful, so they have no pack to waste.
 - {id: poppy_seeds, name: Poppy seeds (khus khus), category: spice, allergens: [], pack_g: null, keeps_days_opened: null}
