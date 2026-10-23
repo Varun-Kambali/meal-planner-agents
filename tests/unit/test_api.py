@@ -14,6 +14,7 @@ import yaml
 from fakes import FakeNutrition
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import BaseModel
 from week_helpers import (
     PLAN,
@@ -22,13 +23,15 @@ from week_helpers import (
     SpyNutrition,
     good,
     model_for,
+    raw,
+    recipe_of,
     write_catalogue_file,
 )
 
 from meal_planner.api import create_app
 from meal_planner.config import Settings
 from meal_planner.llm import ModelPort, ModelReply
-from meal_planner.nutrition import NutritionPort
+from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.startup import StartupError
 from meal_planner.week import WeekResult
 
@@ -592,3 +595,262 @@ async def test_a_client_that_goes_away_stops_the_run(tmp_path: Path) -> None:
 
     assert len(model.calls) == len(SLOTS)
     assert not any(b"week_done" in m.get("body", b"") for m in sent)
+
+
+# Writing one recipe again
+
+
+def a_week(folder: Path) -> WeekResult:
+    with serving(folder) as client:
+        response = client.post("/v1/week", json=plan_json())
+    return week_of(parse_stream(response.text))
+
+
+def replace_body(week: WeekResult, day: str = "wed", slot_id: str = "lunch") -> dict[str, Any]:
+    """What the browser sends: the plan, each recipe as the model wrote it, and which to redo."""
+    return {
+        "rules": plan_json(),
+        "recipes": [
+            {
+                "day": r.spec.day,
+                "slot_id": r.spec.slot.id,
+                "draft": r.draft.model_dump(mode="json"),
+                "attempts": r.attempts,
+            }
+            for r in week.recipes
+        ],
+        "day": day,
+        "slot_id": slot_id,
+    }
+
+
+def lunch_again(title: str = "Rajma rice, the other way") -> SlotModel:
+    recipe = recipe_of("lunch", "wed") | {"title": title}
+    return SlotModel({"lunch": {"write_slot": [raw({"slot_id": "lunch", "recipes": [recipe]})]}})
+
+
+def test_replace_streams_one_new_recipe_and_keeps_the_rest(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    model = lunch_again()
+
+    with serving(tmp_path, model=model) as client:
+        response = client.post("/v1/week/replace", json=replace_body(week))
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = parse_stream(response.text)
+    names = [name for name, _ in events]
+    assert names[0] == "slot_started"
+    assert names[-1] == "week_done"
+    assert names.count("slot_started") == 1
+    assert events[0][1]["slot_id"] == "lunch"
+    assert events[0][1]["days"] == ["wed"]
+    new = week_of(events)
+    assert new.calls == 1
+    before = {(r.spec.day, r.spec.slot.id): r for r in week.recipes}
+    after = {(r.spec.day, r.spec.slot.id): r for r in new.recipes}
+    assert after[("wed", "lunch")].draft.title == "Rajma rice, the other way"
+    assert all(after[k] == before[k] for k in before if k != ("wed", "lunch"))
+
+
+def test_replace_works_the_numbers_out_again_and_takes_none_from_the_client(
+    tmp_path: Path,
+) -> None:
+    week = a_week(tmp_path)
+    nutrition = SpyNutrition(*EXTRA_FOODS)
+    body = replace_body(week)
+
+    with serving(tmp_path, model=lunch_again(), nutrition=nutrition) as client:
+        client.post("/v1/week/replace", json=body)
+
+    # One meal per recipe sent, and one for the recipe that was written.
+    assert len(nutrition.meals) == 28 + 1
+
+
+@pytest.mark.parametrize("field", ["nutrition", "failures", "spec"])
+def test_replace_refuses_a_recipe_that_brings_its_own_numbers(tmp_path: Path, field: str) -> None:
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["recipes"][0][field] = {"kcal": 1}
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    assert response.status_code == 422
+    assert any(p["loc"][:3] == ["body", "recipes", 0] for p in response.json()["detail"])
+
+
+def test_replace_for_a_slot_the_plan_lacks_is_422_naming_it(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=replace_body(week, slot_id="brunch"))
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "slot_id"]
+    assert "brunch" in problem["msg"]
+
+
+def test_replace_with_a_recipe_for_a_slot_the_plan_lacks_is_422_naming_it(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["recipes"][3]["slot_id"] = "brunch"
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "recipes", 3, "slot_id"]
+    assert "brunch" in problem["msg"]
+    assert body["recipes"][3]["day"] in problem["msg"]
+
+
+def test_replace_with_the_same_day_and_slot_twice_is_422_naming_it(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["recipes"].append(body["recipes"][5])
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "recipes", 28]
+    assert body["recipes"][5]["slot_id"] in problem["msg"]
+    assert body["recipes"][5]["day"] in problem["msg"]
+
+
+def test_replace_with_a_draft_for_another_day_than_its_entry_is_422(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["recipes"][0]["draft"]["day"] = "sun"
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "recipes", 0, "draft", "day"]
+
+
+def test_replace_with_an_unknown_food_in_the_rules_is_422(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["rules"]["food"]["exclude_foods"] = ["unobtainium"]
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "rules", "food", "exclude_foods"]
+
+
+class DownNutrition(SpyNutrition):
+    """nutrition-mcp when it cannot be asked at all: the error names no food."""
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        raise NutritionError("nutrition-mcp could not answer compute_meal: Connection closed")
+
+
+def test_replace_is_a_503_naming_the_step_when_the_numbers_cannot_be_worked_out(
+    tmp_path: Path,
+) -> None:
+    week = a_week(tmp_path)
+    model = lunch_again()
+
+    with serving(tmp_path, model=model, nutrition=DownNutrition(*EXTRA_FOODS)) as client:
+        response = client.post("/v1/week/replace", json=replace_body(week))
+
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/json")
+    assert "recompute" in response.json()["detail"]
+    assert model.calls == []
+
+
+class RefusingNutrition(SpyNutrition):
+    """nutrition-mcp refusing one food, as it does for a recipe it cannot work out."""
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        if any(item.food_id == "tofu" for item in items):
+            raise NutritionError("item 1 (tofu): refused", "tofu")
+        return await super().meal(items)
+
+
+def test_replace_treats_a_recipe_nutrition_mcp_refuses_as_one_without_numbers(
+    tmp_path: Path,
+) -> None:
+    week = a_week(tmp_path)
+    with_tofu = {
+        (r.spec.day, r.spec.slot.id)
+        for r in week.recipes
+        if any(i.id == "tofu" for i in r.draft.ingredients)
+    }
+    assert with_tofu
+
+    with serving(
+        tmp_path, model=lunch_again(), nutrition=RefusingNutrition(*EXTRA_FOODS)
+    ) as client:
+        response = client.post("/v1/week/replace", json=replace_body(week))
+
+    assert response.status_code == 200
+    new = week_of(parse_stream(response.text))
+    without_numbers = {(r.spec.day, r.spec.slot.id) for r in new.recipes if r.nutrition is None}
+    assert without_numbers == with_tofu - {("wed", "lunch")}
+
+
+def test_replace_has_its_own_larger_body_limit(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    body = json.dumps(replace_body(week)).encode()
+    padded = body + b" " * (65536 - len(body) + 100)
+    plan = json.dumps(plan_json()).encode()
+    json_header = {"content-type": "application/json"}
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        week_too_big = client.post("/v1/week", content=plan + b" " * 65536, headers=json_header)
+        replace_ok = client.post("/v1/week/replace", content=padded, headers=json_header)
+        replace_too_big = client.post(
+            "/v1/week/replace", content=body + b" " * 131072, headers=json_header
+        )
+
+    assert len(padded) > 65536
+    assert week_too_big.status_code == 413
+    assert replace_ok.status_code == 200
+    assert replace_too_big.status_code == 413
+    assert "131072" in replace_too_big.json()["detail"]
+
+
+def test_replace_cuts_off_a_chunked_body_at_its_limit(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    body = json.dumps(replace_body(week)).encode()
+    parts = [body[i : i + 10000] for i in range(0, len(body), 10000)]
+    parts += [b" " * 10000] * 14
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post(
+            "/v1/week/replace", content=iter(parts), headers={"content-type": "application/json"}
+        )
+
+    assert sum(len(part) for part in parts) > 131072
+    assert response.status_code == 413
+
+
+def test_replace_ends_with_an_error_event_when_the_run_fails(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    week = a_week(tmp_path)
+    capfd.readouterr()
+
+    with serving(tmp_path, model=ExplodingModel()) as client:
+        response = client.post("/v1/week/replace", json=replace_body(week))
+
+    events = parse_stream(response.text)
+    name, data = events[-1]
+    assert name == "error"
+    assert data["step"] == "replace"
+    assert MARK not in response.text
+    captured = capfd.readouterr()
+    assert MARK not in captured.err + captured.out
+    (failed,) = [e for e in log_entries(captured.err) if e["event"] == "run_failed"]
+    assert failed["task"] == "replace"

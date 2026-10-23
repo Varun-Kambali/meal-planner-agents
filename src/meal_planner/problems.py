@@ -22,13 +22,18 @@ def problems_from(errors: Iterable[Mapping[str, Any]]) -> list[Problem]:
     return [{"loc": list(error["loc"]), "msg": str(error["msg"])} for error in errors]
 
 
-def unknown_foods(rules: PlanRules, catalogue: Catalogue, *, root: str = "body") -> list[Problem]:
-    """A problem for each excluded or liked food the catalogue does not have."""
+def unknown_foods(
+    rules: PlanRules, catalogue: Catalogue, *, under: tuple[str, ...] = ("body",)
+) -> list[Problem]:
+    """A problem for each excluded or liked food the catalogue does not have.
+
+    `under` is where the rules sit in the input, so that the location points at the right field.
+    """
     found: list[Problem] = []
     for message in check_rules_against(rules, catalogue):
         # "food.liked_foods: 'x' is not in the catalogue": the field path, then what is wrong.
         field, _, text = message.partition(": ")
-        found.append({"loc": [root, *field.split(".")], "msg": text})
+        found.append({"loc": [*under, *field.split(".")], "msg": text})
     return found
 
 
