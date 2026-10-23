@@ -1,0 +1,186 @@
+id,role,fdc_id,data_type,record,portion,gram_weight
+rolled_oats,food_file,173904,SR Legacy,"Cereals, oats, regular and quick, not fortified, dry",1 cup,81
+rolled_oats,food_file,173904,SR Legacy,"Cereals, oats, regular and quick, not fortified, dry",0.33 cup,27
+brown_rice,food_file,169703,SR Legacy,"Rice, brown, long-grain, raw (Includes foods for USDA's Food Distribution Program)",1 cup,185
+quinoa,food_file,168874,SR Legacy,"Quinoa, uncooked",1 cup,170
+skimmed_milk,food_file,173432,SR Legacy,"Milk, nonfat, fluid, without added vitamin A and vitamin D (fat free or skim)",1 cup,245
+skimmed_milk,food_file,173432,SR Legacy,"Milk, nonfat, fluid, without added vitamin A and vitamin D (fat free or skim)",1 quart,980
+greek_yogurt,food_file,170903,SR Legacy,"Yogurt, Greek, plain, lowfat",1 container (7 oz),200
+mozzarella,food_file,171244,SR Legacy,"Cheese, mozzarella, low moisture, part-skim","1 cup, diced",132
+mozzarella,food_file,171244,SR Legacy,"Cheese, mozzarella, low moisture, part-skim","1 cup, shredded",113
+mozzarella,food_file,171244,SR Legacy,"Cheese, mozzarella, low moisture, part-skim",1 oz,28.35
+mozzarella,food_file,171244,SR Legacy,"Cheese, mozzarella, low moisture, part-skim",1 cubic inch,18
+mozzarella,food_file,171244,SR Legacy,"Cheese, mozzarella, low moisture, part-skim",1 slice (1 oz),28
+whey_protein,food_file,173180,SR Legacy,"Beverages, Protein powder whey based",0.33 cup,32
+egg_white,food_file,172183,SR Legacy,"Egg, white, raw, fresh",1 large,33
+egg_white,food_file,172183,SR Legacy,"Egg, white, raw, fresh",1 cup,243
+chicken_breast,food_file,171077,SR Legacy,"Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",4 oz,113
+chicken_breast,food_file,171077,SR Legacy,"Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",1 piece,272
+chicken_breast,food_file,171077,SR Legacy,"Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",1 package,926
+tofu,food_file,172448,SR Legacy,"Tofu, firm, prepared with calcium sulfate and magnesium chloride (nigari)",0.5 cup,126
+tofu,food_file,172448,SR Legacy,"Tofu, firm, prepared with calcium sulfate and magnesium chloride (nigari)",0.25 block,81
+tofu,food_file,172448,SR Legacy,"Tofu, firm, prepared with calcium sulfate and magnesium chloride (nigari)",0.2 block,91
+banana,food_file,173944,SR Legacy,"Bananas, raw","1 cup, mashed",225
+banana,food_file,173944,SR Legacy,"Bananas, raw","1 cup, sliced",150
+banana,food_file,173944,SR Legacy,"Bananas, raw","1 extra small (less than 6"" long)",81
+banana,food_file,173944,SR Legacy,"Bananas, raw","1 small (6"" to 6-7/8"" long)",101
+banana,food_file,173944,SR Legacy,"Bananas, raw","1 medium (7"" to 7-7/8"" long)",118
+banana,food_file,173944,SR Legacy,"Bananas, raw","1 large (8"" to 8-7/8"" long)",136
+banana,food_file,173944,SR Legacy,"Bananas, raw","1 extra large (9"" or longer)",152
+banana,food_file,173944,SR Legacy,"Bananas, raw",1 NLEA serving,126
+apple,food_file,171688,SR Legacy,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)","1 cup, quartered or chopped",125
+apple,food_file,171688,SR Legacy,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)",1 cup slices,109
+apple,food_file,171688,SR Legacy,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)","1 large (3-1/4"" dia)",223
+apple,food_file,171688,SR Legacy,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)","1 medium (3"" dia)",182
+apple,food_file,171688,SR Legacy,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)","1 small (2-3/4"" dia)",149
+apple,food_file,171688,SR Legacy,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)","1 extra small (2-1/2"" dia)",101
+apple,food_file,171688,SR Legacy,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)",1 NLEA serving,242
+orange,food_file,169105,SR Legacy,"Tangerines, (mandarin oranges), raw","1 cup, sections",195
+orange,food_file,169105,SR Legacy,"Tangerines, (mandarin oranges), raw","1 small (2-1/4"" dia)",76
+orange,food_file,169105,SR Legacy,"Tangerines, (mandarin oranges), raw","1 medium (2-1/2"" dia)",88
+orange,food_file,169105,SR Legacy,"Tangerines, (mandarin oranges), raw","1 large (2-3/4"" dia)",120
+orange,food_file,169105,SR Legacy,"Tangerines, (mandarin oranges), raw",1 NLEA serving,109
+frozen_blueberries,food_file,173950,SR Legacy,"Blueberries, frozen, unsweetened (Includes foods for USDA's Food Distribution Program)","1 cup, unthawed",155
+frozen_blueberries,food_file,173950,SR Legacy,"Blueberries, frozen, unsweetened (Includes foods for USDA's Food Distribution Program)",1 package (20 oz),567
+pomegranate,food_file,169134,SR Legacy,"Pomegranates, raw",0.5 cup arils (seed/juice sacs),87
+pomegranate,food_file,169134,SR Legacy,"Pomegranates, raw","1 pomegranate (4"" dia)",282
+papaya,food_file,169926,SR Legacy,"Papayas, raw","1 cup 1"" pieces",145
+papaya,food_file,169926,SR Legacy,"Papayas, raw","1 cup, mashed",230
+papaya,food_file,169926,SR Legacy,"Papayas, raw","1 fruit, small",157
+papaya,food_file,169926,SR Legacy,"Papayas, raw","1 fruit, large",781
+sweet_potato,food_file,168482,SR Legacy,"Sweet potato, raw, unprepared (Includes foods for USDA's Food Distribution Program)","1 cup, cubes",133
+sweet_potato,food_file,168482,SR Legacy,"Sweet potato, raw, unprepared (Includes foods for USDA's Food Distribution Program)","1 sweetpotato, 5"" long",130
+broccoli,food_file,170379,SR Legacy,"Broccoli, raw",1 cup chopped,91
+broccoli,food_file,170379,SR Legacy,"Broccoli, raw",1 bunch,608
+broccoli,food_file,170379,SR Legacy,"Broccoli, raw","1 spear (about 5"" long)",31
+broccoli,food_file,170379,SR Legacy,"Broccoli, raw",1 stalk,151
+broccoli,food_file,170379,SR Legacy,"Broccoli, raw","0.5 cup, chopped or diced",44
+broccoli,food_file,170379,SR Legacy,"Broccoli, raw",1 NLEA serving,148
+mushrooms,food_file,169251,SR Legacy,"Mushrooms, white, raw","1 cup, pieces or slices",70
+mushrooms,food_file,169251,SR Legacy,"Mushrooms, white, raw","1 cup, whole",96
+mushrooms,food_file,169251,SR Legacy,"Mushrooms, white, raw",1 large,23
+mushrooms,food_file,169251,SR Legacy,"Mushrooms, white, raw",1 medium,18
+mushrooms,food_file,169251,SR Legacy,"Mushrooms, white, raw",1 slice,6
+mushrooms,food_file,169251,SR Legacy,"Mushrooms, white, raw",1 small,10
+mushrooms,food_file,169251,SR Legacy,"Mushrooms, white, raw",0.5 cup pieces,35
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw",1 cup shredded,72
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw","1 cup, chopped (1/2"" pieces, loosely packed)",57
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw","1 head, large",755
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw","1 head, medium (6"" dia)",539
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw","1 head, small",324
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw","1 leaf, large",15
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw","1 leaf, medium",8
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw","1 leaf, small",5
+lettuce,food_file,169248,SR Legacy,"Lettuce, iceberg (includes crisphead types), raw",1 NLEA Serving,89
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw","1 cup, chopped",89
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw","1 cup, shredded",70
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw","1 head, large (about 7"" dia)",1248
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw","1 leaf, large",33
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw","1 head, medium (about 5-3/4"" dia)",908
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw","1 leaf, medium",23
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw","1 head, small (about 4-1/2"" dia)",714
+cabbage,food_file,169975,SR Legacy,"Cabbage, raw",1 leaf,15
+kimchi,food_file,170392,SR Legacy,"Cabbage, kimchi",1 cup,150
+chia_seeds,food_file,170554,SR Legacy,"Seeds, chia seeds, dried",1 oz,28.35
+flax_seeds,food_file,169414,SR Legacy,"Seeds, flaxseed","1 tbsp, whole",10.3
+flax_seeds,food_file,169414,SR Legacy,"Seeds, flaxseed","1 cup, whole",168
+flax_seeds,food_file,169414,SR Legacy,"Seeds, flaxseed","1 tbsp, ground",7
+flax_seeds,food_file,169414,SR Legacy,"Seeds, flaxseed","1 tsp, whole",3.4
+flax_seeds,food_file,169414,SR Legacy,"Seeds, flaxseed","1 tsp, ground",2.5
+pumpkin_seeds,food_file,170556,SR Legacy,"Seeds, pumpkin and squash seed kernels, dried",1 cup,129
+pumpkin_seeds,food_file,170556,SR Legacy,"Seeds, pumpkin and squash seed kernels, dried",1 oz,28.35
+sunflower_seeds,food_file,170562,SR Legacy,"Seeds, sunflower seed kernels, dried","1 cup, with hulls, edible yield",46
+sunflower_seeds,food_file,170562,SR Legacy,"Seeds, sunflower seed kernels, dried",1 cup,140
+sesame_seeds,food_file,170150,SR Legacy,"Seeds, sesame seeds, whole, dried",1 cup,144
+sesame_seeds,food_file,170150,SR Legacy,"Seeds, sesame seeds, whole, dried",1 tbsp,9
+walnuts,food_file,170187,SR Legacy,"Nuts, walnuts, english","1 cup, chopped",117
+walnuts,food_file,170187,SR Legacy,"Nuts, walnuts, english","1 cup, ground",80
+walnuts,food_file,170187,SR Legacy,"Nuts, walnuts, english","1 cup, in shell, edible yield (7 nuts)",28
+walnuts,food_file,170187,SR Legacy,"Nuts, walnuts, english",1 cup shelled (50 halves),100
+walnuts,food_file,170187,SR Legacy,"Nuts, walnuts, english",1 cup pieces or chips,120
+walnuts,food_file,170187,SR Legacy,"Nuts, walnuts, english",1 oz (14 halves),28.35
+almonds,food_file,170567,SR Legacy,"Nuts, almonds","1 cup, whole",143
+almonds,food_file,170567,SR Legacy,"Nuts, almonds","1 cup, sliced",92
+almonds,food_file,170567,SR Legacy,"Nuts, almonds","1 cup, slivered",108
+almonds,food_file,170567,SR Legacy,"Nuts, almonds","1 cup, ground",95
+almonds,food_file,170567,SR Legacy,"Nuts, almonds",1 oz (23 whole kernels),28.35
+almonds,food_file,170567,SR Legacy,"Nuts, almonds",1 almond,1.2
+peanut_butter,food_file,174266,SR Legacy,"Peanut butter, smooth style, with salt (Includes foods for USDA's Food Distribution Program)",2 tbsp,32
+peanut_butter,food_file,174266,SR Legacy,"Peanut butter, smooth style, with salt (Includes foods for USDA's Food Distribution Program)",1 cup,258
+olive_oil,food_file,171413,SR Legacy,"Oil, olive, salad or cooking",1 tablespoon,13.5
+olive_oil,food_file,171413,SR Legacy,"Oil, olive, salad or cooking",1 cup,216
+olive_oil,food_file,171413,SR Legacy,"Oil, olive, salad or cooking",1 tsp,4.5
+soy_sauce,food_file,174277,SR Legacy,Soy sauce made from soy and wheat (shoyu),1 tbsp,16
+soy_sauce,food_file,174277,SR Legacy,Soy sauce made from soy and wheat (shoyu),1 tsp,5.3
+soy_sauce,food_file,174277,SR Legacy,Soy sauce made from soy and wheat (shoyu),1 cup,255
+soy_sauce,food_file,174277,SR Legacy,Soy sauce made from soy and wheat (shoyu),1 individual packet,8.9
+honey,food_file,169640,SR Legacy,Honey,1 cup,339
+honey,food_file,169640,SR Legacy,Honey,1 tbsp,21
+honey,food_file,169640,SR Legacy,Honey,1 packet (0.5 oz),14
+butter,bundled,173410,SR Legacy,"Butter, salted","1 pat (1"" sq, 1/3"" high)",5
+butter,bundled,173410,SR Legacy,"Butter, salted",1 tbsp,14.2
+butter,bundled,173410,SR Legacy,"Butter, salted",1 cup,227
+butter,bundled,173410,SR Legacy,"Butter, salted",1 stick,113
+egg,bundled,171287,SR Legacy,"Egg, whole, raw, fresh",1 large,50
+egg,bundled,171287,SR Legacy,"Egg, whole, raw, fresh",1 extra large,56
+egg,bundled,171287,SR Legacy,"Egg, whole, raw, fresh",1 jumbo,63
+egg,bundled,171287,SR Legacy,"Egg, whole, raw, fresh",1 cup (4.86 large eggs),243
+egg,bundled,171287,SR Legacy,"Egg, whole, raw, fresh",1 medium,44
+egg,bundled,171287,SR Legacy,"Egg, whole, raw, fresh",1 small,38
+onion,bundled,170000,SR Legacy,"Onions, raw","1 cup, chopped",160
+onion,bundled,170000,SR Legacy,"Onions, raw","1 cup, sliced",115
+onion,bundled,170000,SR Legacy,"Onions, raw",1 tbsp chopped,10
+onion,bundled,170000,SR Legacy,"Onions, raw",1 large,150
+onion,bundled,170000,SR Legacy,"Onions, raw","1 slice, large (1/4"" thick)",38
+onion,bundled,170000,SR Legacy,"Onions, raw","1 medium (2-1/2"" dia)",110
+onion,bundled,170000,SR Legacy,"Onions, raw","1 slice, medium (1/8"" thick)",14
+onion,bundled,170000,SR Legacy,"Onions, raw",1 small,70
+onion,bundled,170000,SR Legacy,"Onions, raw","1 slice, thin",9
+onion,bundled,170000,SR Legacy,"Onions, raw",10 rings,60
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average",1 cup cherry tomatoes,149
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average","1 cup, chopped or sliced",180
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average",1 Italian tomato,62
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average",1 cherry,17
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average","1 large whole (3"" dia)",182
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average","1 medium whole (2-3/5"" dia)",123
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average","1 slice, medium (1/4"" thick)",20
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average",1 plum tomato,62
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average","1 small whole (2-2/5"" dia)",91
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average","1 slice, thick/large (1/2"" thick)",27
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average",1 wedge (1/4 of medium tomato),31
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average","1 slice, thin/small",15
+tomato,bundled,170457,SR Legacy,"Tomatoes, red, ripe, raw, year round average",1 NLEA serving,148
+carrot,bundled,170393,SR Legacy,"Carrots, raw",1 cup chopped,128
+carrot,bundled,170393,SR Legacy,"Carrots, raw",1 cup grated,110
+carrot,bundled,170393,SR Legacy,"Carrots, raw",1 cup strips or slices,122
+carrot,bundled,170393,SR Legacy,"Carrots, raw","1 large (7-1/4"" to 8-/1/2"" long)",72
+carrot,bundled,170393,SR Legacy,"Carrots, raw",1 medium,61
+carrot,bundled,170393,SR Legacy,"Carrots, raw","1 small (5-1/2"" long)",50
+carrot,bundled,170393,SR Legacy,"Carrots, raw",1 slice,3
+carrot,bundled,170393,SR Legacy,"Carrots, raw","1 strip large (3"" long)",7
+carrot,bundled,170393,SR Legacy,"Carrots, raw",1 strip medium,4
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw","1 cup, chopped",149
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw","1 cup, sliced",92
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw",1 tbsp,9.3
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw","1 large (2-1/4 per lb, approx 3-3/4"" long, 3"" dia)",164
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw","1 medium (approx 2-3/4"" long, 2-1/2"" dia)",119
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw","1 ring (3"" dia, 1/4"" thick)",10
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw",1 small,74
+capsicum,bundled,170427,SR Legacy,"Peppers, sweet, green, raw",10 strips,27
+green_chilli,bundled,170497,SR Legacy,"Peppers, hot chili, green, raw",1 pepper,45
+green_chilli,bundled,170497,SR Legacy,"Peppers, hot chili, green, raw","0.5 cup, chopped or diced",75
+garlic,bundled,169230,SR Legacy,"Garlic, raw",1 cup,136
+garlic,bundled,169230,SR Legacy,"Garlic, raw",1 tsp,2.8
+garlic,bundled,169230,SR Legacy,"Garlic, raw",1 clove,3
+garlic,bundled,169230,SR Legacy,"Garlic, raw",3 cloves,9
+sugar,bundled,169655,SR Legacy,"Sugars, granulated",1 serving packet,2.8
+sugar,bundled,169655,SR Legacy,"Sugars, granulated",1 tsp,4.2
+sugar,bundled,169655,SR Legacy,"Sugars, granulated",1 cup,200
+sugar,bundled,169655,SR Legacy,"Sugars, granulated",1 serving 1 cube,2.3
+chia_seeds,portion_only,2707590,Survey (FNDDS),Chia seeds,1 cup,168
+chia_seeds,portion_only,2707590,Survey (FNDDS),Chia seeds,Quantity not specified,9
+whey_protein,portion_only,2710742,Survey (FNDDS),"Nutritional powder mix, whey based, NFS","1 scoop, NFS",26
+whey_protein,portion_only,2710742,Survey (FNDDS),"Nutritional powder mix, whey based, NFS",1 scoop Gold Standard,20.5
+whey_protein,portion_only,2710742,Survey (FNDDS),"Nutritional powder mix, whey based, NFS",1 scoop NOW Foods,32
+whey_protein,portion_only,2710742,Survey (FNDDS),"Nutritional powder mix, whey based, NFS",Quantity not specified,26
+whey_protein,portion_only,2710742,Survey (FNDDS),"Nutritional powder mix, whey based, NFS",1 tablespoon,13
