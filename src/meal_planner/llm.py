@@ -21,6 +21,9 @@ from typing import Any, Protocol, runtime_checkable
 # that ships with the package. Set before the import so a test or a cold start never waits on
 # the network.
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+# LiteLLM sets its log level from this variable when it is imported, and at DEBUG it logs the
+# whole request. A value in the environment is overridden: the prompts hold the user's rules.
+os.environ["LITELLM_LOG"] = "ERROR"
 
 import litellm
 from litellm.exceptions import APIConnectionError, RateLimitError, Timeout
@@ -30,6 +33,11 @@ from meal_planner.log import get_logger
 
 # On a failed call LiteLLM prints a provider list to stdout, which only adds noise.
 litellm.suppress_debug_info = True
+# LiteLLM's own loggers can carry the request or the reply, so they are switched off whatever
+# their level. A failed call still gets a `model_call` line below, with the error code and the
+# exception's class.
+for _name in ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy"):
+    logging.getLogger(_name).disabled = True
 
 logger = get_logger(__name__)
 

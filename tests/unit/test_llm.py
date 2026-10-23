@@ -1,6 +1,9 @@
 """The model client: parsing, the LiteLLM wrapper with its call stubbed, and record and replay."""
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -622,3 +625,25 @@ async def test_replay_gives_a_repeated_prompt_its_recordings_in_order(tmp_path: 
 async def test_replay_of_a_missing_file_fails_at_once(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         ReplayModel(tmp_path / "missing.jsonl")
+
+
+# LiteLLM's own logging
+
+
+def test_litellm_loggers_stay_silent_even_when_the_environment_asks_for_debug() -> None:
+    """LiteLLM can log the request it sends, so importing our client switches its loggers off."""
+    code = (
+        "import logging, meal_planner.llm\n"
+        "for name in ('LiteLLM', 'LiteLLM Router', 'LiteLLM Proxy'):\n"
+        "    logger = logging.getLogger(name)\n"
+        "    logger.debug('PROMPT-TEXT')\n"
+        "    logger.warning('PROMPT-TEXT')\n"
+        "    logger.error('PROMPT-TEXT')\n"
+    )
+    env = {**os.environ, "LITELLM_LOG": "DEBUG", "LITELLM_LOCAL_MODEL_COST_MAP": "True"}
+
+    done = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True
+    )
+
+    assert "PROMPT-TEXT" not in done.stdout + done.stderr
