@@ -21,6 +21,11 @@ from typing import Any, Protocol, runtime_checkable
 # that ships with the package. Set before the import so a test or a cold start never waits on
 # the network.
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+# In its default mode LiteLLM calls load_dotenv() on import, which reads the first .env found by
+# walking up from its own install folder. Keys and settings would then come from a file nobody
+# passed in. They must come from the process environment only, which `make run` and the command
+# get through uv's --env-file. Set LITELLM_MODE=DEV to bring the old behaviour back.
+os.environ.setdefault("LITELLM_MODE", "PRODUCTION")
 # LiteLLM sets its log level from this variable when it is imported, and at DEBUG it logs the
 # whole request. A value in the environment is overridden: the prompts hold the user's rules.
 os.environ["LITELLM_LOG"] = "ERROR"
