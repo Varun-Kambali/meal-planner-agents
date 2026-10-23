@@ -9,8 +9,8 @@ stream has started its status is sent, so a failure after that is a last `error`
 import asyncio
 import json
 import time
-from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
-from contextlib import AsyncExitStack, aclosing, asynccontextmanager
+from collections.abc import AsyncIterable, AsyncIterator
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -201,8 +201,26 @@ async def _cleanup() -> AsyncIterator[AsyncExitStack]:
         yield stack
 
 
+async def _pump(
+    run: AsyncIterator[WeekEvent], events: asyncio.Queue[WeekEvent | Exception | None]
+) -> None:
+    """Move the run's events into a queue, then None, or the exception that ended the run."""
+    try:
+        async for event in run:
+            events.put_nowait(event)
+        events.put_nowait(None)
+    except Exception as exc:
+        events.put_nowait(exc)
+
+
+async def _stop(pump: asyncio.Task[None]) -> None:
+    """End the run if it is still going, and wait until its calls are cancelled."""
+    pump.cancel()
+    await asyncio.wait({pump})
+
+
 async def _stream(
-    step: str, run: AsyncGenerator[WeekEvent], settings: Settings, cleanup: AsyncExitStack
+    step: str, run: AsyncIterator[WeekEvent], settings: Settings, cleanup: AsyncExitStack
 ) -> AsyncIterator[ServerSentEvent]:
     """The run's events as server-sent events, always ending with `week_done` or `error`.
 
@@ -210,29 +228,34 @@ async def _stream(
     stream. The event holds no text from the exception, which can quote the request, and the log
     line holds only its class.
 
-    A client that goes away cancels the response while this generator is parked at a yield,
-    where nothing is raised in it. Closing the run stops the graph, and with it the model calls,
-    as soon as the response is over; leaving that to garbage collection would not.
+    The run goes on in a task of its own, and the response ending stops that task through
+    `cleanup`. A client that goes away cancels the response, and the cancellation reaches this
+    generator, if it reaches it at all, while it waits for the next event or is parked at a
+    yield. Cancelling LangGraph from there does not work: the cancellation is repeated at every
+    await, which interrupts LangGraph's own cleanup and leaves its model calls running.
     """
-    cleanup.push_async_callback(run.aclose)
+    events: asyncio.Queue[WeekEvent | Exception | None] = asyncio.Queue()
+    pump = asyncio.create_task(_pump(run, events))
+    cleanup.push_async_callback(_stop, pump)
     started = time.perf_counter()
     try:
-        async with aclosing(run) as events:
-            async for event in events:
-                yield ServerSentEvent(raw_data=event.model_dump_json(), event=event.kind)
-                if isinstance(event, WeekDone):
-                    week = event.week
-                    logger.info(
-                        "run_done",
-                        extra={
-                            "task": step,
-                            "model": settings.model,
-                            "input_tokens": week.input_tokens,
-                            "output_tokens": week.output_tokens,
-                            "latency_ms": round((time.perf_counter() - started) * 1000, 1),
-                            "cost_usd": week.cost_usd,
-                        },
-                    )
+        while (item := await events.get()) is not None:
+            if isinstance(item, Exception):
+                raise item
+            yield ServerSentEvent(raw_data=item.model_dump_json(), event=item.kind)
+            if isinstance(item, WeekDone):
+                week = item.week
+                logger.info(
+                    "run_done",
+                    extra={
+                        "task": step,
+                        "model": settings.model,
+                        "input_tokens": week.input_tokens,
+                        "output_tokens": week.output_tokens,
+                        "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+                        "cost_usd": week.cost_usd,
+                    },
+                )
     except asyncio.CancelledError:
         logger.info("run_cancelled", extra={"task": step})
         raise

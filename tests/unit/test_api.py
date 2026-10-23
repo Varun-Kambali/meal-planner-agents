@@ -31,6 +31,7 @@ from week_helpers import (
 from meal_planner.api import app_factory, create_app
 from meal_planner.config import Settings, get_settings
 from meal_planner.llm import ModelPort, ModelReply
+from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.startup import StartupError
 from meal_planner.week import WeekResult
@@ -443,6 +444,34 @@ def test_log_lines_written_while_the_stream_runs_carry_its_request_id(
     assert done["request_id"] == request_id
     assert done["task"] == "week"
     assert done["input_tokens"] == 0
+
+
+class LoggingModel:
+    """A model that writes a log line after each call, as the real client does."""
+
+    def __init__(self, inner: ModelPort) -> None:
+        self._inner = inner
+
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        reply = await self._inner.structured(
+            task=task, system=system, user=user, schema=schema, timeout_s=timeout_s
+        )
+        get_logger("meal_planner.test").info("model_call", extra={"task": task})
+        return reply
+
+
+def test_log_lines_written_inside_the_run_carry_the_request_id_too(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    with serving(tmp_path, model=LoggingModel(model_for())) as client:
+        response = client.post("/v1/week", json=plan_json())
+
+    entries = log_entries(capfd.readouterr().err)
+    calls = [e for e in entries if e["event"] == "model_call"]
+    assert len(calls) == 4
+    assert {e["request_id"] for e in calls} == {response.headers["x-request-id"]}
 
 
 # Rules and typed text stay out of the logs
