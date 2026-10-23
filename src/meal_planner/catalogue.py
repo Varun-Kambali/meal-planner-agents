@@ -6,6 +6,7 @@ file is loaded, so they have one source. Loading also checks every id against nu
 turns a typo in the file into a startup failure that names the id.
 """
 
+from collections.abc import Container, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
@@ -101,18 +102,27 @@ class Catalogue:
             raise CatalogueError(f"'{food_id}' is not in the catalogue")
         return item
 
-    def allowed_for(self, rules: PlanRules) -> list[CatalogueItem]:
-        """The items the diet, the allergens and the excluded foods leave, in catalogue order."""
-        food = rules.food
-        diets = _DIETS_ALLOWED[food.diet]
-        avoided = set(food.exclude_allergens)
+    def allowed(
+        self,
+        diet: Diet,
+        exclude_allergens: Iterable[Allergen] = (),
+        exclude_foods: Container[str] = (),
+    ) -> list[CatalogueItem]:
+        """The items a diet allows, less the allergens and foods named, in catalogue order."""
+        diets = _DIETS_ALLOWED[diet]
+        avoided = set(exclude_allergens)
         return [
             item
             for item in self.items.values()
             if item.diet in diets
             and avoided.isdisjoint(item.allergens)
-            and item.id not in food.exclude_foods
+            and item.id not in exclude_foods
         ]
+
+    def allowed_for(self, rules: PlanRules) -> list[CatalogueItem]:
+        """The items the diet, the allergens and the excluded foods leave, in catalogue order."""
+        food = rules.food
+        return self.allowed(food.diet, food.exclude_allergens, food.exclude_foods)
 
     def grams(self, food_id: str, amount: float, unit: str) -> float | None:
         """Grams in `amount` of a household unit, or None when this catalogue has no such unit.
