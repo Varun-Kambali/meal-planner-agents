@@ -32,7 +32,7 @@ The build stops on an id that clashes with nutrition-mcp's bundled data, a repea
 ## Choosing a record
 
 1. **Form first.** The record has to be the food as it goes into the recipe: raw, the edible part, dry grain rather than cooked, unroasted seeds, unflavoured powder.
-2. **SR Legacy over Foundation when Foundation lacks nutrients.** Foundation records are newer but often leave out nutrients nutrition-mcp reports. For oats, chia, iceberg lettuce, cabbage and orange-fleshed sweet potato the Foundation record has no fibre value, so available carbohydrate could not be computed; the Foundation olive oils have no energy or fat value at all. Every food here had an SR Legacy record of the right form with fewer gaps, so every row is SR Legacy. The notes name the Foundation record that was passed over.
+2. **SR Legacy over Foundation when Foundation lacks nutrients.** Foundation records are newer but often leave out nutrients nutrition-mcp reports. For oats, chia, iceberg lettuce, cabbage and orange-fleshed sweet potato the Foundation record has no fibre value, so available carbohydrate could not be computed; the Foundation olive oils report fat only as Total fat (NLEA, 1085), not as total lipid (1004), and have no energy value, so kcal and fat would be empty. Every food here had an SR Legacy record of the right form with fewer gaps, so every row is SR Legacy. The notes name the Foundation record that was passed over.
 3. **Unenriched and unfortified where USDA has both**, as nutrition-mcp does. Fortification of Indian oats and milk varies by brand, and an addition that may not be in the food should not be counted.
 4. **The variety sold in India where USDA splits a food.** The orange is the mandarin (santra, Nagpur orange, kinnow). The lettuce is iceberg. The mushroom is the white button mushroom, not UV-treated.
 
@@ -63,14 +63,14 @@ The full list, as reviewed against each record on 2026-10-23:
 | `cabbage` | 169975 | Cabbage, raw | vegan | Green cabbage. Foundation 2346407 has no fibre value |
 | `kimchi` | 170392 | Cabbage, kimchi | non_veg | The only kimchi record; the survey record 2710077 is built from it. Tagged non_veg, see below |
 | `chia_seeds` | 170554 | Seeds, chia seeds, dried | vegan | Foundation 2710819 has no fibre value |
-| `flax_seeds` | 169414 | Seeds, flaxseed | vegan | Covers whole and ground seed. Foundation 2262075 (ground) has more gaps |
+| `flax_seeds` | 169414 | Seeds, flaxseed | vegan | Covers whole and ground seed; named ground because the catalogue's spoon measures are ground weights. Foundation 2262075 (ground) has more gaps |
 | `pumpkin_seeds` | 170556 | Seeds, pumpkin and squash seed kernels, dried | vegan | Unroasted, unsalted kernels |
 | `sunflower_seeds` | 170562 | Seeds, sunflower seed kernels, dried | vegan | Unroasted, unsalted kernels |
 | `sesame_seeds` | 170150 | Seeds, sesame seeds, whole, dried | vegan | Whole (unhulled) seed |
 | `walnuts` | 170187 | Nuts, walnuts, english | vegan | Kernels. Foundation 2346394 has more gaps |
 | `almonds` | 170567 | Nuts, almonds | vegan | Whole kernels with skin. Foundation 2346393 has more gaps |
 | `peanut_butter` | 174266 | Peanut butter, smooth style, with salt | vegan | Smooth and salted; unsalted is 172470 |
-| `olive_oil` | 171413 | Oil, olive, salad or cooking | vegan | The Foundation olive oils have no energy or fat value |
+| `olive_oil` | 171413 | Oil, olive, salad or cooking | vegan | The Foundation olive oils have no energy value and give fat only as Total fat (NLEA), not total lipid |
 | `soy_sauce` | 174277 | Soy sauce made from soy and wheat (shoyu) | vegan | Brewed soy sauce. Tamari is 174278 |
 | `honey` | 169640 | Honey | veg | The only honey record in SR Legacy or Foundation |
 
@@ -124,7 +124,7 @@ A dish or meal with one of these foods reports the nutrient as incomplete and na
 
 **Values to read with care**, all kept as published:
 
-- `sweet_potato`: the record is orange-fleshed (709 µg vitamin A per 100 g). Sweet potatoes sold in India are often white or pale-fleshed, with far less beta-carotene, so vitamin A reads high for those.
+- `sweet_potato`: the record is orange-fleshed (709 µg vitamin A per 100 g), and the row is named "Sweet potato (orange-fleshed)" without the local names. Shakarkandi sold in India is often white or pale-fleshed, with far less beta-carotene, so vitamin A reads high for it; a pale-fleshed sweet potato would need its own row.
 - `sesame_seeds`: whole seed, 975 mg calcium per 100 g. Hulled sesame (169412) has 60 mg, so calcium reads high for a recipe made with hulled til.
 - `kimchi`: neither record says whether it holds fish sauce or salted shrimp, and most kimchi on sale holds one or both. So the food is tagged `non_veg`, and the catalogue gives it the fish and crustacean allergens: a wrong tag on the safe side only leaves kimchi out of a plan, while a missing one would let it into a vegetarian or fish-free one. A vegan kimchi would need its own row. The record also has 0 mg vitamin C.
 - `tofu`: firm tofu varies. 172448 has 9 g protein and 201 mg calcium per 100 g; the denser 172475 has 17 g and 683 mg. A pack that lists about 15 g protein is closer to 172475.

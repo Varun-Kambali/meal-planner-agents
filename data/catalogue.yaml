@@ -133,8 +133,9 @@
 - {id: ginger, name: Ginger, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 14}
 # FDC 169230 (Garlic, raw): one clove is 3 g.
 - {id: garlic, name: Garlic, category: veg, allergens: [], pack_g: 100, keeps_days_opened: 30, measures: {clove: 3}}
-# FDC 168482 (Sweet potato, raw): one sweet potato, 5 inch long, is 130 g.
-- {id: sweet_potato, name: Sweet potato (shakarkandi), category: veg, allergens: [], pack_g: 500, keeps_days_opened: 14, measures: {piece: 130}}
+# FDC 168482 (Sweet potato, raw): one sweet potato, 5 inch long, is 130 g. The record is
+# orange-fleshed, so the name says so: pale-fleshed shakarkandi has far less vitamin A.
+- {id: sweet_potato, name: Sweet potato (orange-fleshed), category: veg, allergens: [], pack_g: 500, keeps_days_opened: 14, measures: {piece: 130}}
 # FDC 170379 (Broccoli, raw): 1 cup chopped is 91 g. One head of about 400 g.
 - {id: broccoli, name: Broccoli, category: veg, allergens: [], pack_g: 400, keeps_days_opened: 5, measures: {cup: 91}}
 # FDC 169251 (Mushrooms, white, raw): one medium is 18 g and 1 cup sliced 70 g. A 200 g punnet.
@@ -166,7 +167,7 @@
 - {id: chia_seeds, name: Chia seeds, category: nut_seed, allergens: [], pack_g: 200, keeps_days_opened: 365, measures: {tbsp: 10.5}}
 # FDC 169414 (Seeds, flaxseed): 1 tbsp ground is 7 g and 1 tsp ground 2.5 g. These are the ground
 # weights, because flax is eaten ground; a tablespoon of whole seed is 10.3 g.
-- {id: flax_seeds, name: Flax seeds (alsi), category: nut_seed, allergens: [], pack_g: 250, keeps_days_opened: 180, measures: {tbsp: 7, tsp: 2.5}}
+- {id: flax_seeds, name: Ground flax seeds (alsi), category: nut_seed, allergens: [], pack_g: 250, keeps_days_opened: 180, measures: {tbsp: 7, tsp: 2.5}}
 # FDC 170556 (Seeds, pumpkin and squash seed kernels, dried): 1 cup is 129 g, so a tablespoon is
 # 8.1 g.
 - {id: pumpkin_seeds, name: Pumpkin seeds, category: nut_seed, allergens: [], pack_g: 200, keeps_days_opened: 90, measures: {cup: 129, tbsp: 8.1}}
