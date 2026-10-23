@@ -81,6 +81,16 @@ class ModelPort(Protocol):
     ) -> ModelReply[T]: ...
 
 
+def missing_api_key(model: str) -> list[str]:
+    """The environment variables LiteLLM reads for `model`'s key that are not set.
+
+    Empty when the key is there, and also when LiteLLM has no variable to name for the model (a
+    local one, say), because then there is nothing to tell the caller to set.
+    """
+    found = litellm.validate_environment(model=model)
+    return [] if found["keys_in_environment"] else list(found["missing_keys"])
+
+
 def parse_reply[T: BaseModel](raw: str, schema: type[T]) -> tuple[T | None, str | None]:
     """The reply read as `schema`, or the error code for why it could not be."""
     try:

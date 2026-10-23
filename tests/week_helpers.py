@@ -12,6 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fakes import FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import BaseModel
@@ -206,3 +207,21 @@ def model_for(
         },
         **kwargs,
     )
+
+
+def write_catalogue_file(folder: Path) -> Path:
+    """`catalogue()` as a catalogue.yaml, for tests that load it the way the app does."""
+    rows = [
+        {
+            "id": food_id,
+            "name": food_id.replace("_", " ").capitalize(),
+            "category": "other",
+            "allergens": [],
+            "pack_g": None,
+            "keeps_days_opened": None,
+        }
+        for food_id in FOOD_IDS
+    ]
+    path = folder / "catalogue.yaml"
+    path.write_text(yaml.safe_dump(rows), encoding="utf-8")
+    return path
