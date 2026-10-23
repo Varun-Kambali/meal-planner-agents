@@ -22,7 +22,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, ConfigDict, Field
 
 from meal_planner.catalogue import Category
-from meal_planner.config import Settings
+from meal_planner.config import Settings, get_settings
 from meal_planner.llm import ModelPort
 from meal_planner.log import get_logger
 from meal_planner.middleware import (
@@ -326,6 +326,11 @@ def create_app(
     app.include_router(router)
     _add_middleware(app, settings)
     return app
+
+
+def app_factory() -> FastAPI:
+    """The app with settings from the environment, for `uvicorn --factory`."""
+    return create_app(get_settings())
 
 
 def _add_middleware(app: FastAPI, settings: Settings) -> None:

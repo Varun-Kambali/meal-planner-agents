@@ -28,8 +28,8 @@ from week_helpers import (
     write_catalogue_file,
 )
 
-from meal_planner.api import create_app
-from meal_planner.config import Settings
+from meal_planner.api import app_factory, create_app
+from meal_planner.config import Settings, get_settings
 from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.startup import StartupError
@@ -83,6 +83,20 @@ def test_healthz_says_ok(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_the_app_factory_reads_the_settings_from_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MEAL_PLANNER_RATE_LIMIT_PER_MINUTE", "7")
+    monkeypatch.setenv("MEAL_PLANNER_CATALOGUE_PATH", str(tmp_path / "missing.yaml"))
+    get_settings.cache_clear()
+
+    app = app_factory()
+
+    assert app.state.settings.rate_limit_per_minute == 7
+    assert app.state.settings.catalogue_path == tmp_path / "missing.yaml"
+    get_settings.cache_clear()
 
 
 def test_every_response_carries_a_request_id(tmp_path: Path) -> None:
