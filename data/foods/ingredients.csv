@@ -20,7 +20,7 @@ broccoli,Broccoli,broccoli|hari gobhi,vegan,usda_fdc_sr_legacy,170379,34,2.82,0.
 mushrooms,Mushrooms (white button),mushroom|mushrooms|button mushrooms|khumbi,vegan,usda_fdc_sr_legacy,169251,22,3.09,0.34,0.05,2.26,1.98,1,5,0.5,3,0.52,17,0,0.04,2.1,0.2,,,
 lettuce,Iceberg lettuce,lettuce|iceberg lettuce|salad lettuce,vegan,usda_fdc_sr_legacy,169248,14,0.9,0.14,0.018,1.77,1.97,1.2,10,0.41,18,0.15,29,25,0,2.8,0,,,
 cabbage,Patta gobi (cabbage),cabbage|patta gobi|bandh gobi|muttaikose|kosu,vegan,usda_fdc_sr_legacy,169975,25,1.28,0.1,0.034,3.3,3.2,2.5,18,0.47,40,0.18,43,5,0,36.6,0,,,
-kimchi,Kimchi (cabbage),kimchi|kimchee|kim chee,vegan,usda_fdc_sr_legacy,170392,15,1.1,0.5,0.067,0.8,1.06,1.6,498,2.5,33,0.22,52,5,0,0,0,,,
+kimchi,Kimchi (cabbage),kimchi|kimchee|kim chee,non_veg,usda_fdc_sr_legacy,170392,15,1.1,0.5,0.067,0.8,1.06,1.6,498,2.5,33,0.22,52,5,0,0,0,,,
 chia_seeds,Chia seeds,chia|chia seeds,vegan,usda_fdc_sr_legacy,170554,486,16.54,30.74,3.33,7.72,,34.4,16,7.72,631,4.58,49,,0,1.6,,,,
 flax_seeds,Alsi (flax seeds),flaxseed|flax seeds|linseed|alsi|ground flaxseed|agase,vegan,usda_fdc_sr_legacy,169414,534,18.29,42.16,3.663,1.58,1.55,27.3,30,5.73,255,4.34,87,0,0,0.6,0,,,
 pumpkin_seeds,Pumpkin seeds,pumpkin seeds|pepitas|pumpkin seed kernels,vegan,usda_fdc_sr_legacy,170556,559,30.23,49.05,8.659,4.71,1.4,6,7,8.82,46,7.81,58,1,0,1.9,0,,,

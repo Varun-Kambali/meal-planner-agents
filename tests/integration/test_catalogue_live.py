@@ -29,6 +29,7 @@ async def test_every_catalogue_id_resolves() -> None:
     assert catalogue.get("rolled_oats").diet == "vegan"
     assert catalogue.get("chicken_breast").diet == "non_veg"
     assert catalogue.get("honey").diet == "veg"
+    assert catalogue.get("kimchi").diet == "non_veg"
     assert catalogue.grams("banana", 1, "piece") == 118.0
     # A liquid's spoons come from nutrition-mcp, not from the catalogue.
     assert "tbsp" in catalogue.get("olive_oil").units

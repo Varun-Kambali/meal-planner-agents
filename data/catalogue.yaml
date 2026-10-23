@@ -72,8 +72,9 @@
 # FDC 2710742 (Nutritional powder mix, whey based, NFS), the survey record built from the whey
 # powder in data/foods: one scoop, not further specified, is 26 g. The same record lists brand
 # scoops of 20.5 g and 32 g, so a pack's own scoop weight is better typed in grams. A 1 kg tub.
-# Some flavoured powders add soy lecithin; the record is unflavoured and carries milk only.
-- {id: whey_protein, name: Whey protein powder, category: dairy, allergens: [milk], pack_g: 1000, keeps_days_opened: 90, measures: {scoop: 26}}
+# Tagged soy as well as milk: many whey powders add soy lecithin and declare soy, and a missing
+# tag would let one through for someone avoiding soy.
+- {id: whey_protein, name: Whey protein powder, category: dairy, allergens: [milk, soy], pack_g: 1000, keeps_days_opened: 90, measures: {scoop: 26}}
 
 # Eggs come in a box of six, about 300 g. FDC 171287 (Egg, whole, raw, fresh): one large egg is
 # 50 g without the shell.
@@ -195,9 +196,10 @@
 # Tofu is a 200 g block, kept in water in the fridge once opened.
 - {id: tofu, name: Tofu (firm), category: other, allergens: [soy], pack_g: 200, keeps_days_opened: 4}
 # FDC 170392 (Cabbage, kimchi): 1 cup is 150 g. A 250 g jar keeps for weeks in the fridge. The
-# record does not say whether it holds fish sauce or salted shrimp, so this row assumes a vegan
-# kimchi and carries no fish or crustacean tag; kimchi made with them is not vegetarian.
-- {id: kimchi, name: Kimchi, category: other, allergens: [], pack_g: 250, keeps_days_opened: 30, measures: {cup: 150}}
+# record does not say whether it holds fish sauce or salted shrimp, and most kimchi on sale holds
+# one or both, so the row is tagged fish and crustaceans and the food non_veg in data/foods. A
+# vegan kimchi would need its own row.
+- {id: kimchi, name: Kimchi, category: other, allergens: [fish, crustaceans], pack_g: 250, keeps_days_opened: 30, measures: {cup: 150}}
 
 # Sugar is a 1 kg pack. FDC 169655 (Sugars, granulated): 1 tsp is 4.2 g. It lists no tablespoon,
 # so 12.6 g is three of those teaspoons.

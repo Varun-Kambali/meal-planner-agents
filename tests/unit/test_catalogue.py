@@ -415,8 +415,10 @@ def test_shipped_catalogue_covers_the_food_file() -> None:
 # food through, so no other tag stands in for the one the category implies.
 ALLERGEN_OF_CATEGORY = {"dairy": "milk", "egg": "egg", "fish": "fish"}
 
-# Allergens a category does not imply: wheat and oat foods, peanuts, tree nuts, soy, sesame, and
-# mustard as seed and as oil. Oats are listed with gluten, as the EU allergen list does.
+# Allergens a category does not imply: wheat and oat foods, peanuts, tree nuts, soy, sesame,
+# mustard as seed and as oil, and foods tagged on the safe side because most of what is sold
+# holds the allergen: kimchi (fish sauce, salted shrimp) and whey powder (soy lecithin). Oats
+# are listed with gluten, as the EU allergen list does.
 ALLERGENS_BY_ID = {
     "atta": {"gluten"},
     "maida": {"gluten"},
@@ -432,6 +434,8 @@ ALLERGENS_BY_ID = {
     "sesame_seeds": {"sesame"},
     "mustard_seeds": {"mustard"},
     "mustard_oil": {"mustard"},
+    "kimchi": {"fish", "crustaceans"},
+    "whey_protein": {"soy"},
 }
 
 

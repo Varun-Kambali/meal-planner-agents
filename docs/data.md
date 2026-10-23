@@ -61,7 +61,7 @@ The full list, as reviewed against each record on 2026-10-23:
 | `mushrooms` | 169251 | Mushrooms, white, raw | vegan | White button, not UV-treated (169376) |
 | `lettuce` | 169248 | Lettuce, iceberg (includes crisphead types), raw | vegan | Iceberg; romaine is 169247 |
 | `cabbage` | 169975 | Cabbage, raw | vegan | Green cabbage. Foundation 2346407 has no fibre value |
-| `kimchi` | 170392 | Cabbage, kimchi | vegan | The only kimchi record; the survey record 2710077 is built from it |
+| `kimchi` | 170392 | Cabbage, kimchi | non_veg | The only kimchi record; the survey record 2710077 is built from it. Tagged non_veg, see below |
 | `chia_seeds` | 170554 | Seeds, chia seeds, dried | vegan | Foundation 2710819 has no fibre value |
 | `flax_seeds` | 169414 | Seeds, flaxseed | vegan | Covers whole and ground seed. Foundation 2262075 (ground) has more gaps |
 | `pumpkin_seeds` | 170556 | Seeds, pumpkin and squash seed kernels, dried | vegan | Unroasted, unsalted kernels |
@@ -126,9 +126,9 @@ A dish or meal with one of these foods reports the nutrient as incomplete and na
 
 - `sweet_potato`: the record is orange-fleshed (709 µg vitamin A per 100 g). Sweet potatoes sold in India are often white or pale-fleshed, with far less beta-carotene, so vitamin A reads high for those.
 - `sesame_seeds`: whole seed, 975 mg calcium per 100 g. Hulled sesame (169412) has 60 mg, so calcium reads high for a recipe made with hulled til.
-- `kimchi`: neither record says whether it holds fish sauce or salted shrimp, which Korean kimchi often does. The food is tagged vegan, with no fish or crustacean allergen, on the assumption of a vegan kimchi. The record also has 0 mg vitamin C.
+- `kimchi`: neither record says whether it holds fish sauce or salted shrimp, and most kimchi on sale holds one or both. So the food is tagged `non_veg`, and the catalogue gives it the fish and crustacean allergens: a wrong tag on the safe side only leaves kimchi out of a plan, while a missing one would let it into a vegetarian or fish-free one. A vegan kimchi would need its own row. The record also has 0 mg vitamin C.
 - `tofu`: firm tofu varies. 172448 has 9 g protein and 201 mg calcium per 100 g; the denser 172475 has 17 g and 683 mg. A pack that lists about 15 g protein is closer to 172475.
-- `whey_protein`: unflavoured. Flavoured powders add sugar or sweetener, and brands differ.
+- `whey_protein`: unflavoured. Flavoured powders add sugar or sweetener, and brands differ. The catalogue tags it soy as well as milk, because many whey powders add soy lecithin.
 - `mozzarella`: tagged veg on the assumption of a microbial or vegetable rennet.
 - `honey`: tagged veg, not vegan, because vegans usually leave honey out.
 - `peanut_butter`: salted, with the sugar commercial peanut butter carries (10.49 g sugars per 100 g against 4.72 g in raw peanuts).
