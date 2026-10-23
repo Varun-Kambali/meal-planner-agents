@@ -7,14 +7,14 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 import yaml
 from fakes import FakeNutrition
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from nutrition_mcp.schemas import MealItemIn, MealResult
+from nutrition_mcp.schemas import MealItemIn, MealResult, SearchResult
 from pydantic import BaseModel
 from week_helpers import (
     PLAN,
@@ -371,6 +371,44 @@ def test_a_food_the_catalogue_lacks_is_422_naming_the_field(tmp_path: Path) -> N
     (problem,) = response.json()["detail"]
     assert problem["loc"] == ["body", "food", "liked_foods"]
     assert "unobtainium" in problem["msg"]
+
+
+class UnreachableNutrition(SpyNutrition):
+    """nutrition-mcp gone: every call fails, and the error names no food."""
+
+    async def search(
+        self, query: str, kind: Literal["dish", "ingredient"] | None = None, limit: int = 5
+    ) -> SearchResult:
+        raise NutritionError("nutrition-mcp could not answer search_food: Connection closed")
+
+
+def test_a_week_is_a_503_naming_the_step_when_nutrition_mcp_cannot_be_reached(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    model = model_for()
+    nutrition = UnreachableNutrition(*EXTRA_FOODS)
+
+    with serving(tmp_path, model=model, nutrition=nutrition) as client:
+        response = client.post("/v1/week", json=plan_json())
+
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/json")
+    assert "nutrition" in response.json()["detail"]
+    assert model.calls == []
+    entries = log_entries(capfd.readouterr().err)
+    (failed,) = [e for e in entries if e["event"] == "nutrition_unreachable"]
+    assert failed["error_type"] == "NutritionError"
+    assert failed["request_id"] == response.headers["x-request-id"]
+
+
+def test_rules_that_are_invalid_are_a_422_even_when_nutrition_mcp_is_down(tmp_path: Path) -> None:
+    plan = plan_json()
+    plan["slots"][1]["kcal_share"] = 7
+
+    with serving(tmp_path, nutrition=UnreachableNutrition(*EXTRA_FOODS)) as client:
+        response = client.post("/v1/week", json=plan)
+
+    assert response.status_code == 422
 
 
 def test_body_over_64kb_413(tmp_path: Path) -> None:

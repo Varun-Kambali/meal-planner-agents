@@ -115,11 +115,30 @@ def _require_known_foods(rules: PlanRules, services: Services, under: tuple[str,
         raise _invalid(problems)
 
 
+async def _require_nutrition(services: Services) -> None:
+    """Ask nutrition-mcp something small, so a week is not started with nobody to check it.
+
+    The graph turns a dead nutrition-mcp into failing recipes and repairs them, which spends
+    model calls on nothing. The question holds no text from the request.
+    """
+    try:
+        await services.nutrition.search("rice", limit=1)
+    except NutritionError as exc:
+        logger.error("nutrition_unreachable", extra={"error_type": type(exc).__name__})
+        detail = "nutrition-mcp could not be reached (step: nutrition)"
+        raise HTTPException(status_code=503, detail=detail) from exc
+
+
 async def _checked_rules(
     rules: PlanRules, services: Annotated[Services, Depends(_services)]
 ) -> PlanRules:
-    """The rules, if every food they name is in the catalogue. This runs before a stream starts."""
+    """The rules, once every food they name is in the catalogue and nutrition-mcp answers.
+
+    This runs before a stream starts, so a refusal is a status code. It runs only for rules that
+    passed validation, so invalid rules are a 422 whether or not nutrition-mcp is up.
+    """
     _require_known_foods(rules, services, ("body",))
+    await _require_nutrition(services)
     return rules
 
 
