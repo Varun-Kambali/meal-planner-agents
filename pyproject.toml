@@ -56,7 +56,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.mypy]
 strict = true
-files = ["src"]
+files = ["src", "scripts"]
 plugins = ["pydantic.mypy"]
 
 # nutrition-mcp ships no py.typed marker, so mypy reads its source instead of treating it as Any.
