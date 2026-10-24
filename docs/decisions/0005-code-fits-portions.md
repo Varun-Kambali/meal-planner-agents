@@ -4,7 +4,7 @@ Date: 2026-10-24 · Status: accepted
 ## Context
 [0002](0002-model-writes-code-checks.md) has the model choose ingredients and grams and code check the result. The first live week on the office-weekday plan showed that split is too coarse for calories. It was one run of the real model, not an eval, so it gives no numbers to quote here, but most days failed at least one check:
 
-- **Calories did not converge in repair.** The writer knows no ingredient's energy, so it guesses grams. The repair call says "calories 565 kcal, slot needs at least 597" and it guesses again, often just as far off on the other side.
+- **Calories did not converge in repair.** The writer knows no ingredient's energy, so it guesses grams. The repair call says how far off the recipe is, in the form "calories N kcal, slot needs at least M kcal", and the writer guesses again, often just as far off on the other side.
 - **Saturated fat and sodium went over.** The writer saw ingredient names only, so it could not know which ones carry them. Saturated fat was over the day's cap on several days and sodium over on training days.
 - **The slot's style was often ignored.** An air-fryer dinner or a no-cook snack did not come out as one.
 
