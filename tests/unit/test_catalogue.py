@@ -278,6 +278,29 @@ async def test_allowed_for_applies_every_rule_at_once(tmp_path: Path) -> None:
     assert ids(catalogue, rules) == ["moong_dal", "peanuts"]
 
 
+async def test_allowed_takes_a_diet_and_allergens_without_a_plan(tmp_path: Path) -> None:
+    catalogue = await mixed_catalogue(tmp_path)
+
+    found = catalogue.allowed("veg", ["milk"])
+
+    assert [item.id for item in found] == ["moong_dal", "peanuts"]
+
+
+async def test_allowed_with_only_a_diet_keeps_every_allergen(tmp_path: Path) -> None:
+    catalogue = await mixed_catalogue(tmp_path)
+
+    assert [item.id for item in catalogue.allowed("egg")] == ["moong_dal", "curd", "egg", "peanuts"]
+
+
+async def test_allowed_for_agrees_with_allowed(tmp_path: Path) -> None:
+    catalogue = await mixed_catalogue(tmp_path)
+    rules = food_rules(diet="non_veg", exclude_allergens=["fish"], exclude_foods=["egg"])
+
+    assert catalogue.allowed_for(rules) == catalogue.allowed(
+        "non_veg", ["fish"], exclude_foods=["egg"]
+    )
+
+
 async def test_get_unknown_id_names_it(tmp_path: Path) -> None:
     catalogue = await mixed_catalogue(tmp_path)
 

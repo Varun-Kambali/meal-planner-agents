@@ -21,6 +21,14 @@ from typing import Any, Protocol, runtime_checkable
 # that ships with the package. Set before the import so a test or a cold start never waits on
 # the network.
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+# In its default mode LiteLLM calls load_dotenv() on import, which reads the first .env found by
+# walking up from its own install folder. Keys and settings would then come from a file nobody
+# passed in. They must come from the process environment only, which `make run` and the command
+# get through uv's --env-file. Set LITELLM_MODE=DEV to bring the old behaviour back.
+os.environ.setdefault("LITELLM_MODE", "PRODUCTION")
+# LiteLLM sets its log level from this variable when it is imported, and at DEBUG it logs the
+# whole request. A value in the environment is overridden: the prompts hold the user's rules.
+os.environ["LITELLM_LOG"] = "ERROR"
 
 import litellm
 from litellm.exceptions import APIConnectionError, RateLimitError, Timeout
@@ -30,6 +38,11 @@ from meal_planner.log import get_logger
 
 # On a failed call LiteLLM prints a provider list to stdout, which only adds noise.
 litellm.suppress_debug_info = True
+# LiteLLM's own loggers can carry the request or the reply, so they are switched off whatever
+# their level. A failed call still gets a `model_call` line below, with the error code and the
+# exception's class.
+for _name in ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy"):
+    logging.getLogger(_name).disabled = True
 
 logger = get_logger(__name__)
 
@@ -71,6 +84,16 @@ class ModelPort(Protocol):
     async def structured[T: BaseModel](
         self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
     ) -> ModelReply[T]: ...
+
+
+def missing_api_key(model: str) -> list[str]:
+    """The environment variables LiteLLM reads for `model`'s key that are not set.
+
+    Empty when the key is there, and also when LiteLLM has no variable to name for the model (a
+    local one, say), because then there is nothing to tell the caller to set.
+    """
+    found = litellm.validate_environment(model=model)
+    return [] if found["keys_in_environment"] else list(found["missing_keys"])
 
 
 def parse_reply[T: BaseModel](raw: str, schema: type[T]) -> tuple[T | None, str | None]:
