@@ -40,7 +40,8 @@ from meal_planner.llm import ModelPort
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.recipes import CheckedRecipe, SlotDraft
 from meal_planner.rules import DayKey, PlanRules
-from meal_planner.week import (
+from meal_planner.week import replace_recipe, run_week
+from meal_planner.week_events import (
     RecipeChecked,
     RepairStarted,
     SlotFailed,
@@ -48,8 +49,6 @@ from meal_planner.week import (
     WeekDone,
     WeekEvent,
     WeekResult,
-    replace_recipe,
-    run_week,
 )
 
 pytestmark = pytest.mark.anyio

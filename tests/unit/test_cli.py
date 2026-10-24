@@ -25,7 +25,7 @@ from week_helpers import (
 from meal_planner.cli import main
 from meal_planner.config import Settings
 from meal_planner.llm import ModelReply
-from meal_planner.week import WeekResult
+from meal_planner.week_events import WeekResult
 
 MARK = "ZXQ-MARKER-5512"
 EXTRA_FOODS = ("brinjal",)

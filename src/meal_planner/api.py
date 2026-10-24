@@ -37,14 +37,8 @@ from meal_planner.problems import Problem, problems_from, unknown_foods
 from meal_planner.recipes import CheckedRecipe, DraftRecipe
 from meal_planner.rules import Allergen, DayKey, Diet, PlanRules, Slug, expand
 from meal_planner.startup import Services, start_services
-from meal_planner.week import (
-    WeekDone,
-    WeekEvent,
-    WeekResult,
-    replace_recipe,
-    run_week,
-    with_numbers,
-)
+from meal_planner.week import replace_recipe, run_week, with_numbers
+from meal_planner.week_events import WeekDone, WeekEvent, WeekResult
 
 logger = get_logger(__name__)
 

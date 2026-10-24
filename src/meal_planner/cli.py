@@ -23,7 +23,8 @@ from meal_planner.nutrition import NutritionPort
 from meal_planner.problems import Problem, problems_from, unknown_foods, where
 from meal_planner.rules import PlanRules
 from meal_planner.startup import StartupError, start_services
-from meal_planner.week import (
+from meal_planner.week import run_week
+from meal_planner.week_events import (
     RecipeChecked,
     RepairStarted,
     SlotFailed,
@@ -32,7 +33,6 @@ from meal_planner.week import (
     WeekDone,
     WeekEvent,
     WeekResult,
-    run_week,
 )
 
 PROG = "meal-planner"
