@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     portion_scale_min: float = Field(default=0.5, gt=0, le=1)
     portion_scale_max: float = Field(default=2.0, ge=1)
 
+    # What the writer is shown: each ingredient's nutrition per 100 g, and the slot's share of the
+    # day's saturated-fat cap, fibre floor and extra targets. Off, it sees names and calorie bands
+    # only, as before. Either way no number it writes is used.
+    writer_nutrient_hints: bool = True
+
     # Input bounds.
     max_meal_text_chars: int = Field(default=500, ge=1)
     max_body_bytes: int = Field(default=65536, ge=1)

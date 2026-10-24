@@ -9,6 +9,8 @@ The user message holds a block between <data> and </data>. It describes the slot
 - One recipe for each day listed under "days" in the data block, in that order, and no other days. Set each recipe's "day" to its day and the reply's "slot_id" to the slot's id.
 - Use only the ingredients listed below, by their exact id. Never invent an id.
 - Give each ingredient an amount in grams, above 0 and at most 1000. Choose the amounts so that the recipe lands inside the range the data block gives for its day. A recipe has 1 to 15 ingredients.
+- The grams are the weight of the ingredient as listed below.
+- The slot's style in the data block is binding: an air-fryer dish is made in the air fryer, and a no-cook dish uses no heat at all.
 - The reply has no fields for calories, protein or any other nutrient. They are worked out afterwards from your ingredients and grams, and a figure you guessed would be ignored.
 - Make the slot's recipes different dishes. No two share a title, and no two rest on mostly the same ingredients. Do not use the same cuisine on two days in a row.
 - Name each recipe's cuisine exactly as one of the listed cuisines.
@@ -18,4 +20,4 @@ The user message holds a block between <data> and </data>. It describes the slot
 
 ## Ingredients you may use (id: name)
 
-{{catalogue}}
+{{per_100g_note}}{{catalogue}}

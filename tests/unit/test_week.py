@@ -1046,7 +1046,7 @@ async def test_writer_is_offered_only_the_ingredients_the_plan_allows() -> None:
     await run(model, rules=PlanRules.model_validate(plan), max_repair_attempts=0)
 
     system = model.of_task("write_slot")[0][0]
-    assert "\noats: Oats\n" in system
+    assert "\noats: Oats (per 100 g: " in system
     assert "banana" not in system
 
 
@@ -1058,12 +1058,147 @@ async def test_a_slot_with_no_protein_share_says_so() -> None:
         ]
     model = model_for()
 
-    await run(model, rules=PlanRules.model_validate(plan), max_repair_attempts=0)
+    await run(
+        model,
+        rules=PlanRules.model_validate(plan),
+        max_repair_attempts=0,
+        writer_nutrient_hints=False,
+    )
 
     snack = next(u for _, u in model.of_task("write_slot") if 'slot_id: "snack"' in u)
     days = snack.split("days:\n")[1].split("</data>")[0].splitlines()
     assert len(days) == 7
     assert all(line.endswith("no protein target") for line in days)
+
+
+async def test_catalogue_lines_show_per_100g() -> None:
+    """With hints on, each ingredient line carries its nutrition per 100 g as whole numbers."""
+    paneer = item(
+        "paneer",
+        per_100g={"kcal": 296.4, "protein_g": 18.6, "sat_fat_g": 12.0, "sodium_mg": 22.0},
+    )
+    cat = Catalogue({**catalogue().items, "paneer": paneer})
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, cat=cat)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        # A value nutrition-mcp does not have is shown as n/a, never as 0.
+        assert (
+            "\npaneer: Paneer (per 100 g: 296 kcal, 19 g protein, 12 g sat fat, n/a g fibre, "
+            "22 mg sodium)\n"
+        ) in system
+        assert "\noats: Oats (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, " in system
+        assert "must not be reported back" in system
+
+
+async def test_catalogue_lines_are_plain_with_hints_off() -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=False)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert "\npaneer: Paneer\n" in system
+        assert "per 100 g" not in system
+        assert "reported back" not in system
+
+
+def day_lines(user: str) -> dict[str, str]:
+    block = user.split("days:\n")[1].split("\n</data>")[0]
+    return {line[2:5]: line for line in block.splitlines()}
+
+
+async def test_day_lines_give_slot_share_of_caps() -> None:
+    """Breakfast is a quarter of the day: caps are rounded down and floors up."""
+    model = model_for()
+
+    await run(model, max_repair_attempts=0)
+
+    user = next(u for _, u in model.of_task("write_slot") if 'slot_id: "breakfast"' in u)
+    lines = day_lines(user)
+    assert lines["mon"].startswith("- mon: 597 to 728 kcal (target 662), at least 34 g protein; ")
+    assert lines["mon"].endswith(
+        "saturated fat at most 7 g, fibre at least 9 g, calcium at least 250 mg, "
+        "sodium at most 575 mg"
+    )
+    assert lines["tue"].endswith(
+        "saturated fat at most 6 g, fibre at least 8 g, iron at least 4 mg"
+    )
+    assert "calcium" not in lines["tue"]
+    assert "the slot's share of the day's limits" in lines["mon"]
+
+
+async def test_day_lines_are_as_before_with_hints_off() -> None:
+    model = model_for()
+
+    await run(model, writer_nutrient_hints=False, max_repair_attempts=0)
+
+    user = next(u for _, u in model.of_task("write_slot") if 'slot_id: "breakfast"' in u)
+    lines = day_lines(user)
+    assert lines["mon"] == "- mon: 597 to 728 kcal (target 662), at least 34 g protein"
+    assert lines["tue"] == "- tue: 507 to 618 kcal (target 562), at least 30 g protein"
+    assert "share of the day" not in user
+
+
+async def test_repair_day_lines_give_the_shares_too() -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model)
+
+    ((_, user),) = model.of_task("repair_slot")
+    assert "saturated fat at most 7 g, fibre at least 9 g" in day_lines(user)["mon"]
+
+
+async def test_the_slots_share_of_a_limit_is_not_thrown_off_by_float_noise() -> None:
+    """0.07 * 100 is 7.000000000000001 and 0.29 * 100 is 28.999999999999996."""
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    for slot, share in zip(plan["slots"], (0.07, 0.29, 0.34, 0.30), strict=True):
+        slot["kcal_share"] = share
+    training = plan["day_types"][0]
+    training["sat_fat_g_max"] = 100
+    training["fibre_g_min"] = 100
+    model = model_for()
+
+    await run(model, rules=PlanRules.model_validate(plan), max_repair_attempts=0)
+
+    by_slot = {
+        re.search(r'slot_id: "(\w+)"', u).group(1): u  # type: ignore[union-attr]
+        for _, u in model.of_task("write_slot")
+    }
+    assert "saturated fat at most 7 g, fibre at least 7 g" in day_lines(by_slot["breakfast"])["mon"]
+    assert "saturated fat at most 29 g, fibre at least 29 g" in day_lines(by_slot["lunch"])["mon"]
+
+
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_say_what_the_grams_are_and_that_the_style_binds(hints: bool) -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        rules_text = system.split("## Ingredients you may use")[0]
+        assert "The grams are the weight of the ingredient as listed below." in rules_text
+        assert "style" in rules_text
+        assert "is binding" in rules_text
+        assert "air-fryer dish" in rules_text
+        assert "no-cook dish uses no heat" in rules_text
+        # The prompts do not say whether the grams are raw, dry or cooked.
+        assert not re.search(r"\b(raw|dry|dried|cooked|uncooked)\b", rules_text, re.IGNORECASE)
 
 
 async def test_writer_prompt_snapshot() -> None:

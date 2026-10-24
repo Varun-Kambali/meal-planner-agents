@@ -33,6 +33,7 @@ def test_defaults() -> None:
     assert s.fit_portions is True
     assert s.portion_scale_min == 0.5
     assert s.portion_scale_max == 2.0
+    assert s.writer_nutrient_hints is True
     assert s.max_meal_text_chars == 500
     assert s.max_body_bytes == 65536
     assert s.max_replace_body_bytes == 131072
@@ -40,10 +41,14 @@ def test_defaults() -> None:
     assert s.cors_origins == []
 
 
-def test_fit_portions_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_accuracy_switches_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MEAL_PLANNER_FIT_PORTIONS", "false")
+    monkeypatch.setenv("MEAL_PLANNER_WRITER_NUTRIENT_HINTS", "false")
 
-    assert Settings().fit_portions is False
+    s = Settings()
+
+    assert s.fit_portions is False
+    assert s.writer_nutrient_hints is False
 
 
 def test_catalogue_path_defaults_to_the_repo_data_folder() -> None:

@@ -49,6 +49,7 @@ from pydantic import (
 
 from meal_planner.catalogue import Catalogue, CatalogueItem
 from meal_planner.checks import (
+    LABELS,
     check_catalogue,
     check_day,
     check_gear_and_time,
@@ -62,7 +63,7 @@ from meal_planner.llm import INVALID_JSON, SCHEMA_MISMATCH, ModelPort, ModelRepl
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.portions import portion_factor, scale_draft
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure, SlotDraft
-from meal_planner.rules import DAYS, DayKey, PlanRules, Slot, SlotSpec, expand
+from meal_planner.rules import DAYS, DayKey, DayType, PlanRules, Slot, SlotSpec, expand
 
 _RecipeKey = tuple[DayKey, str]
 
@@ -282,10 +283,39 @@ def _template(name: str) -> str:
     return resources.files("meal_planner").joinpath("prompts", name).read_text(encoding="utf-8")
 
 
-def _system(name: str, allowed: list[CatalogueItem]) -> str:
-    lines = "\n".join(f"{item.id}: {item.name}" for item in allowed)
+# The nutrients shown beside each ingredient when the writer gets hints, and how each is read out.
+_HINT_COLUMNS = (
+    ("kcal", "kcal"),
+    ("protein_g", "g protein"),
+    ("sat_fat_g", "g sat fat"),
+    ("fibre_g", "g fibre"),
+    ("sodium_mg", "mg sodium"),
+)
+
+_PER_100G_NOTE = (
+    "Each line also gives the food's nutrition per 100 g in brackets. These numbers are there "
+    "for choosing amounts. They must not be reported back in the reply.\n\n"
+)
+
+
+def _catalogue_line(item: CatalogueItem, hints: bool) -> str:
+    if not hints:
+        return f"{item.id}: {item.name}"
+    # Whole numbers; a nutrient nutrition-mcp has no value for is n/a, never 0.
+    shown = ", ".join(
+        f"{'n/a' if (value := item.per_100g.get(key)) is None else f'{value:.0f}'} {label}"
+        for key, label in _HINT_COLUMNS
+    )
+    return f"{item.id}: {item.name} (per 100 g: {shown})"
+
+
+def _system(name: str, allowed: list[CatalogueItem], hints: bool) -> str:
+    values = {
+        "catalogue": "\n".join(_catalogue_line(item, hints) for item in allowed),
+        "per_100g_note": _PER_100G_NOTE if hints else "",
+    }
     # One pass, so text that looks like a placeholder inside a value is not replaced again.
-    return re.sub(r"\{\{catalogue\}\}", lambda _: lines, _template(name))
+    return re.sub(r"\{\{(catalogue|per_100g_note)\}\}", lambda m: values[m[1]], _template(name))
 
 
 def _quote(text: str) -> str:
@@ -307,9 +337,39 @@ def _target(spec: SlotSpec, s: Settings) -> str:
     return f"{text}, no protein target"
 
 
+def _share_of_limits(day_type: DayType, share: float) -> str:
+    """The slot's share of the day type's saturated-fat cap, fibre floor and extra targets.
+
+    A cap is rounded down and a floor up, so the slots' shares together never allow more than the
+    cap or ask for less than the floor.
+    """
+    limits = [
+        ("sat_fat_g", "max", day_type.sat_fat_g_max),
+        ("fibre_g", "min", day_type.fibre_g_min),
+        *((t.nutrient, t.kind, t.value) for t in day_type.extra),
+    ]
+    parts: list[str] = []
+    for key, kind, value in limits:
+        name, unit = LABELS[key]
+        if kind == "max":
+            parts.append(f"{name} at most {math.floor(value * share + _EPS)} {unit}")
+        else:
+            parts.append(f"{name} at least {math.ceil(value * share - _EPS)} {unit}")
+    return ", ".join(parts)
+
+
 def _slot_lines(deps: _Deps, slot: Slot, specs: Sequence[SlotSpec]) -> list[str]:
     """The slot, the plan's kitchen and tastes, and the target for each day, as data lines."""
     food = deps.rules.food
+    day_types = {d.id: d for d in deps.rules.day_types}
+
+    def day_line(spec: SlotSpec) -> str:
+        line = f"- {spec.day}: {_target(spec, deps.settings)}"
+        if not deps.settings.writer_nutrient_hints:
+            return line
+        limits = _share_of_limits(day_types[spec.day_type], slot.kcal_share)
+        return f"{line}; the slot's share of the day's limits: {limits}"
+
     return [
         f"slot_id: {_quote(slot.id)}",
         f"slot_name: {_quote(slot.name)}",
@@ -322,7 +382,7 @@ def _slot_lines(deps: _Deps, slot: Slot, specs: Sequence[SlotSpec]) -> list[str]
         f"cuisines: {', '.join(_quote(c) for c in food.cuisines)}",
         f"liked_foods: {', '.join(_quote(f) for f in food.liked_foods) or 'none'}",
         "days:",
-        *(f"- {spec.day}: {_target(spec, deps.settings)}" for spec in specs),
+        *(day_line(spec) for spec in specs),
     ]
 
 
@@ -382,13 +442,15 @@ def _user(deps: _Deps, job: _Job, closing: str) -> str:
 def _writer_prompt(deps: _Deps, job: _Job) -> tuple[str, str]:
     n = len(job.specs)
     closing = f'Write {n} recipe{"" if n == 1 else "s"}, one for each day under "days".'
-    return _system("writer.md", deps.allowed), _user(deps, job, closing)
+    system = _system("writer.md", deps.allowed, deps.settings.writer_nutrient_hints)
+    return system, _user(deps, job, closing)
 
 
 def _repair_prompt(deps: _Deps, job: _Job) -> tuple[str, str]:
     n = len(job.fix)
     closing = f'Fix the {n} recipe{"" if n == 1 else "s"} under "recipes to fix", same days.'
-    return _system("repair.md", deps.allowed), _user(deps, job, closing)
+    system = _system("repair.md", deps.allowed, deps.settings.writer_nutrient_hints)
+    return system, _user(deps, job, closing)
 
 
 # Reading a reply
