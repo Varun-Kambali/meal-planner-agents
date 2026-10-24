@@ -174,6 +174,7 @@ def item(
             "keeps_days_opened": keeps_days_opened,
             "diet": diet,
             "units": ["g"],
+            "per_100g": dict.fromkeys(NUTRIENT_KEYS),
         }
     )
 

@@ -14,6 +14,7 @@ from typing import Any
 
 import yaml
 from fakes import FakeNutrition
+from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import BaseModel
 
@@ -90,7 +91,15 @@ def good(slot_id: str) -> str:
     return raw(canned(slot_id))
 
 
-def item(food_id: str, *, pack_g: float | None = None, keeps: int | None = None) -> CatalogueItem:
+def item(
+    food_id: str,
+    *,
+    pack_g: float | None = None,
+    keeps: int | None = None,
+    per_100g: dict[str, float] | None = None,
+) -> CatalogueItem:
+    """A catalogue item. Its nutrients per 100 g are the ones the fake nutrition-mcp returns."""
+    nutrients = PROFILE if per_100g is None else per_100g
     return CatalogueItem.model_validate(
         {
             "id": food_id,
@@ -101,6 +110,7 @@ def item(food_id: str, *, pack_g: float | None = None, keeps: int | None = None)
             "keeps_days_opened": keeps,
             "diet": "veg",
             "units": ["g"],
+            "per_100g": {key: nutrients.get(key) for key in NUTRIENT_KEYS},
         }
     )
 
@@ -110,15 +120,15 @@ FOOD_IDS = sorted(
 )
 
 
-def catalogue(*extra: CatalogueItem) -> Catalogue:
-    items = [item(food_id) for food_id in FOOD_IDS]
-    return Catalogue({i.id: i for i in [*items, *extra]})
-
-
 def foods() -> dict[str, dict[str, float]]:
     return {food_id: PROFILE for food_id in FOOD_IDS} | {
         "sugar": PROFILE | {"kcal": 400, "protein_g": 0}
     }
+
+
+def catalogue(*extra: CatalogueItem) -> Catalogue:
+    items = [item(food_id, per_100g=per_100g) for food_id, per_100g in foods().items()]
+    return Catalogue({i.id: i for i in [*items, *extra]})
 
 
 class SpyNutrition(FakeNutrition):
