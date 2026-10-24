@@ -10,6 +10,9 @@ The user message holds a block between <data> and </data>. It describes the slot
 - One recipe for each day listed under "days" in the data block, in that order, and no other days. Set each recipe's "day" to its day and the reply's "slot_id" to the slot's id.
 - Use only the ingredients listed below, by their exact id. Never invent an id.
 - Give each ingredient an amount in grams, above 0 and at most 1000. Choose the amounts so that the recipe lands inside the range the data block gives for its day. A recipe has 1 to 15 ingredients.
+- The grams are the weight of the ingredient as listed below.
+- The slot's style in the data block is binding: an air-fryer dish is made in the air fryer, and a no-cook dish uses no heat at all.
+- In the steps, name ingredients without amounts: the amounts are in the ingredient list, and code may change them.
 - The reply has no fields for calories, protein or any other nutrient. They are worked out afterwards from your ingredients and grams, and a figure you guessed would be ignored.
 - Make the slot's recipes different dishes. No two share a title, and no two rest on mostly the same ingredients. Do not use the same cuisine on two days in a row.
 - Name each recipe's cuisine exactly as one of the listed cuisines.
@@ -17,44 +20,46 @@ The user message holds a block between <data> and </data>. It describes the slot
 - Keep the steps short: at most 10, each under 200 characters. The title is under 80 characters. "store" is one sentence on how to keep the dish, "swap" one ingredient swap, and "fits" one sentence on how the dish suits the slot.
 - Prefer the liked foods when they suit the dish.
 
-## Ingredients you may use (id: name)
+## Ingredients you may use (id: name, then nutrition per 100 g)
 
-almonds: Almonds
-apple: Apple
-atta: Atta
-banana: Banana
-beans: Beans
-broccoli: Broccoli
-capsicum: Capsicum
-carrot: Carrot
-cauliflower: Cauliflower
-cocoa_powder: Cocoa powder
-cucumber: Cucumber
-curd: Curd
-dates: Dates
-flax_seeds: Flax seeds
-guava: Guava
-kabuli_chana: Kabuli chana
-makhana: Makhana
-moong_dal: Moong dal
-mushroom: Mushroom
-oats: Oats
-paneer: Paneer
-papaya: Papaya
-peas: Peas
-pomegranate: Pomegranate
-rajma: Rajma
-roasted_chana: Roasted chana
-soya_chunks: Soya chunks
-spinach: Spinach
-sprouts: Sprouts
-sugar: Sugar
-sweet_potato: Sweet potato
-tofu: Tofu
-toor_dal: Toor dal
-walnuts: Walnuts
-white_rice: White rice
-zucchini: Zucchini
+The nutrition figures are there for choosing amounts. They must not be reported back in the reply.
+
+almonds: Almonds (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+apple: Apple (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+atta: Atta (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+banana: Banana (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+beans: Beans (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+broccoli: Broccoli (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+capsicum: Capsicum (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+carrot: Carrot (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+cauliflower: Cauliflower (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+cocoa_powder: Cocoa powder (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+cucumber: Cucumber (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+curd: Curd (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+dates: Dates (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+flax_seeds: Flax seeds (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+guava: Guava (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+kabuli_chana: Kabuli chana (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+makhana: Makhana (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+moong_dal: Moong dal (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+mushroom: Mushroom (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+oats: Oats (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+paneer: Paneer (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+papaya: Papaya (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+peas: Peas (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+pomegranate: Pomegranate (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+rajma: Rajma (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+roasted_chana: Roasted chana (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+soya_chunks: Soya chunks (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+spinach: Spinach (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+sprouts: Sprouts (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+sugar: Sugar (per 100 g: 400 kcal, 0 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+sweet_potato: Sweet potato (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+tofu: Tofu (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+toor_dal: Toor dal (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+walnuts: Walnuts (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+white_rice: White rice (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
+zucchini: Zucchini (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
 
 --- user ---
 <data>
@@ -69,12 +74,12 @@ gear: air_fryer, pressure_cooker, microwave, stovetop_pan, blender, jar_with_lid
 cuisines: "South Indian", "Japanese", "Mediterranean"
 liked_foods: "paneer", "moong_dal"
 days:
-- mon: 597 to 728 kcal (target 662), at least 34 g protein
-- tue: 507 to 618 kcal (target 562), at least 30 g protein
-- wed: 597 to 728 kcal (target 662), at least 34 g protein
-- thu: 507 to 618 kcal (target 562), at least 30 g protein
-- fri: 597 to 728 kcal (target 662), at least 34 g protein
-- sat: 507 to 618 kcal (target 562), at least 30 g protein
-- sun: 507 to 618 kcal (target 562), at least 30 g protein
+- mon: 597 to 728 kcal (target 662), at least 34 g protein; the slot's share of the day's limits: saturated fat at most 7 g, fibre at least 9 g, calcium at least 250 mg, sodium at most 575 mg
+- tue: 507 to 618 kcal (target 562), at least 30 g protein; the slot's share of the day's limits: saturated fat at most 6 g, fibre at least 8 g, iron at least 4 mg
+- wed: 597 to 728 kcal (target 662), at least 34 g protein; the slot's share of the day's limits: saturated fat at most 7 g, fibre at least 9 g, calcium at least 250 mg, sodium at most 575 mg
+- thu: 507 to 618 kcal (target 562), at least 30 g protein; the slot's share of the day's limits: saturated fat at most 6 g, fibre at least 8 g, iron at least 4 mg
+- fri: 597 to 728 kcal (target 662), at least 34 g protein; the slot's share of the day's limits: saturated fat at most 7 g, fibre at least 9 g, calcium at least 250 mg, sodium at most 575 mg
+- sat: 507 to 618 kcal (target 562), at least 30 g protein; the slot's share of the day's limits: saturated fat at most 6 g, fibre at least 8 g, iron at least 4 mg
+- sun: 507 to 618 kcal (target 562), at least 30 g protein; the slot's share of the day's limits: saturated fat at most 6 g, fibre at least 8 g, iron at least 4 mg
 </data>
 Write 7 recipes, one for each day under "days".

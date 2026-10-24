@@ -9,6 +9,7 @@ import pytest
 import yaml
 from fakes import FakeNutrition
 from nutrition_mcp.models import Diet as NutritionDiet
+from nutrition_mcp.nutrients import NUTRIENT_KEYS
 
 from meal_planner.catalogue import Catalogue, CatalogueError, check_rules_against, load_catalogue
 from meal_planner.config import Settings
@@ -84,6 +85,21 @@ async def test_load_takes_diet_and_units_from_nutrition(tmp_path: Path) -> None:
     item = catalogue.get("egg")
     assert item.diet == "egg"
     assert item.units == ["g", "piece"]
+
+
+async def test_load_keeps_the_nutrients_per_100g(tmp_path: Path) -> None:
+    nutrition = FakeNutrition({"paneer": {"kcal": 296.0, "protein_g": 18.3, "sat_fat_g": 12.5}})
+
+    catalogue = await load(tmp_path, [entry("paneer")], nutrition)
+
+    per_100g = catalogue.get("paneer").per_100g
+    assert set(per_100g) == set(NUTRIENT_KEYS)
+    assert per_100g["kcal"] == 296.0
+    assert per_100g["protein_g"] == 18.3
+    assert per_100g["sat_fat_g"] == 12.5
+    # A nutrient the food has no value for stays unknown; it is never read as 0.
+    assert per_100g["sodium_mg"] is None
+    assert per_100g["fibre_g"] is None
 
 
 async def test_typo_stops_load(tmp_path: Path) -> None:

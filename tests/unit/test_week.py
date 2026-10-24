@@ -2,23 +2,27 @@
 
 import asyncio
 import json
+import math
 import os
 import re
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
+from fakes import FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import TypeAdapter
 from week_helpers import (
     FIXTURES,
     PLAN,
+    PROFILE,
     SLOTS,
     SlotModel,
     SpyNutrition,
     canned,
     catalogue,
     changed,
+    foods,
     good,
     item,
     model_for,
@@ -579,11 +583,198 @@ async def test_a_day_that_stays_over_names_its_recipe() -> None:
     assert all(r.failures == [] for k, r in by_key(week).items() if k != ("mon", "dinner"))
 
 
+# Fitting portions
+
+
+def low_breakfast() -> str:
+    """Monday's breakfast at about 565 kcal: under its 662.5 share and outside the 10% band."""
+    return changed("breakfast", lambda r: scaled(r, 0.853), "mon")
+
+
+def first_check(events: list[WeekEvent], day: str, slot_id: str) -> RecipeChecked:
+    return next(
+        e for e in events if isinstance(e, RecipeChecked) and e.day == day and e.slot_id == slot_id
+    )
+
+
+async def test_fit_portions_scales_a_low_recipe() -> None:
+    model = model_for(writes={"breakfast": [low_breakfast()]})
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    written = scaled(recipe_of("breakfast", "mon"), 0.853)["ingredients"]
+    written_kcal = sum(i["grams"] for i in written) * 2
+    assert written_kcal == pytest.approx(565, abs=1)
+    # The factor is the share over what the writer's grams came to, and every gram is scaled by it.
+    assert mon.portion_scale == pytest.approx(662.5 / written_kcal)
+    assert mon.portion_scale == pytest.approx(1.17, abs=0.01)
+    assert [i.grams for i in mon.draft.ingredients] == [
+        max(1, math.floor(i["grams"] * mon.portion_scale + 0.5)) for i in written
+    ]
+    assert [i.id for i in mon.draft.ingredients] == [i["id"] for i in written]
+    # Its numbers come from a second nutrition-mcp call on the scaled grams.
+    asked = [[(i.food_id, i.amount) for i in call] for call in nutrition.asked]
+    assert [(i["id"], i["grams"]) for i in written] in asked
+    assert [(i.id, i.grams) for i in mon.draft.ingredients] in asked
+    assert len(nutrition.meals) == 29
+    assert mon.nutrition is not None
+    assert mon.nutrition.total.kcal == pytest.approx(
+        sum(i.grams for i in mon.draft.ingredients) * 2, abs=0.01
+    )
+    assert mon.nutrition.total.kcal == pytest.approx(662.5, rel=0.02)
+    # It never failed the calorie check, so there was nothing to repair and no extra attempt.
+    assert mon.failures == []
+    assert mon.attempts == 1
+    assert week.calls == 4
+    assert model.of_task("repair_slot") == []
+    assert "slot_kcal" not in {
+        f.check for e in events if isinstance(e, RecipeChecked) for f in e.failures
+    }
+    assert set(kinds(events)) == {"slot_started", "slot_written", "recipe_checked", "week_done"}
+    assert kinds(events).count("recipe_checked") == 28
+    assert all(r.portion_scale == 1.0 for k, r in by_key(week).items() if k != ("mon", "breakfast"))
+    assert all(d.failures == [] for d in week.days)
+
+
+async def test_a_fitted_recipe_that_still_fails_is_repaired_from_its_scaled_numbers() -> None:
+    """141 g of sugar is 564 kcal and no protein. Fitting brings the calories to the share, the
+    protein check still fails, and the repair call sees the scaled grams and the recount."""
+    sugar = changed(
+        "breakfast",
+        lambda r: r | {"ingredients": [{"id": "sugar", "grams": 141}]},
+        "mon",
+    )
+    model = model_for(
+        writes={"breakfast": [sugar]}, repairs={"breakfast": [repair_reply("breakfast", "mon")]}
+    )
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition)
+
+    # 662.5 / 564 is a factor of 1.1746, so 141 g becomes 166 g: 664 kcal, inside the band.
+    first = first_check(events, "mon", "breakfast")
+    assert [f.check for f in first.failures] == ["slot_protein_g"]
+    ((_, user),) = model.of_task("repair_slot")
+    assert "ingredients: sugar 166 g" in user
+    assert "now comes to: 664 kcal, 0 g protein" in user
+    # The only failure listed for the recipe is the protein one.
+    listed = user.split("failed checks:\n")[1].split("\nother recipes")[0].splitlines()
+    assert len(listed) == 1
+    assert "protein" in listed[0]
+    assert "calories" not in listed[0]
+    # Both counts of the sugar breakfast reached nutrition-mcp, then the repaired recipe's.
+    assert len(nutrition.meals) == 30
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.draft.title == "Banana overnight oats"
+    assert mon.portion_scale == 1.0
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert week.calls == 5
+
+
+async def test_fit_portions_off_leaves_grams() -> None:
+    model = model_for(
+        writes={"breakfast": [low_breakfast()]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition, fit_portions=False)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert [f.check for f in first_check(events, "mon", "breakfast").failures] == ["slot_kcal"]
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert mon.portion_scale == 1.0
+    assert week.calls == 5
+    assert len(nutrition.meals) == 29
+    # The repair call heard the numbers of the grams as the writer gave them.
+    ((_, user),) = model.of_task("repair_slot")
+    assert re.search(r"now comes to: 565 kcal", user)
+    assert all(r.portion_scale == 1.0 for r in week.recipes)
+
+
+@pytest.mark.parametrize("factor", [0.3, 2.6], ids=["needs_3x_more", "needs_less_than_half"])
+async def test_out_of_bounds_recipe_goes_to_repair(factor: float) -> None:
+    """Past the bounds the writer's grams are not trusted to be near, so the writer redoes them."""
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", lambda r: scaled(r, factor), "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert "slot_kcal" in [f.check for f in first_check(events, "mon", "breakfast").failures]
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert mon.portion_scale == 1.0
+    assert week.calls == 5
+    # 28 recipes once, then the repaired one: the out-of-bounds recipe was not counted again.
+    assert len(nutrition.meals) == 29
+
+
+async def test_a_recipe_that_would_pass_1000_g_goes_to_repair() -> None:
+    """600 g of a watery food and 154 g of oats come to 368 kcal: a factor of 1.8 inside the
+    bounds, which would make the watery food 1080 g, more than a recipe may hold."""
+    watery = changed(
+        "breakfast",
+        lambda r: (
+            r
+            | {"ingredients": [{"id": "bottle_gourd", "grams": 600}, {"id": "oats", "grams": 154}]}
+        ),
+        "mon",
+    )
+    model = model_for(
+        writes={"breakfast": [watery]}, repairs={"breakfast": [repair_reply("breakfast", "mon")]}
+    )
+    nutrition = FakeNutrition(foods() | {"bottle_gourd": PROFILE | {"kcal": 10}})
+    cat = Catalogue({**catalogue().items, "bottle_gourd": item("bottle_gourd")})
+
+    events, week = await run(model, nutrition=nutrition, cat=cat)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert [f.check for f in first_check(events, "mon", "breakfast").failures] == ["slot_kcal"]
+    assert mon.portion_scale == 1.0
+    assert mon.attempts == 2
+    assert week.calls == 5
+
+
+async def test_a_recount_that_nutrition_mcp_refuses_keeps_the_recipe_as_written() -> None:
+    class RefusesWholeGrams(SpyNutrition):
+        """Fails any request whose amounts are all whole grams, as the scaled recipes are."""
+
+        async def meal(self, items: list[MealItemIn]) -> MealResult:
+            if all(i.amount == round(i.amount) for i in items):
+                raise NutritionError(
+                    "nutrition-mcp could not answer compute_meal: Connection closed"
+                )
+            return await super().meal(items)
+
+    model = model_for(writes={"breakfast": [low_breakfast()]})
+
+    _, week = await run(model, nutrition=RefusesWholeGrams(), max_repair_attempts=0)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.portion_scale == 1.0
+    assert mon.nutrition is not None
+    written = scaled(recipe_of("breakfast", "mon"), 0.853)["ingredients"]
+    assert [i.grams for i in mon.draft.ingredients] == [i["grams"] for i in written]
+    assert [f.check for f in mon.failures] == ["slot_kcal"]
+
+
 # Replacing one recipe
 
 
 async def replace_events(
-    week: WeekResult, model: ModelPort, day: DayKey, slot_id: str
+    week: WeekResult,
+    model: ModelPort,
+    day: DayKey,
+    slot_id: str,
+    nutrition: NutritionPort | None = None,
 ) -> tuple[list[WeekEvent], WeekResult]:
     events = [
         event
@@ -593,7 +784,7 @@ async def replace_events(
             day,
             slot_id,
             model=model,
-            nutrition=SpyNutrition(),
+            nutrition=nutrition or SpyNutrition(),
             catalogue=catalogue(),
             settings=Settings(),
         )
@@ -624,6 +815,31 @@ async def test_replace_keeps_other_recipes() -> None:
     assert "Paneer rice box" in user
     assert "Tofu rice box" in user
     assert "Rajma rice box" not in user
+
+
+async def test_replace_does_not_rescale_kept_recipes() -> None:
+    """Monday's lunch is 15% low and could be fitted, but a replacement leaves it alone."""
+    low_lunch = changed("lunch", lambda r: scaled(r, 0.85), "mon")
+    _, week = await run(
+        model_for(writes={"lunch": [low_lunch]}), fit_portions=False, max_repair_attempts=0
+    )
+    assert [f.check for f in by_key(week)[("mon", "lunch")].failures] == ["slot_kcal"]
+    new = scaled(recipe_of("breakfast", "wed"), 0.853) | {"title": "Oats, the other way"}
+    model = SlotModel(
+        {"breakfast": {"write_slot": [raw({"slot_id": "breakfast", "recipes": [new]})]}}
+    )
+    nutrition = SpyNutrition()
+
+    _, replaced = await replace_events(week, model, "wed", "breakfast", nutrition)
+
+    before, after = by_key(week), by_key(replaced)
+    assert all(after[k] == before[k] for k in before if k != ("wed", "breakfast"))
+    assert after[("mon", "lunch")].portion_scale == 1.0
+    # The new recipe is fitted, and only it was counted: once as written, once scaled.
+    assert after[("wed", "breakfast")].portion_scale > 1.1
+    assert after[("wed", "breakfast")].failures == []
+    assert len(nutrition.meals) == 2
+    assert replaced.calls == 1
 
 
 async def test_replacing_a_recipe_with_itself_is_not_a_repeat() -> None:
@@ -866,7 +1082,7 @@ async def test_writer_is_offered_only_the_ingredients_the_plan_allows() -> None:
     await run(model, rules=PlanRules.model_validate(plan), max_repair_attempts=0)
 
     system = model.of_task("write_slot")[0][0]
-    assert "\noats: Oats\n" in system
+    assert "\noats: Oats (per 100 g: " in system
     assert "banana" not in system
 
 
@@ -878,12 +1094,178 @@ async def test_a_slot_with_no_protein_share_says_so() -> None:
         ]
     model = model_for()
 
-    await run(model, rules=PlanRules.model_validate(plan), max_repair_attempts=0)
+    await run(
+        model,
+        rules=PlanRules.model_validate(plan),
+        max_repair_attempts=0,
+        writer_nutrient_hints=False,
+    )
 
     snack = next(u for _, u in model.of_task("write_slot") if 'slot_id: "snack"' in u)
     days = snack.split("days:\n")[1].split("</data>")[0].splitlines()
     assert len(days) == 7
     assert all(line.endswith("no protein target") for line in days)
+
+
+async def test_catalogue_lines_show_per_100g() -> None:
+    """With hints on, each ingredient line carries its nutrition per 100 g as whole numbers."""
+    paneer = item(
+        "paneer",
+        per_100g={"kcal": 296.4, "protein_g": 18.6, "sat_fat_g": 12.0, "sodium_mg": 22.0},
+    )
+    mystery = item("mystery", per_100g={})
+    cat = Catalogue({**catalogue().items, "paneer": paneer, "mystery": mystery})
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, cat=cat)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        # A value nutrition-mcp does not have is shown as n/a after its name, never as 0.
+        assert (
+            "\npaneer: Paneer (per 100 g: 296 kcal, 19 g protein, 12 g sat fat, fibre n/a, "
+            "22 mg sodium)\n"
+        ) in system
+        assert (
+            "\nmystery: Mystery (per 100 g: kcal n/a, protein n/a, sat fat n/a, fibre n/a, "
+            "sodium n/a)\n"
+        ) in system
+        assert "\noats: Oats (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, " in system
+        # The heading describes the lines that follow it.
+        assert (
+            "## Ingredients you may use (id: name, then nutrition per 100 g)\n\n"
+            "The nutrition figures are there for choosing amounts. "
+            "They must not be reported back in the reply.\n\n"
+            "almonds: Almonds (per 100 g: "
+        ) in system
+
+
+async def test_catalogue_lines_are_plain_with_hints_off() -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=False)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert "\npaneer: Paneer\n" in system
+        assert "per 100 g" not in system
+        assert "reported back" not in system
+        # Heading, then the plain lines, as before hints existed.
+        assert "## Ingredients you may use (id: name)\n\nalmonds: Almonds\n" in system
+
+
+def day_lines(user: str) -> dict[str, str]:
+    block = user.split("days:\n")[1].split("\n</data>")[0]
+    return {line[2:5]: line for line in block.splitlines()}
+
+
+async def test_day_lines_give_slot_share_of_caps() -> None:
+    """Breakfast is a quarter of the day: caps are rounded down and floors up."""
+    model = model_for()
+
+    await run(model, max_repair_attempts=0)
+
+    user = next(u for _, u in model.of_task("write_slot") if 'slot_id: "breakfast"' in u)
+    lines = day_lines(user)
+    assert lines["mon"].startswith("- mon: 597 to 728 kcal (target 662), at least 34 g protein; ")
+    assert lines["mon"].endswith(
+        "saturated fat at most 7 g, fibre at least 9 g, calcium at least 250 mg, "
+        "sodium at most 575 mg"
+    )
+    assert lines["tue"].endswith(
+        "saturated fat at most 6 g, fibre at least 8 g, iron at least 4 mg"
+    )
+    assert "calcium" not in lines["tue"]
+    assert "the slot's share of the day's limits" in lines["mon"]
+
+
+async def test_day_lines_are_as_before_with_hints_off() -> None:
+    model = model_for()
+
+    await run(model, writer_nutrient_hints=False, max_repair_attempts=0)
+
+    user = next(u for _, u in model.of_task("write_slot") if 'slot_id: "breakfast"' in u)
+    lines = day_lines(user)
+    assert lines["mon"] == "- mon: 597 to 728 kcal (target 662), at least 34 g protein"
+    assert lines["tue"] == "- tue: 507 to 618 kcal (target 562), at least 30 g protein"
+    assert "share of the day" not in user
+
+
+async def test_repair_day_lines_give_the_shares_too() -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model)
+
+    ((_, user),) = model.of_task("repair_slot")
+    assert "saturated fat at most 7 g, fibre at least 9 g" in day_lines(user)["mon"]
+
+
+async def test_the_slots_share_of_a_limit_is_not_thrown_off_by_float_noise() -> None:
+    """0.07 * 100 is 7.000000000000001 and 0.29 * 100 is 28.999999999999996."""
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    for slot, share in zip(plan["slots"], (0.07, 0.29, 0.34, 0.30), strict=True):
+        slot["kcal_share"] = share
+    training = plan["day_types"][0]
+    training["sat_fat_g_max"] = 100
+    training["fibre_g_min"] = 100
+    model = model_for()
+
+    await run(model, rules=PlanRules.model_validate(plan), max_repair_attempts=0)
+
+    by_slot = {
+        re.search(r'slot_id: "(\w+)"', u).group(1): u  # type: ignore[union-attr]
+        for _, u in model.of_task("write_slot")
+    }
+    assert "saturated fat at most 7 g, fibre at least 7 g" in day_lines(by_slot["breakfast"])["mon"]
+    assert "saturated fat at most 29 g, fibre at least 29 g" in day_lines(by_slot["lunch"])["mon"]
+
+
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_say_what_the_grams_are_and_that_the_style_binds(hints: bool) -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        rules_text = system.split("## Ingredients you may use")[0]
+        assert "The grams are the weight of the ingredient as listed below." in rules_text
+        assert "style" in rules_text
+        assert "is binding" in rules_text
+        assert "air-fryer dish" in rules_text
+        assert "no-cook dish uses no heat" in rules_text
+        # The prompts do not say whether the grams are raw, dry or cooked.
+        assert not re.search(r"\b(raw|dry|dried|cooked|uncooked)\b", rules_text, re.IGNORECASE)
+
+
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_keep_amounts_out_of_the_steps(hints: bool) -> None:
+    """Code may change the grams, so a step that named an amount could disagree with the list."""
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert (
+            "- In the steps, name ingredients without amounts: the amounts are in the ingredient "
+            "list, and code may change them.\n"
+        ) in system
 
 
 async def test_writer_prompt_snapshot() -> None:

@@ -9,11 +9,14 @@ The user message holds a block between <data> and </data>. It describes the slot
 - Rewrite each recipe under "recipes to fix" once, with the same day, and reply with only those recipes, in that order. Set the reply's "slot_id" to the slot's id. Do not return the slot's other recipes.
 - Fix what each failed check says and change as little else as you can. The checks are run in code and are right, so do not argue with a number in one. If changing grams cannot fix it, change ingredients. If you change the dish, change its title too.
 - Use only the ingredients listed below, by their exact id. Never invent an id. Give each ingredient an amount in grams, above 0 and at most 1000.
+- The grams are the weight of the ingredient as listed below.
+- The slot's style in the data block is binding: an air-fryer dish is made in the air fryer, and a no-cook dish uses no heat at all.
+- In the steps, name ingredients without amounts: the amounts are in the ingredient list, and code may change them.
 - The reply has no fields for calories, protein or any other nutrient. They are worked out afterwards from your ingredients and grams, and a figure you guessed would be ignored.
 - Keep each fixed recipe different from the slot's other recipes in the data block: another title, mostly different ingredients, and not the same cuisine as the day before or after.
 - Name each recipe's cuisine exactly as one of the listed cuisines. Use only the listed gear, and keep active minutes and total minutes within the limits in the data block. Set "cook_when" to the slot's value.
 - Keep the steps short: at most 10, each under 200 characters. The title is under 80 characters. "store" is one sentence on how to keep the dish, "swap" one ingredient swap, and "fits" one sentence on how the dish suits the slot.
 
-## Ingredients you may use (id: name)
+## Ingredients you may use ({{catalogue_format}})
 
-{{catalogue}}
+{{per_100g_note}}{{catalogue}}

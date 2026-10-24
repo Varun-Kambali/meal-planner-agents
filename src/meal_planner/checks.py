@@ -36,8 +36,9 @@ _Direction = Literal["over", "under", "unknown"]
 # `target * tolerance` is. nutrition-mcp reports two decimals, far coarser than this.
 _EPS = 1e-9
 
-# What the messages call each nutrient nutrition-mcp reports, and its unit.
-_LABELS: dict[str, tuple[str, str]] = {
+# What the messages call each nutrient nutrition-mcp reports, and its unit. The writer's prompts
+# use the same words.
+LABELS: dict[str, tuple[str, str]] = {
     "kcal": ("calories", "kcal"),
     "protein_g": ("protein", "g"),
     "fat_g": ("fat", "g"),
@@ -96,7 +97,7 @@ def _verdict(
     `scope` is "slot" or "day". `missing` names the foods with no value for the nutrient, and
     is None when the value is complete; when it is not None, `value` is a lower bound.
     """
-    name, unit = _LABELS[key]
+    name, unit = LABELS[key]
     lack = f" (no value for {', '.join(missing)})" if missing else ""
     partial = missing is not None
     message: str | None = None

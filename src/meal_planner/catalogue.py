@@ -1,9 +1,9 @@
 """The ingredients the recipe writer may use, and the facts about them that are not nutrition.
 
 `data/catalogue.yaml` holds allergen groups, pack size, shelf life once opened and grams per
-household measure. Diet and the units nutrition-mcp accepts are read from nutrition-mcp when the
-file is loaded, so they have one source. Loading also checks every id against nutrition-mcp, which
-turns a typo in the file into a startup failure that names the id.
+household measure. Diet, the units nutrition-mcp accepts and the nutrients per 100 g are read
+from nutrition-mcp when the file is loaded, so they have one source. Loading also checks every
+id against nutrition-mcp, which turns a typo in the file into a startup failure that names the id.
 """
 
 from collections.abc import Container, Iterable
@@ -90,6 +90,8 @@ class CatalogueItem(CatalogueEntry):
     diet: Diet
     # Every unit nutrition-mcp accepts for the food, "g" first.
     units: list[str]
+    # The food's 16 nutrients for 100 g, by nutrition-mcp's key. None where it has no value.
+    per_100g: dict[str, float | None]
 
 
 @dataclass(frozen=True)
@@ -148,7 +150,7 @@ async def load_catalogue(path: Path, nutrition: NutritionPort) -> Catalogue:
     for entry in entries:
         try:
             # 100 g is a valid amount for every food, so a refusal here means the id is unknown.
-            food = (await nutrition.nutrition(entry.id, 100, "g")).food
+            per_100g = await nutrition.nutrition(entry.id, 100, "g")
         except NutritionError as exc:
             if exc.food_id is None:
                 # The server could not be asked: that is not a wrong id, and saying so for
@@ -156,6 +158,7 @@ async def load_catalogue(path: Path, nutrition: NutritionPort) -> Catalogue:
                 raise
             problems.append(f"'{entry.id}' is not a food id in nutrition-mcp")
             continue
+        food = per_100g.food
         duplicated = [unit for unit in entry.measures if unit in food.units]
         if duplicated:
             problems.append(
@@ -164,7 +167,10 @@ async def load_catalogue(path: Path, nutrition: NutritionPort) -> Catalogue:
             )
             continue
         items[entry.id] = CatalogueItem(
-            **entry.model_dump(), diet=food.diet, units=list(food.units)
+            **entry.model_dump(),
+            diet=food.diet,
+            units=list(food.units),
+            per_100g=dict(per_100g.nutrients),
         )
     if problems:
         raise _error(path, problems)
