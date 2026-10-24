@@ -86,18 +86,25 @@ def test_healthz_says_ok(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok"}
 
 
+@pytest.fixture
+def fresh_settings() -> Iterator[None]:
+    """get_settings caches, so a test that reads it starts and ends with the cache empty."""
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.mark.usefixtures("fresh_settings")
 def test_the_app_factory_reads_the_settings_from_the_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("MEAL_PLANNER_RATE_LIMIT_PER_MINUTE", "7")
     monkeypatch.setenv("MEAL_PLANNER_CATALOGUE_PATH", str(tmp_path / "missing.yaml"))
-    get_settings.cache_clear()
 
     app = app_factory()
 
     assert app.state.settings.rate_limit_per_minute == 7
     assert app.state.settings.catalogue_path == tmp_path / "missing.yaml"
-    get_settings.cache_clear()
 
 
 def test_every_response_carries_a_request_id(tmp_path: Path) -> None:
