@@ -11,6 +11,7 @@ The user message holds a block between <data> and </data>. It describes the slot
 - Give each ingredient an amount in grams, above 0 and at most 1000. Choose the amounts so that the recipe lands inside the range the data block gives for its day. A recipe has 1 to 15 ingredients.
 - The grams are the weight of the ingredient as listed below.
 - The slot's style in the data block is binding: an air-fryer dish is made in the air fryer, and a no-cook dish uses no heat at all.
+- In the steps, name ingredients without amounts: the amounts are in the ingredient list, and code may change them.
 - The reply has no fields for calories, protein or any other nutrient. They are worked out afterwards from your ingredients and grams, and a figure you guessed would be ignored.
 - Make the slot's recipes different dishes. No two share a title, and no two rest on mostly the same ingredients. Do not use the same cuisine on two days in a row.
 - Name each recipe's cuisine exactly as one of the listed cuisines.

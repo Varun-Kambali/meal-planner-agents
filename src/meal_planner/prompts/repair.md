@@ -11,6 +11,7 @@ The user message holds a block between <data> and </data>. It describes the slot
 - Use only the ingredients listed below, by their exact id. Never invent an id. Give each ingredient an amount in grams, above 0 and at most 1000.
 - The grams are the weight of the ingredient as listed below.
 - The slot's style in the data block is binding: an air-fryer dish is made in the air fryer, and a no-cook dish uses no heat at all.
+- In the steps, name ingredients without amounts: the amounts are in the ingredient list, and code may change them.
 - The reply has no fields for calories, protein or any other nutrient. They are worked out afterwards from your ingredients and grams, and a figure you guessed would be ignored.
 - Keep each fixed recipe different from the slot's other recipes in the data block: another title, mostly different ingredients, and not the same cuisine as the day before or after.
 - Name each recipe's cuisine exactly as one of the listed cuisines. Use only the listed gear, and keep active minutes and total minutes within the limits in the data block. Set "cook_when" to the slot's value.

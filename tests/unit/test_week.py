@@ -1201,6 +1201,24 @@ async def test_both_prompts_say_what_the_grams_are_and_that_the_style_binds(hint
         assert not re.search(r"\b(raw|dry|dried|cooked|uncooked)\b", rules_text, re.IGNORECASE)
 
 
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_keep_amounts_out_of_the_steps(hints: bool) -> None:
+    """Code may change the grams, so a step that named an amount could disagree with the list."""
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert (
+            "- In the steps, name ingredients without amounts: the amounts are in the ingredient "
+            "list, and code may change them.\n"
+        ) in system
+
+
 async def test_writer_prompt_snapshot() -> None:
     """Pins the exact text the model is sent for one slot of the fixture plan."""
     model = model_for()
