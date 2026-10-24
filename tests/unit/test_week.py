@@ -638,6 +638,42 @@ async def test_fit_portions_scales_a_low_recipe() -> None:
     assert all(d.failures == [] for d in week.days)
 
 
+async def test_a_fitted_recipe_that_still_fails_is_repaired_from_its_scaled_numbers() -> None:
+    """141 g of sugar is 564 kcal and no protein. Fitting brings the calories to the share, the
+    protein check still fails, and the repair call sees the scaled grams and the recount."""
+    sugar = changed(
+        "breakfast",
+        lambda r: r | {"ingredients": [{"id": "sugar", "grams": 141}]},
+        "mon",
+    )
+    model = model_for(
+        writes={"breakfast": [sugar]}, repairs={"breakfast": [repair_reply("breakfast", "mon")]}
+    )
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition)
+
+    # 662.5 / 564 is a factor of 1.1746, so 141 g becomes 166 g: 664 kcal, inside the band.
+    first = first_check(events, "mon", "breakfast")
+    assert [f.check for f in first.failures] == ["slot_protein_g"]
+    ((_, user),) = model.of_task("repair_slot")
+    assert "ingredients: sugar 166 g" in user
+    assert "now comes to: 664 kcal, 0 g protein" in user
+    # The only failure listed for the recipe is the protein one.
+    listed = user.split("failed checks:\n")[1].split("\nother recipes")[0].splitlines()
+    assert len(listed) == 1
+    assert "protein" in listed[0]
+    assert "calories" not in listed[0]
+    # Both counts of the sugar breakfast reached nutrition-mcp, then the repaired recipe's.
+    assert len(nutrition.meals) == 30
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.draft.title == "Banana overnight oats"
+    assert mon.portion_scale == 1.0
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert week.calls == 5
+
+
 async def test_fit_portions_off_leaves_grams() -> None:
     model = model_for(
         writes={"breakfast": [low_breakfast()]},
