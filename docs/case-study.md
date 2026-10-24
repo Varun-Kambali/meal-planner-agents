@@ -53,7 +53,7 @@ A stateless FastAPI service runs a LangGraph graph: it expands the rules into sl
 The decisions that mattered:
 
 1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The first idea also covered shopping, prep and rotation: several products. Starting from the user's plan keeps v1 to the part that took longest.
-2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost, because its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost too, with no variety. One call per slot sits between 28 calls that can't see each other and the single call that is the eval's baseline.
+2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost, because its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost too, with no variety. One call per slot sits between one call per recipe (28 for a four-slot plan), where no call sees the others, and the single call that is the eval's baseline.
 3. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)). They come from USDA FoodData Central as a custom dataset, and the catalogue of ingredients the writer may use is checked against nutrition-mcp at startup, so a bad id stops the app. Editing nutrition-mcp would tie this project to its releases, and a second source would split where numbers come from.
 4. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would mean login and food logs on a public demo; browser storage with a file export leaves nothing to leak.
 5. **Code fits portions, and the writer is shown nutrition** ([0005](decisions/0005-code-fits-portions.md)). In the first live week (one run, not an evaluation) the writer couldn't land on calories: it knows no ingredient's energy, so it guesses grams, and repair guesses again. Now code scales an off-target recipe's grams by one factor and nutrition-mcp works the result out again, so code never multiplies a nutrient. The writer also sees each ingredient's nutrition per 100 g and the slot's share of the day's limits. More repair rounds lost, since they spend model calls on arithmetic. A solver that picks grams lost, since it would replace the writer's proportions where scaling keeps the dish. Each change has a switch, so the eval can measure it.
@@ -66,7 +66,7 @@ The decisions that mattered:
 
 - **Time is the model's claim.** Minutes are what the recipe states, checked against the slot's limits, never measured.
 - **A style like "no-cook" is free text** that no code checks, though the prompts call it binding.
-- **Saturated fat is the hardest rule** on a high-protein vegetarian plan. The writer now sees each ingredient's saturated fat; the eval will show how much that helps.
+- **Saturated fat is hard to meet.** In the first live run (not an evaluation) it went over the day's cap on several days, and a high-protein vegetarian plan leans on paneer and dairy. The eval will show whether showing the writer each ingredient's saturated fat helps.
 - **Scaling is uniform,** so a piece-counted ingredient such as an egg can land on a fraction of a piece.
 - **Glycemic load is often unknown.** USDA foods carry none; a licensed table loaded through nutrition-mcp would fill it in.
 - **The catalogue limits variety.** A larger licensed table widens it without code changes.
