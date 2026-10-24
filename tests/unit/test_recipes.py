@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import pytest
@@ -119,4 +120,13 @@ async def test_a_checked_recipe_round_trips_through_json() -> None:
         attempts=1,
     )
 
+    assert checked.portion_scale == 1.0
     assert CheckedRecipe.model_validate_json(checked.model_dump_json()) == checked
+
+    # A recipe kept from before portions were fitted has no portion_scale, and reads as not scaled.
+    older = json.loads(checked.model_dump_json())
+    del older["portion_scale"]
+    assert CheckedRecipe.model_validate(older).portion_scale == 1.0
+
+    scaled = checked.model_copy(update={"portion_scale": 1.17})
+    assert CheckedRecipe.model_validate_json(scaled.model_dump_json()).portion_scale == 1.17
