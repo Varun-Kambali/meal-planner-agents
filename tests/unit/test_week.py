@@ -137,11 +137,15 @@ async def test_recipes_come_out_in_week_order() -> None:
 
 
 async def test_events_reach_the_consumer_while_other_slots_are_still_running() -> None:
-    """Lunch is held back until another slot has been written, which only a live stream shows."""
+    """Lunch is held back until the other slots are written, which only a live stream shows."""
     release = asyncio.Event()
     model = model_for(gates={"lunch": release})
-    seen: list[WeekEvent] = []
+    others = {slot for slot in SLOTS if slot != "lunch"}
+    written: list[str] = []
 
+    # Lunch's reply is only released once this loop has seen every other slot written, so lunch
+    # comes last whatever the timing. A stream that held its events back until the end would
+    # never release it, and the timeout would end the test.
     async with asyncio.timeout(10):
         async for event in run_week(
             plan_rules(),
@@ -150,11 +154,11 @@ async def test_events_reach_the_consumer_while_other_slots_are_still_running() -
             catalogue=catalogue(),
             settings=Settings(),
         ):
-            seen.append(event)
             if event.kind == "slot_written":
-                release.set()
+                written.append(event.slot_id)
+                if others <= set(written):
+                    release.set()
 
-    written = [e.slot_id for e in seen if e.kind == "slot_written"]
     assert written[-1] == "lunch"
     assert len(written) == 4
 
