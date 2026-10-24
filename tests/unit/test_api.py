@@ -28,7 +28,7 @@ from week_helpers import (
     write_catalogue_file,
 )
 
-from meal_planner.api import app_factory, create_app
+from meal_planner.api import MAX_ATTEMPTS, app_factory, create_app
 from meal_planner.config import Settings, get_settings
 from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.log import get_logger
@@ -732,6 +732,40 @@ def test_replace_streams_one_new_recipe_and_keeps_the_rest(tmp_path: Path) -> No
     after = {(r.spec.day, r.spec.slot.id): r for r in new.recipes}
     assert after[("wed", "lunch")].draft.title == "Rajma rice, the other way"
     assert all(after[k] == before[k] for k in before if k != ("wed", "lunch"))
+    # The recipe that was replaced starts again at its first attempt.
+    assert after[("wed", "lunch")].attempts == 1
+
+
+def test_replace_keeps_the_attempts_of_the_recipes_it_leaves_alone(tmp_path: Path) -> None:
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["recipes"][0]["attempts"] = MAX_ATTEMPTS
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    new = week_of(parse_stream(response.text))
+    assert new.recipes[0].attempts == MAX_ATTEMPTS
+
+
+@pytest.mark.parametrize("attempts", [0, MAX_ATTEMPTS + 1, 1000])
+def test_replace_refuses_attempts_outside_what_a_recipe_can_have(
+    tmp_path: Path, attempts: int
+) -> None:
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["recipes"][2]["attempts"] = attempts
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "recipes", 2, "attempts"]
+
+
+def test_the_attempts_bound_is_one_try_plus_the_default_repair_attempts() -> None:
+    assert 1 + Settings().max_repair_attempts == MAX_ATTEMPTS
 
 
 def test_replace_works_the_numbers_out_again_and_takes_none_from_the_client(

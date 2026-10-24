@@ -51,6 +51,9 @@ logger = get_logger(__name__)
 REPLACE_PATH = "/v1/week/replace"
 # A week has a recipe for each of 7 days and each slot, and a plan has at most 8 slots.
 MAX_WEEK_RECIPES = 7 * 8
+# The most times one recipe is tried: the writing, then `max_repair_attempts` repairs, which is 3
+# by default. A deployment that raises that setting has to raise this too.
+MAX_ATTEMPTS = 4
 
 router = APIRouter()
 
@@ -75,8 +78,9 @@ class ReplaceEntry(_Body):
     day: DayKey
     slot_id: Slug
     draft: DraftRecipe
-    # How many times the recipe has been tried, which the new recipe's count continues from.
-    attempts: int = Field(default=1, ge=1)
+    # How many times the recipe has been tried. A recipe that is kept keeps its count in the
+    # result; the recipe being replaced starts again at 1.
+    attempts: int = Field(default=1, ge=1, le=MAX_ATTEMPTS)
 
 
 class ReplaceRequest(_Body):
