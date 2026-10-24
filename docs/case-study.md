@@ -66,7 +66,7 @@ The decisions that mattered:
 
 - **Time is the model's claim.** Minutes are what the recipe states, checked against the slot's limits, never measured.
 - **A style like "no-cook" is free text** that no code checks, though the prompts call it binding.
-- **Saturated fat is hard to meet.** In the first live run (not an evaluation) it went over the day's cap on several days, and a high-protein vegetarian plan leans on paneer and dairy. The eval will show whether showing the writer each ingredient's saturated fat helps.
+- **Saturated fat went over the day's cap** on several days in the first live run, which was not an evaluation. The plan was vegetarian, with paneer among its liked foods. The writer now sees each ingredient's saturated fat, and the eval will show whether that helps.
 - **Scaling is uniform,** so a piece-counted ingredient such as an egg can land on a fraction of a piece.
 - **Glycemic load is often unknown.** USDA foods carry none; a licensed table loaded through nutrition-mcp would fill it in.
 - **The catalogue limits variety.** A larger licensed table widens it without code changes.
