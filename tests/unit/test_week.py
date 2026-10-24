@@ -1077,7 +1077,8 @@ async def test_catalogue_lines_show_per_100g() -> None:
         "paneer",
         per_100g={"kcal": 296.4, "protein_g": 18.6, "sat_fat_g": 12.0, "sodium_mg": 22.0},
     )
-    cat = Catalogue({**catalogue().items, "paneer": paneer})
+    mystery = item("mystery", per_100g={})
+    cat = Catalogue({**catalogue().items, "paneer": paneer, "mystery": mystery})
     model = model_for(
         writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
         repairs={"breakfast": [repair_reply("breakfast", "mon")]},
@@ -1087,10 +1088,14 @@ async def test_catalogue_lines_show_per_100g() -> None:
 
     for task in ("write_slot", "repair_slot"):
         system = model.of_task(task)[0][0]
-        # A value nutrition-mcp does not have is shown as n/a, never as 0.
+        # A value nutrition-mcp does not have is shown as n/a after its name, never as 0.
         assert (
-            "\npaneer: Paneer (per 100 g: 296 kcal, 19 g protein, 12 g sat fat, n/a g fibre, "
+            "\npaneer: Paneer (per 100 g: 296 kcal, 19 g protein, 12 g sat fat, fibre n/a, "
             "22 mg sodium)\n"
+        ) in system
+        assert (
+            "\nmystery: Mystery (per 100 g: kcal n/a, protein n/a, sat fat n/a, fibre n/a, "
+            "sodium n/a)\n"
         ) in system
         assert "\noats: Oats (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, " in system
         assert "must not be reported back" in system

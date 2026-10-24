@@ -283,13 +283,14 @@ def _template(name: str) -> str:
     return resources.files("meal_planner").joinpath("prompts", name).read_text(encoding="utf-8")
 
 
-# The nutrients shown beside each ingredient when the writer gets hints, and how each is read out.
+# The nutrients shown beside each ingredient when the writer gets hints: nutrition-mcp's key, how
+# a value is read out, and the name used when there is no value.
 _HINT_COLUMNS = (
-    ("kcal", "kcal"),
-    ("protein_g", "g protein"),
-    ("sat_fat_g", "g sat fat"),
-    ("fibre_g", "g fibre"),
-    ("sodium_mg", "mg sodium"),
+    ("kcal", "kcal", "kcal"),
+    ("protein_g", "g protein", "protein"),
+    ("sat_fat_g", "g sat fat", "sat fat"),
+    ("fibre_g", "g fibre", "fibre"),
+    ("sodium_mg", "mg sodium", "sodium"),
 )
 
 _PER_100G_NOTE = (
@@ -301,10 +302,10 @@ _PER_100G_NOTE = (
 def _catalogue_line(item: CatalogueItem, hints: bool) -> str:
     if not hints:
         return f"{item.id}: {item.name}"
-    # Whole numbers; a nutrient nutrition-mcp has no value for is n/a, never 0.
+    # Whole numbers; a nutrient nutrition-mcp has no value for reads "fibre n/a", never 0.
     shown = ", ".join(
-        f"{'n/a' if (value := item.per_100g.get(key)) is None else f'{value:.0f}'} {label}"
-        for key, label in _HINT_COLUMNS
+        f"{name} n/a" if (value := item.per_100g.get(key)) is None else f"{value:.0f} {label}"
+        for key, label, name in _HINT_COLUMNS
     )
     return f"{item.id}: {item.name} (per 100 g: {shown})"
 
