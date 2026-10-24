@@ -3,6 +3,7 @@
 import pytest
 from nutrition_mcp.models import Nutrients
 from nutrition_mcp.schemas import MealResult
+from pydantic import ValidationError
 from week_helpers import plan_rules, recipe_of
 
 from meal_planner.config import Settings
@@ -168,3 +169,9 @@ def test_scale_changes_only_the_grams() -> None:
     assert scaled.model_copy(update={"ingredients": original.ingredients}) == original
     # The draft it was given is left as it was.
     assert [i.grams for i in original.ingredients] == [120, 40.5, 7]
+
+
+def test_a_factor_that_passes_1000_g_is_refused_not_clipped() -> None:
+    # portion_factor never gives such a factor; a caller that made one up gets an error.
+    with pytest.raises(ValidationError, match="grams"):
+        scale_draft(draft(600), 2.0)

@@ -49,7 +49,11 @@ def portion_factor(recipe: CheckedRecipe, s: Settings) -> float | None:
 
 
 def scale_draft(draft: DraftRecipe, factor: float) -> DraftRecipe:
-    """The draft with every gram times `factor`, in whole grams. Nothing else changes."""
+    """The draft with every gram times `factor`, in whole grams. Nothing else changes.
+
+    Take the factor from `portion_factor`, which guarantees no ingredient passes 1000 g. A factor
+    from anywhere else can ask for more than a DraftIngredient allows, and that raises.
+    """
     ingredients = [
         DraftIngredient(id=i.id, grams=_scaled_grams(i.grams, factor)) for i in draft.ingredients
     ]
