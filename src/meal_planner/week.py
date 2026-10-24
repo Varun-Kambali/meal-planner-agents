@@ -3,7 +3,7 @@
 The steps are the ones in docs/architecture.md, "Writing a week":
 
     expand -> write_slot (one model call per slot, all slots at once)
-           -> compute (one nutrition-mcp call per recipe)
+           -> compute (one nutrition-mcp call per recipe, a second for a recipe scaled to its slot)
            -> check -> repair_slot (one call per slot with failing recipes) -> compute -> check ...
            -> report
 
@@ -60,6 +60,7 @@ from meal_planner.checks import (
 from meal_planner.config import Settings
 from meal_planner.llm import INVALID_JSON, SCHEMA_MISMATCH, ModelPort, ModelReply
 from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.portions import portion_factor, scale_draft
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure, SlotDraft
 from meal_planner.rules import DAYS, DayKey, PlanRules, Slot, SlotSpec, expand
 
@@ -586,15 +587,36 @@ async def with_numbers(
     return recipe.model_copy(update={"nutrition": meal})
 
 
+async def _numbered(recipe: CheckedRecipe, deps: _Deps) -> CheckedRecipe:
+    """The recipe with its numbers, scaled to its slot's calories first if that is called for.
+
+    Scaling changes grams only. The scaled recipe is worked out again by nutrition-mcp, so every
+    number still comes from it. If that second call fails, the recipe stays as the writer gave
+    it, with the numbers it already has: fitting is an improvement, never a reason to fail.
+    """
+    numbered = await with_numbers(recipe, nutrition=deps.nutrition, catalogue=deps.catalogue)
+    if not deps.settings.fit_portions:
+        return numbered
+    factor = portion_factor(numbered, deps.settings)
+    if factor is None:
+        return numbered
+    fitted = numbered.model_copy(
+        update={
+            "draft": scale_draft(numbered.draft, factor),
+            "nutrition": None,
+            "portion_scale": factor,
+        }
+    )
+    fitted = await with_numbers(fitted, nutrition=deps.nutrition, catalogue=deps.catalogue)
+    return fitted if fitted.nutrition is not None else numbered
+
+
 async def _compute(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
+    # Only recipes written or rewritten in this run are in `fresh`, so the ones a replacement
+    # keeps are never scaled.
     keys = state["fresh"]
     deps = runtime.context
-    numbered = await asyncio.gather(
-        *(
-            with_numbers(state["recipes"][key], nutrition=deps.nutrition, catalogue=deps.catalogue)
-            for key in keys
-        )
-    )
+    numbered = await asyncio.gather(*(_numbered(state["recipes"][key], deps) for key in keys))
     return {"recipes": dict(zip(keys, numbered, strict=True))}
 
 

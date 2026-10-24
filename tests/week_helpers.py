@@ -132,14 +132,17 @@ def catalogue(*extra: CatalogueItem) -> Catalogue:
 
 
 class SpyNutrition(FakeNutrition):
-    """FakeNutrition that remembers the food ids of every meal it was asked about."""
+    """FakeNutrition that remembers every meal it was asked about: `meals` holds the food ids and
+    `asked` the items with their amounts."""
 
     def __init__(self, *extra_ids: str) -> None:
         super().__init__(foods() | {food_id: PROFILE for food_id in extra_ids})
         self.meals: list[list[str]] = []
+        self.asked: list[list[MealItemIn]] = []
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
         self.meals.append([i.food_id for i in items])
+        self.asked.append(list(items))
         return await super().meal(items)
 
 

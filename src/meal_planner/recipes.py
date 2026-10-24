@@ -65,6 +65,9 @@ class CheckedRecipe(_Model):
     nutrition: MealResult | None
     failures: list[Failure]
     attempts: int
+    # The factor code applied to the model's grams for this attempt; 1.0 when it did not scale.
+    # The draft holds the grams after scaling.
+    portion_scale: float = 1.0
 
 
 class DayReport(_Model):

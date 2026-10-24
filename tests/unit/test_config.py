@@ -30,11 +30,20 @@ def test_defaults() -> None:
     assert s.no_waste_min_pack_share == 0.5
     assert s.max_concurrent_model_calls == 4
     assert s.slot_call_timeout_s == 120
+    assert s.fit_portions is True
+    assert s.portion_scale_min == 0.5
+    assert s.portion_scale_max == 2.0
     assert s.max_meal_text_chars == 500
     assert s.max_body_bytes == 65536
     assert s.max_replace_body_bytes == 131072
     assert s.rate_limit_per_minute == 10
     assert s.cors_origins == []
+
+
+def test_fit_portions_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MEAL_PLANNER_FIT_PORTIONS", "false")
+
+    assert Settings().fit_portions is False
 
 
 def test_catalogue_path_defaults_to_the_repo_data_folder() -> None:
@@ -87,6 +96,9 @@ def test_environment_overrides_use_the_prefix(monkeypatch: pytest.MonkeyPatch) -
         ("MEAL_PLANNER_RATE_LIMIT_PER_MINUTE", "0"),
         ("MEAL_PLANNER_MAX_CONCURRENT_MODEL_CALLS", "0"),
         ("MEAL_PLANNER_SLOT_CALL_TIMEOUT_S", "0"),
+        ("MEAL_PLANNER_PORTION_SCALE_MIN", "0"),
+        ("MEAL_PLANNER_PORTION_SCALE_MIN", "1.5"),
+        ("MEAL_PLANNER_PORTION_SCALE_MAX", "0.9"),
     ],
 )
 def test_bad_environment_value_is_rejected(

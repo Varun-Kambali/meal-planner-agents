@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # Seconds one slot's call may take. A slot is seven recipes, so this is longer than a chat turn.
     slot_call_timeout_s: float = Field(default=120, gt=0)
 
+    # Fitting portions: when a recipe's calories are outside the slot's band, code scales every
+    # gram by the same factor to bring them to the slot's share, if the factor is within these
+    # bounds and no ingredient passes 1000 g. Outside them the writer is asked to redo the amounts.
+    fit_portions: bool = True
+    portion_scale_min: float = Field(default=0.5, gt=0, le=1)
+    portion_scale_max: float = Field(default=2.0, ge=1)
+
     # Input bounds.
     max_meal_text_chars: int = Field(default=500, ge=1)
     max_body_bytes: int = Field(default=65536, ge=1)

@@ -2,23 +2,27 @@
 
 import asyncio
 import json
+import math
 import os
 import re
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
+from fakes import FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import TypeAdapter
 from week_helpers import (
     FIXTURES,
     PLAN,
+    PROFILE,
     SLOTS,
     SlotModel,
     SpyNutrition,
     canned,
     catalogue,
     changed,
+    foods,
     good,
     item,
     model_for,
@@ -579,11 +583,162 @@ async def test_a_day_that_stays_over_names_its_recipe() -> None:
     assert all(r.failures == [] for k, r in by_key(week).items() if k != ("mon", "dinner"))
 
 
+# Fitting portions
+
+
+def low_breakfast() -> str:
+    """Monday's breakfast at about 565 kcal: under its 662.5 share and outside the 10% band."""
+    return changed("breakfast", lambda r: scaled(r, 0.853), "mon")
+
+
+def first_check(events: list[WeekEvent], day: str, slot_id: str) -> RecipeChecked:
+    return next(
+        e for e in events if isinstance(e, RecipeChecked) and e.day == day and e.slot_id == slot_id
+    )
+
+
+async def test_fit_portions_scales_a_low_recipe() -> None:
+    model = model_for(writes={"breakfast": [low_breakfast()]})
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    written = scaled(recipe_of("breakfast", "mon"), 0.853)["ingredients"]
+    written_kcal = sum(i["grams"] for i in written) * 2
+    assert written_kcal == pytest.approx(565, abs=1)
+    # The factor is the share over what the writer's grams came to, and every gram is scaled by it.
+    assert mon.portion_scale == pytest.approx(662.5 / written_kcal)
+    assert mon.portion_scale == pytest.approx(1.17, abs=0.01)
+    assert [i.grams for i in mon.draft.ingredients] == [
+        max(1, math.floor(i["grams"] * mon.portion_scale + 0.5)) for i in written
+    ]
+    assert [i.id for i in mon.draft.ingredients] == [i["id"] for i in written]
+    # Its numbers come from a second nutrition-mcp call on the scaled grams.
+    asked = [[(i.food_id, i.amount) for i in call] for call in nutrition.asked]
+    assert [(i["id"], i["grams"]) for i in written] in asked
+    assert [(i.id, i.grams) for i in mon.draft.ingredients] in asked
+    assert len(nutrition.meals) == 29
+    assert mon.nutrition is not None
+    assert mon.nutrition.total.kcal == pytest.approx(
+        sum(i.grams for i in mon.draft.ingredients) * 2, abs=0.01
+    )
+    assert mon.nutrition.total.kcal == pytest.approx(662.5, rel=0.02)
+    # It never failed the calorie check, so there was nothing to repair and no extra attempt.
+    assert mon.failures == []
+    assert mon.attempts == 1
+    assert week.calls == 4
+    assert model.of_task("repair_slot") == []
+    assert "slot_kcal" not in {
+        f.check for e in events if isinstance(e, RecipeChecked) for f in e.failures
+    }
+    assert set(kinds(events)) == {"slot_started", "slot_written", "recipe_checked", "week_done"}
+    assert kinds(events).count("recipe_checked") == 28
+    assert all(r.portion_scale == 1.0 for k, r in by_key(week).items() if k != ("mon", "breakfast"))
+    assert all(d.failures == [] for d in week.days)
+
+
+async def test_fit_portions_off_leaves_grams() -> None:
+    model = model_for(
+        writes={"breakfast": [low_breakfast()]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition, fit_portions=False)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert [f.check for f in first_check(events, "mon", "breakfast").failures] == ["slot_kcal"]
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert mon.portion_scale == 1.0
+    assert week.calls == 5
+    assert len(nutrition.meals) == 29
+    # The repair call heard the numbers of the grams as the writer gave them.
+    ((_, user),) = model.of_task("repair_slot")
+    assert re.search(r"now comes to: 565 kcal", user)
+    assert all(r.portion_scale == 1.0 for r in week.recipes)
+
+
+@pytest.mark.parametrize("factor", [0.3, 2.6], ids=["needs_3x_more", "needs_less_than_half"])
+async def test_out_of_bounds_recipe_goes_to_repair(factor: float) -> None:
+    """Past the bounds the writer's grams are not trusted to be near, so the writer redoes them."""
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", lambda r: scaled(r, factor), "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert "slot_kcal" in [f.check for f in first_check(events, "mon", "breakfast").failures]
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert mon.portion_scale == 1.0
+    assert week.calls == 5
+    # 28 recipes once, then the repaired one: the out-of-bounds recipe was not counted again.
+    assert len(nutrition.meals) == 29
+
+
+async def test_a_recipe_that_would_pass_1000_g_goes_to_repair() -> None:
+    """600 g of a watery food and 154 g of oats come to 368 kcal: a factor of 1.8 inside the
+    bounds, which would make the watery food 1080 g, more than a recipe may hold."""
+    watery = changed(
+        "breakfast",
+        lambda r: (
+            r
+            | {"ingredients": [{"id": "bottle_gourd", "grams": 600}, {"id": "oats", "grams": 154}]}
+        ),
+        "mon",
+    )
+    model = model_for(
+        writes={"breakfast": [watery]}, repairs={"breakfast": [repair_reply("breakfast", "mon")]}
+    )
+    nutrition = FakeNutrition(foods() | {"bottle_gourd": PROFILE | {"kcal": 10}})
+    cat = Catalogue({**catalogue().items, "bottle_gourd": item("bottle_gourd")})
+
+    events, week = await run(model, nutrition=nutrition, cat=cat)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert [f.check for f in first_check(events, "mon", "breakfast").failures] == ["slot_kcal"]
+    assert mon.portion_scale == 1.0
+    assert mon.attempts == 2
+    assert week.calls == 5
+
+
+async def test_a_recount_that_nutrition_mcp_refuses_keeps_the_recipe_as_written() -> None:
+    class RefusesWholeGrams(SpyNutrition):
+        """Fails any request whose amounts are all whole grams, as the scaled recipes are."""
+
+        async def meal(self, items: list[MealItemIn]) -> MealResult:
+            if all(i.amount == round(i.amount) for i in items):
+                raise NutritionError(
+                    "nutrition-mcp could not answer compute_meal: Connection closed"
+                )
+            return await super().meal(items)
+
+    model = model_for(writes={"breakfast": [low_breakfast()]})
+
+    _, week = await run(model, nutrition=RefusesWholeGrams(), max_repair_attempts=0)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.portion_scale == 1.0
+    assert mon.nutrition is not None
+    written = scaled(recipe_of("breakfast", "mon"), 0.853)["ingredients"]
+    assert [i.grams for i in mon.draft.ingredients] == [i["grams"] for i in written]
+    assert [f.check for f in mon.failures] == ["slot_kcal"]
+
+
 # Replacing one recipe
 
 
 async def replace_events(
-    week: WeekResult, model: ModelPort, day: DayKey, slot_id: str
+    week: WeekResult,
+    model: ModelPort,
+    day: DayKey,
+    slot_id: str,
+    nutrition: NutritionPort | None = None,
 ) -> tuple[list[WeekEvent], WeekResult]:
     events = [
         event
@@ -593,7 +748,7 @@ async def replace_events(
             day,
             slot_id,
             model=model,
-            nutrition=SpyNutrition(),
+            nutrition=nutrition or SpyNutrition(),
             catalogue=catalogue(),
             settings=Settings(),
         )
@@ -624,6 +779,31 @@ async def test_replace_keeps_other_recipes() -> None:
     assert "Paneer rice box" in user
     assert "Tofu rice box" in user
     assert "Rajma rice box" not in user
+
+
+async def test_replace_does_not_rescale_kept_recipes() -> None:
+    """Monday's lunch is 15% low and could be fitted, but a replacement leaves it alone."""
+    low_lunch = changed("lunch", lambda r: scaled(r, 0.85), "mon")
+    _, week = await run(
+        model_for(writes={"lunch": [low_lunch]}), fit_portions=False, max_repair_attempts=0
+    )
+    assert [f.check for f in by_key(week)[("mon", "lunch")].failures] == ["slot_kcal"]
+    new = scaled(recipe_of("breakfast", "wed"), 0.853) | {"title": "Oats, the other way"}
+    model = SlotModel(
+        {"breakfast": {"write_slot": [raw({"slot_id": "breakfast", "recipes": [new]})]}}
+    )
+    nutrition = SpyNutrition()
+
+    _, replaced = await replace_events(week, model, "wed", "breakfast", nutrition)
+
+    before, after = by_key(week), by_key(replaced)
+    assert all(after[k] == before[k] for k in before if k != ("wed", "breakfast"))
+    assert after[("mon", "lunch")].portion_scale == 1.0
+    # The new recipe is fitted, and only it was counted: once as written, once scaled.
+    assert after[("wed", "breakfast")].portion_scale > 1.1
+    assert after[("wed", "breakfast")].failures == []
+    assert len(nutrition.meals) == 2
+    assert replaced.calls == 1
 
 
 async def test_replacing_a_recipe_with_itself_is_not_a_repeat() -> None:
