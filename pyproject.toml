@@ -22,7 +22,8 @@ dependencies = [
     "mcp>=2.3,<3",
     "nutrition-mcp",
     "pydantic>=2.9",
-    "pydantic-settings>=2.5",
+    # 2.7 is the first release with NoDecode, which the CORS origins setting uses.
+    "pydantic-settings>=2.7",
     "pyyaml>=6",
     "uvicorn>=0.54,<1",
 ]
