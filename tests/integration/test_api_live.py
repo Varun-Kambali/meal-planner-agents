@@ -66,16 +66,30 @@ def free_port() -> int:
 
 
 def uvicorn_arguments_of_make_run(port: int) -> list[str]:
-    """The arguments `make run` gives uvicorn, read from the Makefile with a dry run."""
+    """The arguments `make run` gives uvicorn, read from the Makefile with a dry run.
+
+    Under `make test` this is a sub-make, and GNU make 4 then prints "Entering directory" and
+    "Leaving directory" lines around the recipe. So the make flags are dropped from its
+    environment, directory lines are switched off, and the recipe is the one line that runs
+    uvicorn, not the last line.
+    """
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL")
+    }
     # ENV_FILE points nowhere so that the dry run never names a real .env file.
     done = subprocess.run(
-        ["make", "-n", "run", "ENV_FILE=/nonexistent/.env"],
+        ["make", "-n", "--no-print-directory", "run", "ENV_FILE=/nonexistent/.env"],
         cwd=REPO,
+        env=environment,
         capture_output=True,
         text=True,
         check=True,
     )
-    words = shlex.split(done.stdout.strip().splitlines()[-1])
+    commands = [line for line in done.stdout.splitlines() if " uvicorn " in f" {line} "]
+    assert len(commands) == 1, f"expected one uvicorn line from make -n run, got: {done.stdout!r}"
+    words = shlex.split(commands[0])
     arguments = words[words.index("uvicorn") + 1 :]
     arguments[arguments.index("--port") + 1] = str(port)
     return arguments
