@@ -293,9 +293,12 @@ _HINT_COLUMNS = (
     ("sodium_mg", "mg sodium", "sodium"),
 )
 
+# What the heading says each line is made of, and the note under it, for each setting.
+_FORMAT = "id: name"
+_FORMAT_WITH_HINTS = "id: name, then nutrition per 100 g"
 _PER_100G_NOTE = (
-    "Each line also gives the food's nutrition per 100 g in brackets. These numbers are there "
-    "for choosing amounts. They must not be reported back in the reply.\n\n"
+    "The nutrition figures are there for choosing amounts. "
+    "They must not be reported back in the reply.\n\n"
 )
 
 
@@ -313,10 +316,15 @@ def _catalogue_line(item: CatalogueItem, hints: bool) -> str:
 def _system(name: str, allowed: list[CatalogueItem], hints: bool) -> str:
     values = {
         "catalogue": "\n".join(_catalogue_line(item, hints) for item in allowed),
+        "catalogue_format": _FORMAT_WITH_HINTS if hints else _FORMAT,
         "per_100g_note": _PER_100G_NOTE if hints else "",
     }
     # One pass, so text that looks like a placeholder inside a value is not replaced again.
-    return re.sub(r"\{\{(catalogue|per_100g_note)\}\}", lambda m: values[m[1]], _template(name))
+    return re.sub(
+        r"\{\{(catalogue|catalogue_format|per_100g_note)\}\}",
+        lambda m: values[m[1]],
+        _template(name),
+    )
 
 
 def _quote(text: str) -> str:

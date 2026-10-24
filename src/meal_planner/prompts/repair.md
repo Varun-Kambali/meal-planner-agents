@@ -17,6 +17,6 @@ The user message holds a block between <data> and </data>. It describes the slot
 - Name each recipe's cuisine exactly as one of the listed cuisines. Use only the listed gear, and keep active minutes and total minutes within the limits in the data block. Set "cook_when" to the slot's value.
 - Keep the steps short: at most 10, each under 200 characters. The title is under 80 characters. "store" is one sentence on how to keep the dish, "swap" one ingredient swap, and "fits" one sentence on how the dish suits the slot.
 
-## Ingredients you may use (id: name)
+## Ingredients you may use ({{catalogue_format}})
 
 {{per_100g_note}}{{catalogue}}

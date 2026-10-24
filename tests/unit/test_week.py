@@ -1134,7 +1134,13 @@ async def test_catalogue_lines_show_per_100g() -> None:
             "sodium n/a)\n"
         ) in system
         assert "\noats: Oats (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, " in system
-        assert "must not be reported back" in system
+        # The heading describes the lines that follow it.
+        assert (
+            "## Ingredients you may use (id: name, then nutrition per 100 g)\n\n"
+            "The nutrition figures are there for choosing amounts. "
+            "They must not be reported back in the reply.\n\n"
+            "almonds: Almonds (per 100 g: "
+        ) in system
 
 
 async def test_catalogue_lines_are_plain_with_hints_off() -> None:
@@ -1150,6 +1156,8 @@ async def test_catalogue_lines_are_plain_with_hints_off() -> None:
         assert "\npaneer: Paneer\n" in system
         assert "per 100 g" not in system
         assert "reported back" not in system
+        # Heading, then the plain lines, as before hints existed.
+        assert "## Ingredients you may use (id: name)\n\nalmonds: Almonds\n" in system
 
 
 def day_lines(user: str) -> dict[str, str]:

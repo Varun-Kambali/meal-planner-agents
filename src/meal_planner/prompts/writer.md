@@ -19,6 +19,6 @@ The user message holds a block between <data> and </data>. It describes the slot
 - Keep the steps short: at most 10, each under 200 characters. The title is under 80 characters. "store" is one sentence on how to keep the dish, "swap" one ingredient swap, and "fits" one sentence on how the dish suits the slot.
 - Prefer the liked foods when they suit the dish.
 
-## Ingredients you may use (id: name)
+## Ingredients you may use ({{catalogue_format}})
 
 {{per_100g_note}}{{catalogue}}

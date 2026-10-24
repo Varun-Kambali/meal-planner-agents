@@ -20,9 +20,9 @@ The user message holds a block between <data> and </data>. It describes the slot
 - Keep the steps short: at most 10, each under 200 characters. The title is under 80 characters. "store" is one sentence on how to keep the dish, "swap" one ingredient swap, and "fits" one sentence on how the dish suits the slot.
 - Prefer the liked foods when they suit the dish.
 
-## Ingredients you may use (id: name)
+## Ingredients you may use (id: name, then nutrition per 100 g)
 
-Each line also gives the food's nutrition per 100 g in brackets. These numbers are there for choosing amounts. They must not be reported back in the reply.
+The nutrition figures are there for choosing amounts. They must not be reported back in the reply.
 
 almonds: Almonds (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
 apple: Apple (per 100 g: 200 kcal, 14 g protein, 1 g sat fat, 5 g fibre, 100 mg sodium)
