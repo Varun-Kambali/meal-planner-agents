@@ -1,8 +1,8 @@
 # Architecture
 
-Status: agreed at kickoff on 2026-10-21, and brought in line with the code when the recipe pipeline was finished, on 2026-10-24, and again when the meal reader was added, on 2026-10-25. What the system must do is in [requirements.md](requirements.md); why it is built this way is in [case-study.md](case-study.md).
+Status: agreed at kickoff on 2026-10-21, and brought in line with the code when the recipe pipeline was finished, on 2026-10-24, and again when the meal reader and the day and week totals were added, on 2026-10-25. What the system must do is in [requirements.md](requirements.md); why it is built this way is in [case-study.md](case-study.md).
 
-Built so far: the week graph, the checks, the meal reader, the HTTP API for writing and replacing a week and for reading a typed meal, and a command line with `week` and `read`. The day and week totals, tracing, the frontend, the evals and the deployed demo are still to come, and the sections on them say so.
+Built so far: the week graph, the checks, the meal reader, the day and week totals, the HTTP API for writing and replacing a week, reading a typed meal and summarising a log, and a command line with `week` and `read`. Tracing, the frontend, the evals and the deployed demo are still to come, and the sections on them say so.
 
 ## Overview
 
@@ -50,27 +50,28 @@ The browser holds everything about the user. Each request sends the plan rules (
 
 | Module | Does |
 |---|---|
-| `rules.py` | Pydantic models for the plan rules (day types, targets, slots, gear, food rules, shopping days) and the JSON Schema export |
+| `rules.py` | Pydantic models for the plan rules (day types, targets, slots, gear, food rules, shopping days) and the JSON Schema export. A day type's extra targets are for nutrients it has no field for: one that repeats calories, protein, carbohydrate, fat, saturated fat or fibre, or names a nutrient twice, is refused with the field named |
 | `catalogue.py` | Loads `data/catalogue.yaml`, the ingredients the writer may use, with allergen groups, pack size and shelf life. Checks every id against nutrition-mcp at startup and keeps each food's nutrients per 100 g from the same call |
 | `nutrition.py` | The nutrition-mcp client: one MCP session over stdio, typed wrappers for `search_food`, `get_nutrition` and `compute_meal`, timeouts and error mapping |
 | `llm.py` | The model client: model id from config, timeouts, retries with backoff, structured output into Pydantic models, and a log line with tokens, latency and cost for every call. A reply that cannot be used comes back with an error code, never as an exception. Also the fake, recorder and replayer that tests and the smoke eval use |
 | `log.py` | JSON log lines on stderr that carry only an allowlist of fields (task, model, tokens, latency, cost, error, error type) and the request id, so no rule or typed text can reach a log |
 | `recipes.py` | The models a recipe passes through: what the writer returns (`DraftRecipe`, `SlotDraft`), a recipe with its numbers and failures (`CheckedRecipe`), and a day's totals and failures (`DayReport`) |
-| `checks.py` | Pure functions, one per hard check. Each returns pass or fail and a reason the model can act on ("protein 31 g, slot needs at least 36 g") |
+| `checks.py` | Pure functions, one per hard check. Each returns pass or fail and a reason the model can act on ("protein 31 g, slot needs at least 36 g"). A number in a reason is whole when whole units are within 2% of it and has one or two decimals when they are not, so a limit of 2.4 ug is not shown as 3; rounding goes up for a floor and down for a cap. A list of foods with no value for a nutrient names foods only, as a person reads them ("mustard oil"), also for a recipe nutrition-mcp could not work out, which lacks all its ingredients. `add_up_meals` adds up a day's meals for both the day checks and the summaries |
 | `portions.py` | Fits a recipe's grams to its slot's calories: the scale factor and the scaled draft. Arithmetic on grams only |
 | `week.py` | The LangGraph graph that writes, checks and repairs a week, and `run_week` and `replace_recipe`, which run it |
 | `week_events.py` | The events the graph streams to the client and the `WeekResult` that the last one carries |
 | `week_prompts.py` | The writer and repair prompts: the system prompt with the catalogue filled in, and the user message built from the slot, the failures and the summaries of the slot's other recipes. String building only; it makes no model call. Also the two helpers that load a prompt file and quote text into a data block, which the reader uses too |
+| `summary.py` | The meal log (`MealLog`, its entries and foods), the export file (`Export`), and `summarise`, which works each eaten meal out with nutrition-mcp and holds each date's total to the targets of its day type (see Day and week totals) |
 | `reader.py` | Turns a typed meal into nutrition-mcp foods, amounts and numbers (see Reading a typed meal). One model call to list the foods and one more for each name that nutrition-mcp's search cannot settle; code and nutrition-mcp decide the rest: the match, the amount, the unit and the status of each item |
 | `prompts/` | The system prompts as Markdown: `writer.md` and `repair.md`, with a placeholder for the catalogue, and `reader.md` and `choose_food.md` for the meal reader |
 | `startup.py` | What has to be true before the app answers: LangSmith tracing off, the model's key set, nutrition-mcp running, the catalogue loaded against it. Each way it fails ends in one line saying why. Shared by the API and the command line |
-| `problems.py` | Invalid input in one form for the API and the command line: where it is and what is wrong. The rejected value is dropped from validation errors, because it is the user's rules, and nothing is logged. A few messages name an id so it can be fixed, such as an unknown liked or excluded food, an undefined day type or a slot the plan lacks. A typed meal that is blank or too long is reported by its length only |
+| `problems.py` | Invalid input in one form for the API and the command line: where it is and what is wrong. The location of an unknown liked or excluded food comes from the catalogue check as data, not from the wording of its message. The rejected value is dropped from validation errors, because it is the user's rules, and nothing is logged. A few messages name an id so it can be fixed, such as an unknown liked or excluded food, an undefined day type or a slot the plan lacks. A typed meal that is blank or too long is reported by its length only |
 | `middleware.py` | The request id, the body size limit and the rate limit, as plain ASGI middleware. Starlette's `BaseHTTPMiddleware` buffers around streams, and the week is a stream |
 | `api.py` | FastAPI routes, server-sent events and CORS |
 | `cli.py` | `meal-planner week <rules.json>`: the same graph without the web server, with progress on stderr and the week as JSON. `meal-planner read "<text>"`: reads a typed meal and prints the result as JSON |
 | `config.py` | Settings from environment variables (`pydantic-settings`) |
 
-Not built yet: `summary.py` (day and week totals against targets) and `tracing.py` (Langfuse setup and the masking of user content). The frontend will live in `frontend/` (React, Vite, TypeScript), store the rules, the week and the log in the browser, and only display numbers the API returns.
+Not built yet: `tracing.py` (Langfuse setup and the masking of user content). The frontend will live in `frontend/` (React, Vite, TypeScript), store the rules, the week and the log in the browser, and only display numbers the API returns.
 
 ## Writing a week
 
@@ -125,19 +126,28 @@ A typed meal costs one model call, plus one for each name that has several resul
 
 ## Day and week totals
 
-Not built yet.
+`POST /v1/summary` takes the plan rules and a meal log and returns what was eaten, date by date, against the targets of each date's day type. The server keeps nothing: the log is the browser's.
 
-The log holds, for each planned meal, its status and its items as food ids, amounts and units. A summary request sends the log and the rules; the server recomputes each meal with `compute_meal`, adds up each day, and compares the totals with the targets using the same functions as the day checks. A meal's glycemic load is shown only when every item in it has one.
+The log (`MealLog`, version 1) has an entry for each planned meal the person logged: its date, its slot, its status (`as_planned`, `different_amount`, `swapped` or `skipped`) and the foods eaten, up to 20, each a nutrition-mcp food id, an amount above 0 and a unit. It holds no nutrition number. It covers at most 7 consecutive days, which need not begin on a Monday. The export file (`Export`, version 1) is the rules, the week (or null) and the log, and `schemas/export.json` is its JSON Schema, for the browser to check a file against before it loads it.
+
+1. **Check the log.** An entry names a slot the plan has, once for each date. A skipped meal lists no foods and any other lists at least one. A log that fails is refused with the entry named by its date and slot, and nothing is dropped quietly.
+2. **Numbers (nutrition-mcp).** Each meal that was eaten is sent to `compute_meal`, one at a time. A skipped meal is not sent. A food, amount or unit nutrition-mcp refuses refuses the entry: the refusal names the date, the slot, the item and the food, every such entry is named at once, and nothing is added up.
+3. **Add up (code).** The meals of a date are added up with `add_up_meals`, the function the day checks use, so a nutrient no eaten food has a value for is unknown (null), never 0, and a food that lacks one makes the total a lower bound. A date whose meals were all skipped totals 0 for every nutrient: nothing was eaten, which is known.
+4. **Compare (code).** The date's day type is the plan's for its weekday, and `check_day_totals` holds the totals to it with the day tolerance from the settings. The failures read as the week's day failures do, and they name foods in words a person reads. Carbohydrate and fat are reported as fractions over or under their targets, and never fail a day.
+5. **Week.** `planned_meals` is the plan's slots on each date in the log. `as_planned_share` is the meals eaten as planned over that, so a slot with no entry counts against it, and it is 0 for an empty log. `days_on_target` counts the dates with no failure.
+
+A meal's glycemic load, by slot, is shown only when every food in it has one. Otherwise it is null, and `gl_missing` says how many foods have none. Both are keyed by slot and hold the date's meals that were eaten. A day summary also carries its day type's targets by nutrient. The log holds no minimum or maximum, so the browser reads which is which from the rules.
 
 ## API
 
-The API keeps no state. Five routes:
+The API keeps no state. Six routes:
 
 | Route | Does |
 |---|---|
 | `POST /v1/week` | Takes the plan rules as JSON and streams the week it writes |
 | `POST /v1/week/replace` | Takes the rules, the week's recipes and the day and slot to write again, and streams the week with that recipe replaced |
 | `POST /v1/log/read` | Takes `{"text": "..."}`, a typed meal, and returns the reader's result as JSON. It is not a stream |
+| `POST /v1/summary` | Takes `{"rules": ..., "log": ...}` and returns the week summary as JSON. It is not a stream |
 | `GET /v1/catalogue` | Lists the ingredients a plan form can offer (id, name, category) for a `diet` and the allergens to leave out (`exclude_allergens`, repeatable) |
 | `GET /healthz` | Returns `{"status": "ok"}` |
 
@@ -194,6 +204,8 @@ Startup problems stop the app with one line that says why. A request that cannot
 | A catalogue id unknown to nutrition-mcp | Startup stops and names every such id |
 | Invalid rules, or a liked or excluded food that is not in the catalogue | 422 with a list of where and what. The rejected value is dropped from validation errors and nothing is logged; a few messages name an id so it can be fixed, such as an unknown liked or excluded food or an undefined day type |
 | A typed meal that is blank or too long | 422 naming `body.text`, with the length in the message and none of the text |
+| A log that does not fit the rules or that nutrition-mcp refuses | 422 whose location is `body.log.entries` followed by the entry (and its item) and whose message names the date and slot. The message may say the food id or unit it refuses, which the person sent; nothing is logged |
+| nutrition-mcp cannot be reached, or sends an answer that cannot be used, while a log is summarised | 503, or 502, naming the step `nutrition`. The log line holds `summary_failed` and the class of the error |
 | A body over the limit, or too many requests | 413, or 429 with `Retry-After` (see API) |
 | nutrition-mcp cannot be reached before a run starts | 503 naming the step: `nutrition` for a new week, which first asks it a small question so that no model call is spent on a server that is down, and `recompute` for a replacement, whose kept recipes need their numbers worked out. For a replacement, nutrition-mcp is asked twice before this, and its refusing one recipe is not a 503: that recipe is marked `nutrition_failed` |
 | nutrition-mcp cannot be reached in the middle of a run | It is asked once more. If that fails too, the recipe has no numbers and a `nutrition_unavailable` failure, is not sent back to the writer, which cannot fix that, and is reported failing. The run goes on. The recipe's day cannot pass, because a recipe with no numbers counts as missing every nutrient. A scaled recipe whose numbers cannot be had keeps the writer's grams and its first numbers |

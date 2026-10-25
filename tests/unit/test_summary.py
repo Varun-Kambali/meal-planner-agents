@@ -21,8 +21,10 @@ from week_helpers import SLOTS, SpyNutrition, catalogue, item, model_for, plan_r
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
 from meal_planner.nutrition import NutritionError
+from meal_planner.reader import MAX_ITEMS
 from meal_planner.rules import PlanRules
 from meal_planner.summary import (
+    MAX_FOODS,
     Export,
     LogRejected,
     MealLog,
@@ -437,6 +439,10 @@ def test_a_bad_entry_is_refused_at_the_field(change: dict[str, Any], loc: tuple[
         log_of(entry(MON, "lunch") | change)
 
     assert [e["loc"] for e in err.value.errors()] == [loc]
+
+
+def test_a_meal_holds_as_many_foods_as_the_reader_reads_from_one_text() -> None:
+    assert MAX_FOODS == MAX_ITEMS == 20
 
 
 def test_twenty_foods_are_a_meal() -> None:

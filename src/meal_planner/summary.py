@@ -23,7 +23,6 @@ from meal_planner.checks import add_up_meals, check_day_totals
 from meal_planner.config import Settings
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.problems import Problem
-from meal_planner.reader import MAX_ITEMS
 from meal_planner.recipes import Failure
 from meal_planner.rules import CORE_TARGET_FIELDS, DAYS, DayType, PlanRules
 from meal_planner.week_events import WeekResult
@@ -32,6 +31,9 @@ MealStatus = Literal["as_planned", "different_amount", "swapped", "skipped"]
 
 # A log covers at most this many consecutive days, a week.
 LOG_DAYS = 7
+# The most foods one meal lists, as many as the meal reader reads from one typed text. A test
+# holds the two together.
+MAX_FOODS = 20
 
 
 class _Model(BaseModel):
@@ -57,7 +59,7 @@ class LogEntry(_Model):
     date: datetime.date
     slot_id: str
     status: MealStatus
-    items: list[LogItem] = Field(max_length=MAX_ITEMS)
+    items: list[LogItem] = Field(max_length=MAX_FOODS)
 
     @model_validator(mode="after")
     def _items_match_the_status(self) -> Self:
