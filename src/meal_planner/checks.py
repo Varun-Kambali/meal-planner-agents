@@ -253,7 +253,8 @@ def _gear_names(names: Iterable[str]) -> str:
 
 
 # A nutrition figure in the model's words: a number beside a nutrition word, either way round,
-# with or without a unit ("450 kcal", "28 g protein", "protein: 28 g", "~30g of protein").
+# with or without a unit ("450 kcal", "28 g protein", "A 400-kcal dinner", "25+ g protein",
+# "protein: 28 g", "fat less than 10 g", "~30g of protein").
 _NUTRIENT = (
     r"(?:k?cals?|kj|calories?|protein|carb(?:ohydrate)?s?|(?:sat(?:urated)?\s+)?fat|fib(?:re|er)"
     r"|sugars?|sodium|salt)"
@@ -261,21 +262,25 @@ _NUTRIENT = (
 # The whole number, so "12 minutes" is never read as "1" followed by something else.
 _NUMBER = r"(?<![\w.,])\d+(?:[.,]\d+)*(?![.,]?\d)"
 _UNIT = r"(?:k?cals?|kj|g|gms?|grams?|mg|milligrams?|mcg|ug|µg|%)(?![a-z])"
-# Words that can stand between a nutrition word and its number: "protein of 28 g", "fat under 9".
+# What can join a number to its unit or word: a space, a hyphen ("400-kcal") or a plus ("25+ g").
+_JOIN = r"(?:-|\s*\+\s*|\s*)"
+# Words that can stand between a nutrition word and its number: "protein of 28 g", "fat under 9",
+# "protein at least 30 g". Longer phrases come first so "no more than" is not cut at "more than".
 _LINK = (
-    r"(?:[:=(~-]\s*|(?:of|is|at|about|around|approx(?:imately)?|roughly|nearly|under|over"
-    r"|below|above|only|just)\s+)"
+    r"(?:[:=(~-]\s*|(?:of|is|about|around|approx(?:imately)?|roughly|nearly|only|just"
+    r"|at\s+least|at\s+most|at|no\s+more\s+than|less\s+than|more\s+than|up\s+to"
+    r"|under|over|below|above)\s+)"
 )
 # After "salt 2" or "sugar 1", a measure or a time means an amount or a moment, not a figure.
 _NOT_A_FIGURE = (
     r"(?:tsps?|tbsps?|teaspoons?|tablespoons?|cups?|ml|l|litres?|liters?|pinch(?:es)?"
     r"|secs?|seconds?|mins?|minutes?|hrs?|hours?|days?|times?|pieces?|whistles?)(?![a-z])"
 )
-_FIGURE = re.compile(
-    rf"{_NUMBER}\s*(?:{_UNIT}\s*)?(?:of\s+)?{_NUTRIENT}(?![a-z])"
-    rf"|(?<![a-z]){_NUTRIENT}\s*{_LINK}*~?{_NUMBER}(?:\s*{_UNIT})?(?!\s*{_NOT_A_FIGURE})",
-    re.IGNORECASE,
+_NUMBER_THEN_WORD = rf"{_NUMBER}{_JOIN}(?:{_UNIT}{_JOIN})?(?:of\s+)?{_NUTRIENT}(?![a-z])"
+_WORD_THEN_NUMBER = (
+    rf"(?<![a-z]){_NUTRIENT}\s*{_LINK}*~?{_NUMBER}(?:\s*{_UNIT})?(?!\s*{_NOT_A_FIGURE})"
 )
+_FIGURE = re.compile(f"{_NUMBER_THEN_WORD}|{_WORD_THEN_NUMBER}", re.IGNORECASE)
 
 
 def check_model_figures(draft: DraftRecipe) -> list[Failure]:

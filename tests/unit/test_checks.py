@@ -626,6 +626,31 @@ FIGURES = [
     "salt 2 g",
     "1.5 g FIBRE",
     "20% protein",
+    "A 400-calorie breakfast",
+    "A 400-kcal dinner",
+    "30g-protein shake",
+    "Packs 25+ g protein",
+    "Packs 25 + g protein",
+    "protein at least 30 g",
+    "fat less than 10 g",
+    "calories up to 400",
+    "saturated fat at most 7 g",
+    "sodium at most 575 mg",
+    "fibre no more than 9 g",
+]
+
+# Each phrase that can stand between a nutrition word and its number.
+LIMIT_PHRASES = [
+    "at least",
+    "at most",
+    "less than",
+    "more than",
+    "up to",
+    "under",
+    "over",
+    "no more than",
+    "below",
+    "above",
 ]
 
 # Numbers that are not nutrition, and nutrition words with no number.
@@ -641,6 +666,15 @@ NOT_FIGURES = [
     "season with salt, then rest 5 minutes",
     "low in fat and sugar",
     "serves 2. Protein comes from the paneer",
+    "a 2-minute rest",
+    "serves 1",
+    "Day 2 lunch",
+    "a 10-minute soak",
+    "Simmer 20-30 minutes",
+    "2+ cups of water",
+    "add salt at least 5 minutes before the end",
+    "salt up to 2 tsp",
+    "protein bar, then 2-3 tbsp curd",
 ]
 
 
@@ -654,6 +688,14 @@ def test_a_nutrition_figure_in_the_text_fails(phrase: str) -> None:
     assert len(quoted) == 1
     assert quoted[0] in phrase
     assert re.search(r"\d", quoted[0])
+
+
+@pytest.mark.parametrize("limit", LIMIT_PHRASES)
+def test_a_limit_between_the_word_and_the_number_still_fails(limit: str) -> None:
+    text = f"Light, protein {limit} 30 g, and filling."
+    failure = only(check_model_figures(with_text(fits=text)))
+
+    assert failure.message.startswith("fits names a nutrition figure ('protein ")
 
 
 @pytest.mark.parametrize(
