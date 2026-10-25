@@ -191,7 +191,9 @@ async def _replacement(
                 )
             )
     except NutritionError as exc:
-        # The message can name a food from the drafts, so only the class is logged.
+        # with_numbers raises only an error marked `unreachable`; a refusal, named or not, leaves
+        # that recipe without numbers. The message can name a food from the drafts, so only the
+        # class is logged.
         logger.error(
             "recompute_failed", extra={"task": "replace", "error_type": type(exc).__name__}
         )

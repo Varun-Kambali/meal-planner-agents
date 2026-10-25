@@ -381,12 +381,14 @@ def test_a_food_the_catalogue_lacks_is_422_naming_the_field(tmp_path: Path) -> N
 
 
 class UnreachableNutrition(SpyNutrition):
-    """nutrition-mcp gone: every call fails, and the error names no food."""
+    """nutrition-mcp gone: every call fails as unreachable."""
 
     async def search(
         self, query: str, kind: Literal["dish", "ingredient"] | None = None, limit: int = 5
     ) -> SearchResult:
-        raise NutritionError("nutrition-mcp could not answer search_food: Connection closed")
+        raise NutritionError(
+            "nutrition-mcp could not answer search_food: Connection closed", unreachable=True
+        )
 
 
 def test_a_week_is_a_503_naming_the_step_when_nutrition_mcp_cannot_be_reached(
@@ -870,10 +872,12 @@ def test_replace_with_an_unknown_food_in_the_rules_is_422(tmp_path: Path) -> Non
 
 
 class DownNutrition(SpyNutrition):
-    """nutrition-mcp when it cannot be asked at all: the error names no food."""
+    """nutrition-mcp when it cannot be asked at all: the error is marked unreachable."""
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
-        raise NutritionError("nutrition-mcp could not answer compute_meal: Connection closed")
+        raise NutritionError(
+            "nutrition-mcp could not answer compute_meal: Connection closed", unreachable=True
+        )
 
 
 def test_replace_is_a_503_naming_the_step_when_the_numbers_cannot_be_worked_out(
@@ -920,6 +924,30 @@ def test_replace_treats_a_recipe_nutrition_mcp_refuses_as_one_without_numbers(
     new = week_of(parse_stream(response.text))
     without_numbers = {(r.spec.day, r.spec.slot.id) for r in new.recipes if r.nutrition is None}
     assert without_numbers == with_tofu - {("wed", "lunch")}
+
+
+class RefusingWithoutAName(SpyNutrition):
+    """nutrition-mcp refusing a recipe with a message that names no food."""
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        if any(item.food_id == "tofu" for item in items):
+            raise NutritionError("compute_meal could not work out this meal")
+        return await super().meal(items)
+
+
+def test_replace_does_not_read_a_refusal_naming_no_food_as_nutrition_mcp_being_down(
+    tmp_path: Path,
+) -> None:
+    week = a_week(tmp_path)
+
+    with serving(
+        tmp_path, model=lunch_again(), nutrition=RefusingWithoutAName(*EXTRA_FOODS)
+    ) as client:
+        response = client.post("/v1/week/replace", json=replace_body(week))
+
+    assert response.status_code == 200
+    new = week_of(parse_stream(response.text))
+    assert any(r.nutrition is None for r in new.recipes)
 
 
 def test_replace_has_its_own_larger_body_limit(tmp_path: Path) -> None:

@@ -98,7 +98,8 @@ async def _load_catalogue(settings: Settings, nutrition: NutritionPort) -> Catal
     except CatalogueError as exc:
         raise StartupError(f"the ingredient catalogue cannot be used: {_one_line(exc)}") from exc
     except NutritionError as exc:
-        # Raised only when the server could not be asked, not for an id it refused.
+        # Raised only when the server could not be asked or its answer could not be read,
+        # not for an id it refused.
         raise StartupError(f"nutrition-mcp stopped answering: {_one_line(exc)}") from exc
 
 

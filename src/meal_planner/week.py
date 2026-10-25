@@ -333,9 +333,10 @@ async def with_numbers(
     """The recipe with its numbers from nutrition-mcp, or with the reason it has none.
 
     A recipe nutrition-mcp refuses gets no numbers and a `nutrition_failed` failure. When
-    nutrition-mcp could not be asked at all (the error names no food), the graph treats that the
-    same way, so one bad moment fails recipes and not the week. A caller that has no week to
-    protect passes `raise_if_unreachable` to get the error instead.
+    nutrition-mcp could not be asked at all (`NutritionError.unreachable`), the graph treats that
+    the same way, so one bad moment fails recipes and not the week. A caller that has no week to
+    protect passes `raise_if_unreachable` to get that error instead; a refusal is the recipe's
+    either way.
     """
     ingredients = recipe.draft.ingredients
     if any(i.id not in catalogue.items for i in ingredients):
@@ -345,7 +346,7 @@ async def with_numbers(
     try:
         meal = await nutrition.meal(items)
     except NutritionError as exc:
-        if raise_if_unreachable and exc.food_id is None:
+        if raise_if_unreachable and exc.unreachable:
             raise
         failure = Failure(
             check=NUTRITION_FAILED, message=f"nutrition-mcp could not work out this recipe: {exc}"

@@ -236,7 +236,9 @@ async def test_a_catalogue_file_that_is_not_yaml_gives_one_line(tmp_path: Path) 
 
 class DeadNutrition(FakeNutrition):
     async def nutrition(self, food_id: str, amount: float, unit: str):  # type: ignore[no-untyped-def,override]
-        raise NutritionError("nutrition-mcp could not answer get_nutrition: Connection closed")
+        raise NutritionError(
+            "nutrition-mcp could not answer get_nutrition: Connection closed", unreachable=True
+        )
 
 
 async def test_nutrition_mcp_going_away_while_the_catalogue_loads_is_a_start_failure(

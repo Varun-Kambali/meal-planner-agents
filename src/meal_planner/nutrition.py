@@ -16,6 +16,7 @@ from typing import Any, Literal, Protocol, Self, runtime_checkable
 from mcp import Client, MCPError, StdioServerParameters
 from mcp.types import CallToolResult, TextContent
 from nutrition_mcp.schemas import MealItemIn, MealResult, NutritionResult, SearchResult
+from pydantic import BaseModel, ValidationError
 
 SERVER_COMMAND = "nutrition-mcp"
 DATA_DIRS_VARIABLE = "NUTRITION_MCP_DATA_DIRS"
@@ -33,10 +34,12 @@ _VALID_UNITS = re.compile(r"valid units: ([^;]+)")
 
 
 class NutritionError(Exception):
-    """nutrition-mcp refused a call, or could not be asked. The message says which.
+    """nutrition-mcp refused a call, could not be asked, or sent a result that could not be read.
 
-    A refusal carries nutrition-mcp's own message, and `food_id` when one food is to blame. When
-    the connection failed there is no food to blame, so `food_id` is None.
+    A refusal carries nutrition-mcp's own message, and `food_id` when one food is to blame; a
+    refusal whose message names no food has no `food_id`. `unreachable` is set only when
+    nutrition-mcp could not be asked at all (the connection failed or timed out), which says
+    nothing about the foods asked about. Every other error leaves it False.
     """
 
     def __init__(
@@ -44,10 +47,13 @@ class NutritionError(Exception):
         message: str,
         food_id: str | None = None,
         valid_units: list[str] | None = None,
+        *,
+        unreachable: bool = False,
     ) -> None:
         super().__init__(message)
         self.food_id = food_id
         self.valid_units = valid_units or []
+        self.unreachable = unreachable
 
 
 @runtime_checkable
@@ -128,35 +134,52 @@ class NutritionClient:
         arguments: dict[str, Any] = {"query": query, "limit": limit}
         if kind is not None:
             arguments["kind"] = kind
-        return SearchResult.model_validate(await self._call("search_food", arguments))
+        return await self._call("search_food", arguments, SearchResult)
 
     async def nutrition(self, food_id: str, amount: float, unit: str) -> NutritionResult:
         arguments = {"food_id": food_id, "amount": amount, "unit": unit}
-        return NutritionResult.model_validate(await self._call("get_nutrition", arguments, food_id))
+        return await self._call("get_nutrition", arguments, NutritionResult, food_id)
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
         arguments = {"items": [item.model_dump() for item in items]}
-        return MealResult.model_validate(await self._call("compute_meal", arguments))
+        return await self._call("compute_meal", arguments, MealResult)
 
-    async def _call(
-        self, tool: str, arguments: dict[str, Any], food_id: str | None = None
-    ) -> dict[str, Any]:
+    async def _call[T: BaseModel](
+        self, tool: str, arguments: dict[str, Any], result: type[T], food_id: str | None = None
+    ) -> T:
+        """The tool's result as `result`, or a NutritionError. The arguments are never in its
+        message, because they can hold what the user typed."""
+        unreadable = f"nutrition-mcp's result for {tool} could not be read"
         try:
-            result = await self._session.call_tool(tool, arguments)
+            answer = await self._session.call_tool(tool, arguments)
         except (MCPError, OSError, TimeoutError) as exc:
             # A request that timed out, or a connection that closed: the SDK raises these instead
-            # of returning a result. The arguments are left out of the message because they can
-            # hold what the user typed. Cancellation is a BaseException and passes through.
-            detail = str(exc) or type(exc).__name__
-            raise NutritionError(f"nutrition-mcp could not answer {tool}: {detail}") from exc
-        if result.is_error:
-            message = _message(result)
+            # of returning a result. Cancellation is a BaseException and passes through.
+            raise NutritionError(
+                f"nutrition-mcp could not answer {tool}: {_detail(exc)}", unreachable=True
+            ) from exc
+        except (ValidationError, RuntimeError) as exc:
+            # The SDK checks a result against the protocol (ValidationError) and against the
+            # tool's output schema (RuntimeError). Its message can quote the result, which can
+            # echo the arguments, so it stays on the cause.
+            raise NutritionError(unreadable) from exc
+        if answer.is_error:
+            message = _message(answer)
             if food_id is None and (item := _ITEM_FOOD.match(message)):
                 food_id = item.group(1)
             units = _VALID_UNITS.search(message)
             valid_units = units.group(1).split(", ") if units else []
             raise NutritionError(message, food_id, valid_units)
-        content = result.structured_content
+        content = answer.structured_content
         if not isinstance(content, dict):
             raise NutritionError(f"nutrition-mcp sent no structured content for {tool}")
-        return content
+        try:
+            return result.model_validate(content)
+        except ValidationError as exc:
+            raise NutritionError(unreadable) from exc
+
+
+def _detail(exc: Exception) -> str:
+    """What went wrong, on one line. str() of an MCPError is the repr of its arguments."""
+    text = exc.message if isinstance(exc, MCPError) else str(exc)
+    return " ".join(text.split()) or type(exc).__name__

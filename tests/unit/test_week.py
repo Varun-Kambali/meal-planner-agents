@@ -38,9 +38,9 @@ from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
 from meal_planner.llm import ModelPort
 from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.recipes import CheckedRecipe, SlotDraft
-from meal_planner.rules import DayKey, PlanRules
-from meal_planner.week import replace_recipe, run_week
+from meal_planner.recipes import CheckedRecipe, DraftRecipe, SlotDraft
+from meal_planner.rules import DayKey, PlanRules, expand
+from meal_planner.week import replace_recipe, run_week, with_numbers
 from meal_planner.week_events import (
     RecipeChecked,
     RepairStarted,
@@ -587,7 +587,9 @@ class DownNutrition(SpyNutrition):
     """nutrition-mcp when its connection is gone: every call is refused the way the client does."""
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
-        raise NutritionError("nutrition-mcp could not answer compute_meal: Connection closed")
+        raise NutritionError(
+            "nutrition-mcp could not answer compute_meal: Connection closed", unreachable=True
+        )
 
 
 async def test_nutrition_mcp_going_away_fails_the_recipes_and_still_ends_the_week() -> None:
@@ -601,6 +603,55 @@ async def test_nutrition_mcp_going_away_fails_the_recipes_and_still_ends_the_wee
     assert all(day.failures for day in week.days)
     assert week.calls == 4
     assert kinds(events)[-1] == "week_done"
+
+
+def monday_breakfast() -> CheckedRecipe:
+    spec = next(s for s in expand(plan_rules()) if (s.day, s.slot.id) == ("mon", "breakfast"))
+    draft = DraftRecipe.model_validate(recipe_of("breakfast", "mon"))
+    return CheckedRecipe(spec=spec, draft=draft, nutrition=None, failures=[], attempts=1)
+
+
+class FailingNutrition(SpyNutrition):
+    """Raises `errors` in turn for each meal it is asked about, then answers as usual."""
+
+    def __init__(self, *errors: NutritionError) -> None:
+        super().__init__()
+        self.errors = list(errors)
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        if self.errors:
+            self.meals.append([i.food_id for i in items])
+            raise self.errors.pop(0)
+        return await super().meal(items)
+
+
+def refusal_naming_no_food() -> NutritionError:
+    return NutritionError("compute_meal could not work out this meal")
+
+
+def connection_closed() -> NutritionError:
+    return NutritionError(
+        "nutrition-mcp could not answer compute_meal: Connection closed", unreachable=True
+    )
+
+
+async def test_with_numbers_raises_only_when_nutrition_mcp_cannot_be_reached() -> None:
+    """A refusal that names no food is still an answer, so it fails the recipe, not the call."""
+    refused = await with_numbers(
+        monday_breakfast(),
+        nutrition=FailingNutrition(refusal_naming_no_food()),
+        catalogue=catalogue(),
+        raise_if_unreachable=True,
+    )
+    assert [f.check for f in refused.failures] == ["nutrition_failed"]
+
+    with pytest.raises(NutritionError, match="Connection closed"):
+        await with_numbers(
+            monday_breakfast(),
+            nutrition=FailingNutrition(connection_closed(), connection_closed()),
+            catalogue=catalogue(),
+            raise_if_unreachable=True,
+        )
 
 
 async def test_rate_limited_slot_reported_unwritten() -> None:
@@ -850,7 +901,8 @@ async def test_a_recount_that_nutrition_mcp_refuses_keeps_the_recipe_as_written(
         async def meal(self, items: list[MealItemIn]) -> MealResult:
             if all(i.amount == round(i.amount) for i in items):
                 raise NutritionError(
-                    "nutrition-mcp could not answer compute_meal: Connection closed"
+                    "nutrition-mcp could not answer compute_meal: Connection closed",
+                    unreachable=True,
                 )
             return await super().meal(items)
 

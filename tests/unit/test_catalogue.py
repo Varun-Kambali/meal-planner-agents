@@ -126,10 +126,37 @@ async def test_a_server_fault_is_not_reported_as_unknown_ids(tmp_path: Path) -> 
 
     class Down(FakeNutrition):
         async def nutrition(self, food_id: str, amount: float, unit: str) -> Any:
-            raise NutritionError("nutrition-mcp could not answer get_nutrition: Connection closed")
+            raise NutritionError(
+                "nutrition-mcp could not answer get_nutrition: Connection closed", unreachable=True
+            )
 
     with pytest.raises(NutritionError, match="Connection closed"):
         await load(tmp_path, [entry("atta"), entry("besan")], Down({"atta": {}, "besan": {}}))
+
+
+async def test_an_answer_that_cannot_be_read_is_not_reported_as_unknown_ids(tmp_path: Path) -> None:
+    """nutrition-mcp answered, but with nothing about the food: that is its fault, not the id's."""
+
+    class Garbled(FakeNutrition):
+        async def nutrition(self, food_id: str, amount: float, unit: str) -> Any:
+            raise NutritionError("nutrition-mcp's result for get_nutrition could not be read")
+
+    with pytest.raises(NutritionError, match="could not be read"):
+        await load(tmp_path, [entry("atta")], Garbled({"atta": {}}))
+
+
+async def test_a_refused_id_is_reported_and_the_rest_still_load(tmp_path: Path) -> None:
+    class RefusesBesan(FakeNutrition):
+        async def nutrition(self, food_id: str, amount: float, unit: str) -> Any:
+            if food_id == "besan":
+                raise NutritionError("unknown food id 'besan'", "besan")
+            return await super().nutrition(food_id, amount, unit)
+
+    with pytest.raises(CatalogueError) as caught:
+        await load(tmp_path, [entry("atta"), entry("besan")], RefusesBesan({"atta": {}}))
+
+    assert "'besan' is not a food id in nutrition-mcp" in str(caught.value)
+    assert "'atta'" not in str(caught.value)
 
 
 async def test_bad_value_names_the_id_and_field(tmp_path: Path) -> None:
