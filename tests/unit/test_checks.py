@@ -1526,6 +1526,90 @@ def test_a_day_can_fail_on_ingredients_and_cuisine_together() -> None:
     assert checks_of(failures) == ["variety_ingredients", "variety_cuisine"]
 
 
+def clash() -> list[CheckedRecipe]:
+    """Monday and Tuesday alike in ingredients and cuisine."""
+    return pair(["a", "b", "c"], ["a", "b", "c"], cuisines=("Japanese", "Japanese"))
+
+
+MON, TUE = ("mon", "breakfast"), ("tue", "breakfast")
+
+
+def test_a_clash_goes_to_the_recipe_the_caller_prefers() -> None:
+    failures = check_variety(clash(), plan_rules(), settings(), prefer=[{MON}])
+
+    assert set(failures) == {MON}
+    alike, cuisine = failures[MON]
+    # Worded from Monday's side: Tuesday is the recipe it must differ from.
+    assert alike.check == "variety_ingredients"
+    assert "with the tue recipe 'Second dish'" in alike.message
+    assert cuisine.check == "variety_cuisine"
+    assert cuisine.message == (
+        "cuisine 'Japanese' repeats the day after (tue); "
+        "the plan lists other cuisines, so use a different one"
+    )
+
+
+def test_a_title_clash_on_the_earlier_recipe_names_the_later_one() -> None:
+    recipes = [
+        checked(["a"], day="mon", title="Masala oats", cuisine="South Indian"),
+        checked(["x"], day="wed", title="Masala Oats", cuisine="Japanese"),
+    ]
+
+    failures = check_variety(recipes, plan_rules(), settings(), prefer=[{MON}])
+
+    assert only(failures[MON]).message == (
+        "same title as the wed recipe 'Masala Oats'; make a different dish and name it so"
+    )
+
+
+@pytest.mark.parametrize(
+    ("prefer", "blamed"),
+    [
+        ([{MON}, {TUE}], MON),
+        ([{TUE}, {MON}], TUE),
+        ([{MON, TUE}, {MON}], MON),
+        ([set(), {MON}], MON),
+        ([{MON, TUE}, {MON, TUE}], TUE),
+        ([], TUE),
+    ],
+    ids=["first_set", "first_set_other_way", "second_set", "empty_first", "neither", "none"],
+)
+def test_the_first_set_that_tells_the_pair_apart_decides(
+    prefer: list[set[tuple[DayKey, str]]], blamed: tuple[DayKey, str]
+) -> None:
+    failures = check_variety(clash(), plan_rules(), settings(), prefer=prefer)
+
+    assert set(failures) == {blamed}
+    assert checks_of(failures[blamed]) == ["variety_ingredients", "variety_cuisine"]
+
+
+def test_each_pair_is_blamed_on_its_own() -> None:
+    """Wednesday has Monday's title and Tuesday's ingredients; only Monday is preferred."""
+    recipes = [
+        checked(["a", "b"], day="mon", title="One", cuisine="South Indian"),
+        checked(["x", "y"], day="tue", title="Two", cuisine="Japanese"),
+        checked(["x", "y", "z"], day="wed", title="One", cuisine="Mediterranean"),
+    ]
+
+    failures = check_variety(recipes, plan_rules(), settings(), prefer=[{MON}])
+
+    assert checks_of(failures[MON]) == ["variety_title"]
+    assert "the wed recipe 'One'" in failures[MON][0].message
+    # The Tuesday and Wednesday pair has no preference, so the later day takes it.
+    assert set(failures) == {MON, ("wed", "breakfast")}
+    assert checks_of(failures[("wed", "breakfast")]) == ["variety_ingredients"]
+    assert "the tue recipe 'Two'" in failures[("wed", "breakfast")][0].message
+
+
+def test_a_cuisine_outside_the_list_stays_on_its_own_recipe() -> None:
+    recipes = pair(["a"], ["x"], cuisines=("Thai", "Japanese"))
+
+    failures = check_variety(recipes, plan_rules(), settings(), prefer=[{TUE}])
+
+    assert checks_of(failures[MON]) == ["cuisine_not_in_plan"]
+    assert TUE not in failures
+
+
 def test_a_varied_week_has_no_failures() -> None:
     cuisines = ["South Indian", "Japanese", "Mediterranean"]
     days: list[DayKey] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]

@@ -394,69 +394,21 @@ class _Evaluation:
     no_waste: dict[tuple[str, DayKey], Failure]
 
 
-def _ref(recipe: CheckedRecipe) -> str:
-    """How `check_variety` names the earlier recipe of a pair in its messages."""
-    return f"the {recipe.spec.day} recipe '{recipe.draft.title}'"
-
-
-def _seen_from(failure: Failure, new: CheckedRecipe, other: CheckedRecipe) -> Failure:
-    """A clash `check_variety` put on `other`, which comes later, worded for `new`, the earlier."""
-    if failure.check == "variety_cuisine":
-        message = (
-            f"cuisine '{other.draft.cuisine}' repeats the day after ({other.spec.day}); "
-            "the plan lists other cuisines, so use a different one"
-        )
-    else:
-        message = failure.message.replace(_ref(new), _ref(other))
-    return Failure(check=failure.check, message=message)
-
-
-def _variety(
-    recipes: dict[_RecipeKey, CheckedRecipe], deps: _Deps, repairable: frozenset[_RecipeKey]
-) -> dict[_RecipeKey, list[Failure]]:
-    """The variety failures, each on a recipe this run is able to rewrite.
-
-    `check_variety` puts a clash on the later recipe of the pair. When one recipe is written
-    again among others that stay, a clash with a later one would land on a recipe nobody
-    rewrites, and the new one would pass. So the kept recipes are checked without the new one,
-    and a failure that only appears with it moves to it, worded as seen from the new recipe.
-    """
-    rules, s = deps.rules, deps.settings
-    found = check_variety(list(recipes.values()), rules, s)
-    kept = {key: recipe for key, recipe in recipes.items() if key not in repairable}
-    if not kept or len(kept) == len(recipes):
-        return found
-    without_new = check_variety(list(kept.values()), rules, s)
-    for key in kept:
-        old = list(without_new.get(key, []))
-        stay: list[Failure] = []
-        added: list[Failure] = []
-        for failure in found.get(key, []):
-            if failure in old:
-                old.remove(failure)
-                stay.append(failure)
-            else:
-                added.append(failure)
-        # Variety is within a slot, so the new recipe is the one of this slot that can change.
-        new_keys = [k for k in recipes if k in repairable and k[1] == key[1]]
-        if added and len(new_keys) == 1:
-            found[key] = stay
-            found.setdefault(new_keys[0], []).extend(
-                _seen_from(f, recipes[new_keys[0]], recipes[key]) for f in added
-            )
-    return found
-
-
 def _evaluate(
-    recipes: dict[_RecipeKey, CheckedRecipe], deps: _Deps, repairable: frozenset[_RecipeKey]
+    recipes: dict[_RecipeKey, CheckedRecipe],
+    deps: _Deps,
+    repairable: frozenset[_RecipeKey],
+    fresh: frozenset[_RecipeKey],
 ) -> _Evaluation:
     """Every check on the week as it stands, with the failures each recipe is to fix.
 
-    Failures only go to recipes in `repairable`, the ones this run may rewrite: a replacement
-    is checked inside the rest of the week, and what clashes with the rest is its to fix. A day
-    that misses its targets is blamed on one of them, once per failed check, only when every
-    slot of the day is there and none of them fails on its own: those are rewritten first,
-    and the day is then worked out again.
+    A clash between two recipes goes to the one this run may rewrite (`repairable`): a
+    replacement is checked inside the rest of the week, and what clashes with the rest is its to
+    fix. Between two that may both be rewritten it goes to the one written in the latest round
+    (`fresh`), so a recipe that already passed is not rewritten because another changed; when
+    both or neither are, to the later day. A day that misses its targets is blamed on a recipe in
+    `repairable`, once per failed check, only when every slot of the day is there and none of
+    them fails on its own: those are rewritten first, and the day is then worked out again.
     """
     rules, s = deps.rules, deps.settings
     found: dict[_RecipeKey, list[Failure]] = {}
@@ -473,7 +425,8 @@ def _evaluate(
         failures += check_gear_and_time(recipe.draft, rules, recipe.spec.slot)
         failures += check_model_figures(recipe.draft)
         found[key] = failures
-    for key, failures in _variety(recipes, deps, repairable).items():
+    variety = check_variety(list(recipes.values()), rules, s, prefer=[repairable, fresh])
+    for key, failures in variety.items():
         found[key] += failures
 
     day_types = {d.id: d for d in rules.day_types}
@@ -603,7 +556,8 @@ async def _check(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     work, gave_up, restored = _settle_unwritten(state, deps, attempt, rounds_left)
     unwritten = {**state["unwritten"], **gave_up}
     repairable = state["scope"] - unwritten.keys()
-    evaluation = _evaluate({**state["recipes"], **restored}, deps, repairable)
+    fresh = frozenset(state["fresh"])
+    evaluation = _evaluate({**state["recipes"], **restored}, deps, repairable, fresh)
     _announce(state, deps, evaluation)
     if rounds_left:
         busy = {job.slot_id for job in work}

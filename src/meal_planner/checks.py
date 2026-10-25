@@ -18,7 +18,7 @@ Two conventions run through the nutrition checks:
 import math
 import re
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Literal
 
 from nutrition_mcp.models import DIET_SUITABLE_FOR, Nutrients
@@ -465,43 +465,70 @@ def _blame(recipe: CheckedRecipe, key: str, direction: _Direction) -> float:
 # Week checks
 
 
+def spreads_cuisines(rules: PlanRules) -> bool:
+    """Whether the plan lists more than one cuisine, so a cuisine may not repeat the next day.
+
+    Cuisines are counted in plain form, so a plan that spells one cuisine two ways lists one.
+    """
+    return len({_plain(cuisine) for cuisine in rules.food.cuisines}) > 1
+
+
 def check_variety(
-    recipes: list[CheckedRecipe], rules: PlanRules, s: Settings
+    recipes: list[CheckedRecipe],
+    rules: PlanRules,
+    s: Settings,
+    prefer: Sequence[Collection[tuple[DayKey, str]]] = (),
 ) -> dict[tuple[DayKey, str], list[Failure]]:
     """Cuisines from the plan's list, no two recipes of one slot alike, no cuisine twice in a row.
 
     A recipe's cuisine must be one of the plan's. Cuisines, like titles, are compared in plain
-    form (see `_plain`), so "South-Indian" is the listed "South Indian". A recipe is alike an
-    earlier one in its slot when the titles match or the ingredient ids overlap by a Jaccard
-    similarity at or above `variety_jaccard_fail_at`. When the plan lists more than one cuisine, a
-    recipe may not use the listed cuisine of the day before. The later recipe of a pair gets the
-    failure, under its (day, slot id), because it is the one to rewrite.
+    form (see `_plain`), so "South-Indian" is the listed "South Indian". Two recipes of a slot are
+    alike when the titles match or the ingredient ids overlap by a Jaccard similarity at or above
+    `variety_jaccard_fail_at`. When the plan lists more than one cuisine, two recipes on days next
+    to each other may not use the same listed cuisine.
+
+    A clash between two recipes goes to one of them, under its (day, slot id), worded for it: it
+    is the one to rewrite. `prefer` holds sets of (day, slot id) in order: the first set that has
+    one recipe of the pair and not the other picks that one. When none tells them apart, the later
+    day gets the clash.
     """
     listed: dict[str, str] = {}
     for cuisine in rules.food.cuisines:
         listed.setdefault(_plain(cuisine), cuisine)
-    spread_cuisines = len(listed) > 1
+    spread = spreads_cuisines(rules)
     by_slot: dict[str, list[CheckedRecipe]] = defaultdict(list)
     for recipe in recipes:
         by_slot[recipe.spec.slot.id].append(recipe)
 
+    def key(recipe: CheckedRecipe) -> tuple[DayKey, str]:
+        return (recipe.spec.day, recipe.spec.slot.id)
+
+    def blame_earlier(earlier: CheckedRecipe, later: CheckedRecipe) -> bool:
+        for keys in prefer:
+            if (key(earlier) in keys) != (key(later) in keys):
+                return key(earlier) in keys
+        return False
+
     found: dict[tuple[DayKey, str], list[Failure]] = {}
-    for slot_id, in_slot in by_slot.items():
+
+    def add(recipe: CheckedRecipe, failures: list[Failure]) -> None:
+        if failures:
+            found.setdefault(key(recipe), []).extend(failures)
+
+    for in_slot in by_slot.values():
         in_week_order = sorted(in_slot, key=lambda r: DAYS.index(r.spec.day))
         # The plan's spelling of each recipe's cuisine, or None when it is not one of them.
         matched = [listed.get(_plain(r.draft.cuisine)) for r in in_week_order]
         for position, later in enumerate(in_week_order):
-            failures: list[Failure] = []
             if matched[position] is None:
-                failures.append(_unlisted_cuisine(later, rules.food.cuisines))
+                add(later, [_unlisted_cuisine(later, rules.food.cuisines)])
             for before, earlier in enumerate(in_week_order[:position]):
-                failures += _alike(earlier, later, s)
-                if spread_cuisines:
-                    failures += _same_cuisine_next_day(
-                        earlier, later, matched[before], matched[position]
-                    )
-            if failures:
-                found.setdefault((later.spec.day, slot_id), []).extend(failures)
+                blamed, other = (earlier, later)
+                if not blame_earlier(earlier, later):
+                    blamed, other = (later, earlier)
+                add(blamed, _alike(blamed, other, s))
+                if spread and matched[before] == matched[position]:
+                    add(blamed, _same_cuisine_next_day(blamed, other, matched[before]))
     return found
 
 
@@ -513,18 +540,19 @@ def _unlisted_cuisine(recipe: CheckedRecipe, cuisines: Sequence[str]) -> Failure
     )
 
 
-def _alike(earlier: CheckedRecipe, later: CheckedRecipe, s: Settings) -> list[Failure]:
+def _alike(blamed: CheckedRecipe, other: CheckedRecipe, s: Settings) -> list[Failure]:
+    """How `blamed` is alike `other`, worded for `blamed`, which is the one to rewrite."""
     failures: list[Failure] = []
-    before = f"the {earlier.spec.day} recipe '{earlier.draft.title}'"
-    if _plain(earlier.draft.title) == _plain(later.draft.title):
+    them = f"the {other.spec.day} recipe '{other.draft.title}'"
+    if _plain(blamed.draft.title) == _plain(other.draft.title):
         failures.append(
             Failure(
                 check="variety_title",
-                message=f"same title as {before}; make a different dish and name it so",
+                message=f"same title as {them}; make a different dish and name it so",
             )
         )
-    first = {i.id for i in earlier.draft.ingredients}
-    second = {i.id for i in later.draft.ingredients}
+    first = {i.id for i in blamed.draft.ingredients}
+    second = {i.id for i in other.draft.ingredients}
     shared = first & second
     union = first | second
     similarity = len(shared) / len(union)
@@ -532,7 +560,7 @@ def _alike(earlier: CheckedRecipe, later: CheckedRecipe, s: Settings) -> list[Fa
         failures.append(
             Failure(
                 check="variety_ingredients",
-                message=f"shares {len(shared)} of {len(union)} ingredients with {before} "
+                message=f"shares {len(shared)} of {len(union)} ingredients with {them} "
                 f"(similarity {similarity:.2f}, it must stay under "
                 f"{s.variety_jaccard_fail_at:.2f}); use mostly different ingredients",
             )
@@ -541,19 +569,18 @@ def _alike(earlier: CheckedRecipe, later: CheckedRecipe, s: Settings) -> list[Fa
 
 
 def _same_cuisine_next_day(
-    earlier: CheckedRecipe,
-    later: CheckedRecipe,
-    earlier_cuisine: str | None,
-    later_cuisine: str | None,
+    blamed: CheckedRecipe, other: CheckedRecipe, cuisine: str | None
 ) -> list[Failure]:
-    """The cuisines are the plan's spellings; two cuisines outside the list are not a repeat."""
-    day_before = DAYS.index(later.spec.day) - DAYS.index(earlier.spec.day) == 1
-    if day_before and earlier_cuisine is not None and earlier_cuisine == later_cuisine:
+    """`cuisine` is the plan's spelling of the cuisine both recipes use, or None when it is not
+    one of the plan's: two cuisines outside the list are not a repeat."""
+    gap = DAYS.index(blamed.spec.day) - DAYS.index(other.spec.day)
+    if abs(gap) == 1 and cuisine is not None:
+        side = "before" if gap == 1 else "after"
         return [
             Failure(
                 check="variety_cuisine",
-                message=f"cuisine '{earlier_cuisine}' repeats the day before "
-                f"({earlier.spec.day}); the plan lists other cuisines, so use a different one",
+                message=f"cuisine '{cuisine}' repeats the day {side} ({other.spec.day}); "
+                "the plan lists other cuisines, so use a different one",
             )
         ]
     return []

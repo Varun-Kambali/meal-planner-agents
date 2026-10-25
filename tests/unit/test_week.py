@@ -322,6 +322,77 @@ async def test_unmeetable_plan_finishes_with_the_shortfall_stated() -> None:
     assert week.unwritten == []
 
 
+# Which recipe of a clashing pair is rewritten
+
+
+def japanese(recipe: dict[str, Any]) -> dict[str, Any]:
+    """Tuesday's snack is Japanese, so this puts the recipe in its cuisine."""
+    return recipe | {"cuisine": "Japanese"}
+
+
+def mon_snack_repaired_into_tuesdays_cuisine(*then: str) -> SlotModel:
+    """Monday's snack lacks protein; its repair fixes that and takes Tuesday's cuisine."""
+    return model_for(
+        writes={"snack": [changed("snack", without_protein, "mon")]},
+        repairs={
+            "snack": [
+                raw({"slot_id": "snack", "recipes": [japanese(recipe_of("snack", "mon"))]}),
+                *then,
+            ]
+        },
+    )
+
+
+async def test_a_clash_made_in_the_last_round_stays_on_the_recipe_that_changed() -> None:
+    model = mon_snack_repaired_into_tuesdays_cuisine()
+
+    _, week = await run(model, max_repair_attempts=1)
+
+    recipes = by_key(week)
+    mon, tue = recipes[("mon", "snack")], recipes[("tue", "snack")]
+    assert [f.check for f in mon.failures] == ["variety_cuisine"]
+    assert "repeats the day after (tue)" in mon.failures[0].message
+    assert tue.failures == []
+    assert tue.attempts == 1
+    assert week.calls == 5
+
+
+async def test_a_clash_made_by_a_repair_is_repaired_on_that_recipe() -> None:
+    """Tuesday passed and stays as it was: Monday, which changed, is written again."""
+    model = mon_snack_repaired_into_tuesdays_cuisine(repair_reply("snack", "mon"))
+
+    events, week = await run(model)
+
+    recipes = by_key(week)
+    assert recipes[("mon", "snack")].attempts == 3
+    assert recipes[("mon", "snack")].failures == []
+    assert recipes[("tue", "snack")].attempts == 1
+    started = [(e.slot_id, e.days) for e in events if isinstance(e, RepairStarted)]
+    assert started == [("snack", ["mon"]), ("snack", ["mon"])]
+    assert "tue" not in [e.day for e in events if isinstance(e, RecipeChecked) and e.attempt > 1]
+    second, third = [user for _, user in model.of_task("repair_slot")]
+    assert "the day after (tue)" in third
+    assert "the day after" not in second
+
+
+async def test_a_clash_in_the_first_writing_goes_to_the_later_day() -> None:
+    model = model_for(
+        writes={"snack": [changed("snack", lambda r: r | {"cuisine": "South Indian"}, "tue")]},
+        repairs={"snack": [repair_reply("snack", "tue")]},
+    )
+
+    events, week = await run(model)
+
+    checked = {
+        (e.day, e.slot_id): e for e in events if isinstance(e, RecipeChecked) and e.attempt == 1
+    }
+    assert [f.check for f in checked[("tue", "snack")].failures] == ["variety_cuisine"]
+    assert "the day before (mon)" in checked[("tue", "snack")].failures[0].message
+    assert checked[("mon", "snack")].failures == []
+    assert by_key(week)[("tue", "snack")].attempts == 2
+    assert all(r.failures == [] for r in week.recipes)
+
+
 # A reply that cannot be used
 
 
