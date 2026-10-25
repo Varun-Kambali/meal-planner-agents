@@ -662,5 +662,5 @@ def test_the_schema_of_an_export_says_how_the_warnings_are_written_in_json() -> 
 
     no_waste = schema["$defs"]["WeekResult"]["properties"]["no_waste"]
     assert no_waste["type"] == "array"
-    assert no_waste["items"] == {"$ref": "#/$defs/_NoWasteRow"}
+    assert no_waste["items"] == {"$ref": "#/$defs/NoWasteRow"}
     assert schema["properties"]["version"] == {"const": 1, "title": "Version", "type": "integer"}

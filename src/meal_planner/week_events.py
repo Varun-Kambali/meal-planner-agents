@@ -69,7 +69,7 @@ class SlotFailed(_Event):
     final: bool
 
 
-class _NoWasteRow(BaseModel):
+class NoWasteRow(BaseModel):
     ingredient: str
     window_start: DayKey
     failure: Failure
@@ -96,18 +96,18 @@ class WeekResult(BaseModel):
 
     # JSON has no tuple keys, so the warnings travel as a list of rows and come back as a dict.
     # The schema says what a file holds, which is the rows.
-    @field_validator("no_waste", mode="before", json_schema_input_type=list[_NoWasteRow])
+    @field_validator("no_waste", mode="before", json_schema_input_type=list[NoWasteRow])
     @classmethod
     def _rows_to_dict(cls, value: Any) -> Any:
         if isinstance(value, list):
-            rows = [_NoWasteRow.model_validate(row) for row in value]
+            rows = [NoWasteRow.model_validate(row) for row in value]
             return {(row.ingredient, row.window_start): row.failure for row in rows}
         return value
 
     @field_serializer("no_waste", when_used="json")
-    def _dict_to_rows(self, value: dict[tuple[str, DayKey], Failure]) -> list[_NoWasteRow]:
+    def _dict_to_rows(self, value: dict[tuple[str, DayKey], Failure]) -> list[NoWasteRow]:
         return [
-            _NoWasteRow(ingredient=food_id, window_start=start, failure=failure)
+            NoWasteRow(ingredient=food_id, window_start=start, failure=failure)
             for (food_id, start), failure in value.items()
         ]
 
