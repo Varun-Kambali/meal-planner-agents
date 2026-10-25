@@ -445,13 +445,22 @@ def test_rate_limit_429(tmp_path: Path) -> None:
     assert health.status_code == 200
 
 
-class ExplodingModel:
-    """A model that fails with text the user must never see in a log."""
+class ExplodingNutrition(SpyNutrition):
+    """A nutrition-mcp stand-in that breaks its contract part way through a run: after `after`
+    meals it raises a plain exception, with text the user must never see in a log.
 
-    async def structured[T: BaseModel](
-        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
-    ) -> ModelReply[T]:
-        raise RuntimeError(f"provider echoed the request: {MARK}")
+    A model that raises no longer ends a run (the slot is refused instead), so this is how a
+    test reaches the path where the run itself fails after the stream has started.
+    """
+
+    def __init__(self, *extra_ids: str, after: int = 0) -> None:
+        super().__init__(*extra_ids)
+        self.after = after
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        if len(self.meals) >= self.after:
+            raise RuntimeError(f"stand-in echoed the request: {MARK}")
+        return await super().meal(items)
 
 
 def log_entries(captured: str) -> list[dict[str, Any]]:
@@ -461,7 +470,7 @@ def log_entries(captured: str) -> list[dict[str, Any]]:
 def test_a_failure_after_the_stream_starts_ends_with_one_error_event(
     tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    with serving(tmp_path, model=ExplodingModel()) as client:
+    with serving(tmp_path, nutrition=ExplodingNutrition(*EXTRA_FOODS)) as client:
         response = client.post("/v1/week", json=plan_json())
 
     assert response.status_code == 200
@@ -624,7 +633,7 @@ def test_no_rules_text_in_logs_when_the_run_fails(
     records: list[logging.LogRecord],
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    with serving(tmp_path, model=ExplodingModel()) as client:
+    with serving(tmp_path, nutrition=ExplodingNutrition(*EXTRA_FOODS)) as client:
         client.post("/v1/week", json=marked_plan())
 
     assert_no_marker(records, capfd.readouterr())
@@ -991,8 +1000,10 @@ def test_replace_ends_with_an_error_event_when_the_run_fails(
 ) -> None:
     week = a_week(tmp_path)
     capfd.readouterr()
+    # The week is worked out again before the stream starts; the new recipe is not.
+    nutrition = ExplodingNutrition(*EXTRA_FOODS, after=len(week.recipes))
 
-    with serving(tmp_path, model=ExplodingModel()) as client:
+    with serving(tmp_path, model=lunch_again(), nutrition=nutrition) as client:
         response = client.post("/v1/week/replace", json=replace_body(week))
 
     events = parse_stream(response.text)

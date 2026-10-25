@@ -50,7 +50,8 @@ from meal_planner.checks import (
     worst_recipe_for_day,
 )
 from meal_planner.config import Settings
-from meal_planner.llm import INVALID_JSON, SCHEMA_MISMATCH, ModelPort, ModelReply
+from meal_planner.llm import INVALID_JSON, MODEL_ERROR, SCHEMA_MISMATCH, ModelPort, ModelReply
+from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.portions import portion_factor, scale_draft
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure, SlotDraft
@@ -67,6 +68,8 @@ from meal_planner.week_events import (
     WeekResult,
 )
 from meal_planner.week_prompts import Job, repair_prompt, writer_prompt
+
+logger = get_logger(__name__)
 
 _RecipeKey = tuple[DayKey, str]
 
@@ -223,13 +226,22 @@ async def _ask(
     emit = get_stream_writer()
     async with deps.gate:
         emit(started)
-        reply = await deps.model.structured(
-            task=task,
-            system=system,
-            user=user,
-            schema=SlotDraft,
-            timeout_s=deps.settings.slot_call_timeout_s,
-        )
+        try:
+            reply = await deps.model.structured(
+                task=task,
+                system=system,
+                user=user,
+                schema=SlotDraft,
+                timeout_s=deps.settings.slot_call_timeout_s,
+            )
+        except Exception as exc:
+            # The model port promises a reply, never an exception. If one comes anyway it is a
+            # final refusal for this slot only, so the rest of the week goes on. Only the class
+            # is logged: the message could hold the prompt.
+            logger.error(
+                "model_call_raised", extra={"task": task, "error_type": type(exc).__name__}
+            )
+            reply = ModelReply(value=None, raw="", error=MODEL_ERROR)
     usage = _Usage(1, reply.input_tokens, reply.output_tokens, reply.cost_usd)
     days = [spec.day for spec in job.specs]
     last_try = job.attempt > deps.settings.max_repair_attempts

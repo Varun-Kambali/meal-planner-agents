@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
 import time
 from collections.abc import Awaitable, Callable
@@ -121,9 +122,20 @@ def _classify(exc: Exception) -> tuple[str, bool]:
     return MODEL_ERROR, False
 
 
+# A provider's reply is read field by field with getattr, because not every provider fills every
+# field: one with no message is an empty reply, and one with no usage counts zero tokens.
+
+
 def _text(response: Any) -> str:
-    choices = response.choices
-    return str(choices[0].message.content or "") if choices else ""
+    choices = getattr(response, "choices", None)
+    first = choices[0] if isinstance(choices, list | tuple) and choices else None
+    content = getattr(getattr(first, "message", None), "content", None)
+    return str(content or "")
+
+
+def _tokens(response: Any, name: str) -> int:
+    count = getattr(getattr(response, "usage", None), name, None)
+    return int(count) if isinstance(count, int | float) and math.isfinite(count) else 0
 
 
 def _cost(response: Any) -> float | None:
@@ -215,13 +227,12 @@ class LiteLLMModel:
         else:
             raw = _text(response)
             value, error = parse_reply(raw, schema)
-            usage = response.usage
             reply = ModelReply(
                 value=value,
                 raw=raw,
                 error=error,
-                input_tokens=int(usage.prompt_tokens or 0),
-                output_tokens=int(usage.completion_tokens or 0),
+                input_tokens=_tokens(response, "prompt_tokens"),
+                output_tokens=_tokens(response, "completion_tokens"),
                 cost_usd=_cost(response),
                 latency_ms=latency_ms,
                 model=self.model,

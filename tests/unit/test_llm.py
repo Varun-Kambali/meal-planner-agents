@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import litellm
@@ -392,6 +393,48 @@ async def test_a_malformed_reply_is_returned_not_retried() -> None:
 
 async def test_a_reply_with_no_text_is_an_error() -> None:
     reply = await ask(client(StubCompletion(completion(None))))
+
+    assert reply.value is None
+    assert reply.error == "invalid_json"
+    assert reply.raw == ""
+
+
+@pytest.mark.parametrize(
+    "usage",
+    [
+        None,
+        SimpleNamespace(prompt_tokens=None, completion_tokens=None),
+        SimpleNamespace(),
+        SimpleNamespace(prompt_tokens=float("nan"), completion_tokens="7"),
+    ],
+    ids=["no_usage", "null_counts", "no_counts", "not_counts"],
+)
+async def test_a_reply_without_token_counts_has_zero_tokens(usage: Any) -> None:
+    """Some providers send no usage, or usage with no counts; that is zero, not an exception."""
+    choice = SimpleNamespace(message=SimpleNamespace(content=REPLY))
+    response = SimpleNamespace(choices=[choice], usage=usage)
+    if usage is None:
+        del response.usage
+
+    reply = await ask(client(StubCompletion(response)))
+
+    assert reply.value == Dish(name="Rajma", servings=4)
+    assert (reply.input_tokens, reply.output_tokens) == (0, 0)
+    assert reply.error is None
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        SimpleNamespace(choices=[SimpleNamespace()]),
+        SimpleNamespace(choices=[]),
+        SimpleNamespace(choices=None),
+        SimpleNamespace(),
+    ],
+    ids=["no_message", "no_choices", "null_choices", "nothing"],
+)
+async def test_a_response_with_no_message_is_an_error_not_an_exception(response: Any) -> None:
+    reply = await ask(client(StubCompletion(response)))
 
     assert reply.value is None
     assert reply.error == "invalid_json"

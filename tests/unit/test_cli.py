@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import BaseModel
+from nutrition_mcp.schemas import MealItemIn, MealResult
 from week_helpers import (
     PLAN,
     SLOTS,
@@ -24,7 +24,6 @@ from week_helpers import (
 
 from meal_planner.cli import main
 from meal_planner.config import Settings
-from meal_planner.llm import ModelReply
 from meal_planner.week_events import WeekResult
 
 MARK = "ZXQ-MARKER-5512"
@@ -261,17 +260,19 @@ def test_a_failed_start_exits_non_zero_with_one_line(
     assert "LANGSMITH_TRACING" in err[0]
 
 
-class ExplodingModel:
-    async def structured[T: BaseModel](
-        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
-    ) -> ModelReply[T]:
-        raise RuntimeError(f"provider echoed the request: {MARK}")
+class ExplodingNutrition(SpyNutrition):
+    """Breaks the nutrition port's contract during the run, with text that must stay unseen."""
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        raise RuntimeError(f"stand-in echoed the request: {MARK}")
 
 
 def test_a_run_that_fails_says_only_what_kind_of_failure_it_was(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = run_cli(tmp_path, "week", str(rules_file(tmp_path)), model=ExplodingModel())
+    nutrition = ExplodingNutrition(*EXTRA_FOODS)
+
+    code = run_cli(tmp_path, "week", str(rules_file(tmp_path)), nutrition=nutrition)
 
     captured = capsys.readouterr()
     assert code == 1

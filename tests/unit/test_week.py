@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from fakes import FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, MealResult
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from week_helpers import (
     FIXTURES,
     PLAN,
@@ -36,7 +36,7 @@ from week_helpers import (
 
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
-from meal_planner.llm import ModelPort
+from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.recipes import CheckedRecipe, DraftRecipe, SlotDraft
 from meal_planner.rules import DayKey, PlanRules, expand
@@ -758,6 +758,58 @@ async def test_rate_limited_slot_reported_unwritten() -> None:
     # The slots that were written are complete, and every day says it lacks its lunch.
     assert all(r.attempts == 1 and r.failures == [] for r in week.recipes)
     assert all(day.failures for day in week.days)
+    assert kinds(events)[-1] == "week_done"
+
+
+class RaisesFor:
+    """A model whose call for one slot and task raises, as a broken stand-in or library might."""
+
+    def __init__(self, inner: SlotModel, slot_id: str, task: str, error: Exception) -> None:
+        self.inner, self.slot_id, self.task, self.error = inner, slot_id, task, error
+
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        if task == self.task and f'slot_id: "{self.slot_id}"' in user:
+            raise self.error
+        return await self.inner.structured(
+            task=task, system=system, user=user, schema=schema, timeout_s=timeout_s
+        )
+
+
+async def test_a_model_call_that_raises_fails_only_its_slot(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    model = RaisesFor(model_for(), "lunch", "write_slot", RuntimeError("Vegetarian, no onions"))
+
+    events, week = await run(model)
+
+    assert week.unwritten == [
+        (day, "lunch", "model_error") for day in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    ]
+    assert len(week.recipes) == 21
+    assert all(r.failures == [] for r in week.recipes)
+    assert week.calls == 4
+    (failed,) = [e for e in events if isinstance(e, SlotFailed)]
+    assert (failed.slot_id, failed.reason, failed.final) == ("lunch", "model_error", True)
+    assert kinds(events)[-1] == "week_done"
+    err = capsys.readouterr().err
+    assert '"event": "model_call_raised"' in err
+    assert '"error_type": "RuntimeError"' in err
+    assert "onions" not in err
+
+
+async def test_a_repair_call_that_raises_leaves_the_recipes_as_they_were() -> None:
+    inner = model_for(writes={"breakfast": [changed("breakfast", without_protein, "mon")]})
+    model = RaisesFor(inner, "breakfast", "repair_slot", KeyError("usage"))
+
+    events, week = await run(model)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert [f.check for f in mon.failures] == ["slot_protein_g"]
+    assert mon.attempts == 2
+    assert week.unwritten == []
+    assert kinds(events).count("repair_started") == 1
     assert kinds(events)[-1] == "week_done"
 
 
