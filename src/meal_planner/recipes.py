@@ -33,8 +33,9 @@ class DraftRecipe(_Model):
     cuisine: Cuisine
     ingredients: list[DraftIngredient] = Field(min_length=1, max_length=15)
     steps: list[Step] = Field(min_length=1, max_length=10)
-    active_min: int
-    total_min: int
+    # Minutes; the total includes the active time.
+    active_min: int = Field(ge=0)
+    total_min: int = Field(ge=0)
     gear: list[Gear]
     cook_when: CookWhen
     store: str

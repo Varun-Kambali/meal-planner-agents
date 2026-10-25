@@ -208,7 +208,8 @@ def check_slot_targets(draft_nutrition: MealResult, spec: SlotSpec, s: Settings)
 
 
 def check_gear_and_time(draft: DraftRecipe, rules: PlanRules, slot: Slot) -> list[Failure]:
-    """Only gear the user owns, and active and total minutes within the slot's limits."""
+    """Only gear the user owns, active and total minutes within the slot's limits, and no more
+    active minutes than total minutes, since the total includes the active time."""
     failures: list[Failure] = []
     owned = set(rules.gear)
     missing = [g for g in dict.fromkeys(draft.gear) if g not in owned]
@@ -234,6 +235,14 @@ def check_gear_and_time(draft: DraftRecipe, rules: PlanRules, slot: Slot) -> lis
                 check="total_min",
                 message=f"total time {draft.total_min} min, "
                 f"slot allows at most {slot.max_total_min} min",
+            )
+        )
+    if draft.active_min > draft.total_min:
+        failures.append(
+            Failure(
+                check="time",
+                message=f"active time {draft.active_min} min is more than the total time "
+                f"{draft.total_min} min; the total includes the active time",
             )
         )
     return failures

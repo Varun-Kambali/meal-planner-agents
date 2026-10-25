@@ -561,7 +561,27 @@ def test_gear_and_minutes_are_reported_together() -> None:
 
     failures = check_gear_and_time(draft(gear=["oven"], active_min=99, total_min=20), rules, slot())
 
-    assert checks_of(failures) == ["gear", "active_min"]
+    assert checks_of(failures) == ["gear", "active_min", "time"]
+
+
+@pytest.mark.parametrize(
+    ("active", "total", "expected"),
+    [(20, 20, []), (21, 20, ["time"]), (0, 0, []), (1, 0, ["time"])],
+)
+def test_active_minutes_may_not_exceed_total_minutes(
+    active: int, total: int, expected: list[str]
+) -> None:
+    failures = check_gear_and_time(draft(active_min=active, total_min=total), plan_rules(), slot())
+
+    assert checks_of(failures) == expected
+
+
+def test_the_time_message_says_the_total_includes_the_active_time() -> None:
+    failure = only(check_gear_and_time(draft(active_min=25, total_min=15), plan_rules(), slot()))
+
+    assert failure.message == (
+        "active time 25 min is more than the total time 15 min; the total includes the active time"
+    )
 
 
 # Nutrition figures in the model's text

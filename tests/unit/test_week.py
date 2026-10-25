@@ -50,6 +50,7 @@ from meal_planner.week_events import (
     WeekEvent,
     WeekResult,
 )
+from meal_planner.week_prompts import Job, repair_prompt, writer_prompt
 
 pytestmark = pytest.mark.anyio
 
@@ -1579,6 +1580,95 @@ async def test_both_prompts_keep_nutrition_figures_out_of_the_text(hints: bool) 
             "afterwards in code from your ingredients and grams.\n"
         ) in system
         assert "ignored" not in system
+
+
+def prompts_for(rules: PlanRules, cat: Catalogue | None = None) -> dict[str, tuple[str, str]]:
+    """The writer's and the repairer's (system, user) prompts for the plan's breakfast."""
+    specs = [spec for spec in expand(rules) if spec.slot.id == "breakfast"]
+    job = Job("breakfast", specs, 1, None, [], [])
+    allowed = (cat or catalogue()).allowed_for(rules)
+    return {
+        "writer": writer_prompt(rules, Settings(), allowed, job),
+        "repair": repair_prompt(rules, Settings(), allowed, job),
+    }
+
+
+WRITER_CUISINE_RULE = "Do not use the same cuisine on two days in a row."
+REPAIR_CUISINE_RULE = "Do not give it the same cuisine as the day before or the day after."
+
+
+@pytest.mark.parametrize(
+    "cuisines",
+    [["South Indian"], ["South Indian", "south-indian"]],
+    ids=["one", "one_spelled_twice"],
+)
+def test_a_plan_with_one_cuisine_is_not_told_to_vary_it(cuisines: list[str]) -> None:
+    """The check lets a one-cuisine plan repeat it, so the prompts must not forbid that."""
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    plan["food"]["cuisines"] = cuisines
+
+    prompts = prompts_for(PlanRules.model_validate(plan))
+
+    writer, repair = prompts["writer"][0], prompts["repair"][0]
+    assert WRITER_CUISINE_RULE not in writer
+    assert REPAIR_CUISINE_RULE not in repair
+    assert "no two rest on mostly the same ingredients.\n- Name each recipe's cuisine" in writer
+    assert (
+        "- Keep each fixed recipe different from the slot's other recipes in the data block: "
+        "another title and mostly different ingredients.\n- Name each recipe's cuisine"
+    ) in repair
+
+
+def test_a_plan_with_more_cuisines_is_told_not_to_repeat_one_the_next_day() -> None:
+    prompts = prompts_for(plan_rules())
+
+    assert (
+        "no two rest on mostly the same ingredients. Do not use the same cuisine on two days in "
+        "a row.\n"
+    ) in prompts["writer"][0]
+    assert (
+        "another title and mostly different ingredients. Do not give it the same cuisine as the "
+        "day before or the day after.\n"
+    ) in prompts["repair"][0]
+
+
+def test_only_liked_foods_the_plan_allows_are_listed() -> None:
+    """Curd is excluded by name, almonds by allergen and eggs by diet: none may be suggested."""
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    plan["food"] |= {
+        "exclude_allergens": ["peanut", "tree_nuts"],
+        "exclude_foods": ["brinjal", "curd"],
+        "liked_foods": ["curd", "paneer", "almonds", "egg", "moong_dal"],
+    }
+    rules = PlanRules.model_validate(plan)
+    almonds = catalogue().items["almonds"].model_copy(update={"allergens": ["tree_nuts"]})
+    egg = item("egg").model_copy(update={"diet": "egg"})
+    cat = Catalogue({**catalogue().items, "almonds": almonds, "egg": egg})
+
+    for _, user in prompts_for(rules, cat).values():
+        assert '\nliked_foods: "paneer", "moong_dal"\n' in user
+
+
+def test_no_liked_food_the_plan_allows_reads_none() -> None:
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    plan["food"] |= {"exclude_foods": ["paneer", "moong_dal"]}
+
+    for _, user in prompts_for(PlanRules.model_validate(plan)).values():
+        assert "\nliked_foods: none\n" in user
+
+
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_say_active_minutes_are_part_of_the_total(hints: bool) -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert "with active minutes no more than total minutes" in system
 
 
 async def test_writer_prompt_snapshot() -> None:

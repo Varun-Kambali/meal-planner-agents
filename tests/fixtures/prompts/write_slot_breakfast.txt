@@ -16,7 +16,7 @@ The user message holds a block between <data> and </data>. It describes the slot
 - The reply has no fields for calories, protein or any other nutrient, and its text (the title, the steps, "store", "swap" and "fits") must not contain any nutrition figure, such as calories or grams of protein, because every figure is worked out afterwards in code from your ingredients and grams.
 - Make the slot's recipes different dishes. No two share a title, and no two rest on mostly the same ingredients. Do not use the same cuisine on two days in a row.
 - Name each recipe's cuisine exactly as one of the listed cuisines.
-- Use only the listed gear. Keep active minutes and total minutes within the limits in the data block, and set "cook_when" to the slot's value.
+- Use only the listed gear. Keep active minutes and total minutes within the limits in the data block, with active minutes no more than total minutes, and set "cook_when" to the slot's value.
 - Keep the steps short: at most 10, each under 200 characters. The title is under 80 characters. "store" is one sentence on how to keep the dish, "swap" one ingredient swap, and "fits" one sentence on how the dish suits the slot.
 - Prefer the liked foods when they suit the dish.
 
