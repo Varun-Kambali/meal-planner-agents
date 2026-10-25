@@ -569,7 +569,9 @@ async def test_nutrition_mcp_refusing_a_recipe_is_a_failure_not_a_crash() -> Non
     odd = changed("snack", lambda r: r | {"ingredients": [{"id": "mystery", "grams": 100}]}, "fri")
     model = model_for(writes={"snack": [odd]}, repairs={"snack": [repair_reply("snack", "fri")]})
 
-    events, week = await run(model, cat=catalogue(item("mystery")))
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition, cat=catalogue(item("mystery")))
 
     friday = by_key(week)[("fri", "snack")]
     assert friday.attempts == 2
@@ -581,28 +583,77 @@ async def test_nutrition_mcp_refusing_a_recipe_is_a_failure_not_a_crash() -> Non
     )
     assert [f.check for f in first.failures] == ["nutrition_failed"]
     assert "mystery" in first.failures[0].message
+    # A refusal is an answer: it is not asked again, and the writer changes the ingredient.
+    assert sum("mystery" in meal for meal in nutrition.meals) == 1
+    assert [t for t, _, _ in model.calls].count("repair_slot") == 1
 
 
 class DownNutrition(SpyNutrition):
     """nutrition-mcp when its connection is gone: every call is refused the way the client does."""
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
+        self.meals.append([i.food_id for i in items])
         raise NutritionError(
             "nutrition-mcp could not answer compute_meal: Connection closed", unreachable=True
         )
 
 
-async def test_nutrition_mcp_going_away_fails_the_recipes_and_still_ends_the_week() -> None:
-    events, week = await run(model_for(), nutrition=DownNutrition(), max_repair_attempts=0)
+async def test_nutrition_mcp_going_away_is_not_repaired_and_still_ends_the_week() -> None:
+    """The recipes are not at fault, so no repair is asked for, and none is shown as passing."""
+    nutrition = DownNutrition()
+
+    events, week = await run(model_for(), nutrition=nutrition)
 
     assert len(week.recipes) == 28
     assert all(r.nutrition is None for r in week.recipes)
     for recipe in week.recipes:
-        assert [f.check for f in recipe.failures] == ["nutrition_failed"]
-        assert "Connection closed" in recipe.failures[0].message
+        assert [f.check for f in recipe.failures] == ["nutrition_unavailable"]
+        assert recipe.failures[0].message == (
+            "numbers not known: nutrition-mcp could not be reached"
+        )
+        assert recipe.attempts == 1
     assert all(day.failures for day in week.days)
     assert week.calls == 4
+    assert "repair_started" not in kinds(events)
+    # Each recipe was asked about twice: once, and once more after the first failed.
+    assert len(nutrition.meals) == 2 * 28
     assert kinds(events)[-1] == "week_done"
+
+
+async def test_a_recount_that_fails_once_passes_on_the_second_try() -> None:
+    nutrition = FailingNutrition(connection_closed())
+
+    events, week = await run(model_for(), nutrition=nutrition)
+
+    assert all(r.failures == [] and r.nutrition is not None for r in week.recipes)
+    assert all(d.failures == [] for d in week.days)
+    assert len(nutrition.meals) == 28 + 1
+    assert week.calls == 4
+    assert "repair_started" not in kinds(events)
+
+
+async def test_an_unavailable_recipe_is_left_while_its_slot_is_repaired() -> None:
+    """Only Monday's breakfast is counted while nutrition-mcp is down; Tuesday's still repairs."""
+
+    class DownForMonday(SpyNutrition):
+        async def meal(self, items: list[MealItemIn]) -> MealResult:
+            if "banana" in [i.food_id for i in items]:
+                raise NutritionError("could not answer compute_meal: closed", unreachable=True)
+            return await super().meal(items)
+
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "tue")]},
+        repairs={"breakfast": [repair_reply("breakfast", "tue")]},
+    )
+
+    events, week = await run(model, nutrition=DownForMonday())
+
+    recipes = by_key(week)
+    assert [f.check for f in recipes[("mon", "breakfast")].failures] == ["nutrition_unavailable"]
+    assert recipes[("mon", "breakfast")].attempts == 1
+    assert recipes[("tue", "breakfast")].failures == []
+    started = [(e.slot_id, e.days) for e in events if isinstance(e, RepairStarted)]
+    assert started == [("breakfast", ["tue"])]
 
 
 def monday_breakfast() -> CheckedRecipe:
@@ -652,6 +703,43 @@ async def test_with_numbers_raises_only_when_nutrition_mcp_cannot_be_reached() -
             catalogue=catalogue(),
             raise_if_unreachable=True,
         )
+
+
+@pytest.mark.parametrize("raise_if_unreachable", [True, False])
+async def test_with_numbers_asks_once_more_when_nutrition_mcp_cannot_be_reached(
+    raise_if_unreachable: bool,
+) -> None:
+    nutrition = FailingNutrition(connection_closed())
+
+    recipe = await with_numbers(
+        monday_breakfast(),
+        nutrition=nutrition,
+        catalogue=catalogue(),
+        raise_if_unreachable=raise_if_unreachable,
+    )
+
+    assert recipe.nutrition is not None
+    assert recipe.failures == []
+    assert len(nutrition.meals) == 2
+
+
+async def test_with_numbers_gives_up_after_the_second_try() -> None:
+    nutrition = FailingNutrition(connection_closed(), connection_closed())
+
+    recipe = await with_numbers(monday_breakfast(), nutrition=nutrition, catalogue=catalogue())
+
+    assert recipe.nutrition is None
+    assert [f.check for f in recipe.failures] == ["nutrition_unavailable"]
+    assert len(nutrition.meals) == 2
+
+
+async def test_with_numbers_does_not_ask_again_after_a_refusal() -> None:
+    nutrition = FailingNutrition(refusal_naming_no_food())
+
+    recipe = await with_numbers(monday_breakfast(), nutrition=nutrition, catalogue=catalogue())
+
+    assert [f.check for f in recipe.failures] == ["nutrition_failed"]
+    assert len(nutrition.meals) == 1
 
 
 async def test_rate_limited_slot_reported_unwritten() -> None:

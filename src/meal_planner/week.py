@@ -15,6 +15,10 @@ range, the wrong recipes for the days asked) fails the attempt for the whole slo
 of the week goes on. A rate limit or timeout is not tried again here: the model client has
 already retried it, so the slot is reported unwritten with the reason.
 
+When nutrition-mcp cannot be reached for a recipe's numbers, it is asked once more; if it still
+cannot be, the recipe is marked `nutrition_unavailable` and not repaired, because the writer
+cannot fix that, and it is reported as failing.
+
 Progress goes out as events while the graph runs. The model is only ever asked for words and
 for grams of catalogue ingredients; every nutrition number comes from nutrition-mcp.
 """
@@ -31,7 +35,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import Overwrite, Send
-from nutrition_mcp.schemas import MealItemIn
+from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import ValidationError
 
 from meal_planner.catalogue import Catalogue, CatalogueItem
@@ -69,6 +73,11 @@ _RecipeKey = tuple[DayKey, str]
 # The check name of a recipe that nutrition-mcp refused. Every other failure is worked out again
 # on each pass; this one is carried, because the refusal is not repeated.
 NUTRITION_FAILED = "nutrition_failed"
+# The check name of a recipe whose numbers are not known because nutrition-mcp could not be
+# reached, even when asked twice. That is not the recipe's fault, so it is never sent to repair;
+# it is carried to the end like a refusal, and the recipe is reported as failing.
+NUTRITION_UNAVAILABLE = "nutrition_unavailable"
+_CARRIED = (NUTRITION_FAILED, NUTRITION_UNAVAILABLE)
 
 
 # Graph state and the work handed to a node
@@ -332,11 +341,12 @@ async def with_numbers(
 ) -> CheckedRecipe:
     """The recipe with its numbers from nutrition-mcp, or with the reason it has none.
 
-    A recipe nutrition-mcp refuses gets no numbers and a `nutrition_failed` failure. When
-    nutrition-mcp could not be asked at all (`NutritionError.unreachable`), the graph treats that
-    the same way, so one bad moment fails recipes and not the week. A caller that has no week to
-    protect passes `raise_if_unreachable` to get that error instead; a refusal is the recipe's
-    either way.
+    A recipe nutrition-mcp refuses gets no numbers and a `nutrition_failed` failure, which the
+    writer can fix by changing an ingredient. When nutrition-mcp could not be asked at all
+    (`NutritionError.unreachable`), it is asked once more; if that fails too, the recipe gets
+    `nutrition_unavailable`, so one bad moment fails recipes and not the week. A caller that has
+    no week to protect passes `raise_if_unreachable` to get that error instead; a refusal is the
+    recipe's either way.
     """
     ingredients = recipe.draft.ingredients
     if any(i.id not in catalogue.items for i in ingredients):
@@ -344,15 +354,33 @@ async def with_numbers(
         return recipe
     items = [MealItemIn(food_id=i.id, amount=i.grams, unit="g") for i in ingredients]
     try:
-        meal = await nutrition.meal(items)
+        meal = await _meal(nutrition, items)
     except NutritionError as exc:
-        if raise_if_unreachable and exc.unreachable:
+        if exc.unreachable and raise_if_unreachable:
             raise
-        failure = Failure(
-            check=NUTRITION_FAILED, message=f"nutrition-mcp could not work out this recipe: {exc}"
+        failure = (
+            Failure(
+                check=NUTRITION_UNAVAILABLE,
+                message="numbers not known: nutrition-mcp could not be reached",
+            )
+            if exc.unreachable
+            else Failure(
+                check=NUTRITION_FAILED,
+                message=f"nutrition-mcp could not work out this recipe: {exc}",
+            )
         )
         return recipe.model_copy(update={"failures": [failure]})
     return recipe.model_copy(update={"nutrition": meal})
+
+
+async def _meal(nutrition: NutritionPort, items: list[MealItemIn]) -> MealResult:
+    """compute_meal, asked once more when nutrition-mcp could not be reached the first time."""
+    try:
+        return await nutrition.meal(items)
+    except NutritionError as exc:
+        if not exc.unreachable:
+            raise
+    return await nutrition.meal(items)
 
 
 async def _numbered(recipe: CheckedRecipe, deps: _Deps) -> CheckedRecipe:
@@ -414,11 +442,11 @@ def _evaluate(
     rules, s = deps.rules, deps.settings
     found: dict[_RecipeKey, list[Failure]] = {}
     for key, recipe in recipes.items():
-        # A refusal is only carried while there are no numbers.
+        # Why there are no numbers is only carried while there are none.
         failures = (
             []
             if recipe.nutrition is not None
-            else [f for f in recipe.failures if f.check == NUTRITION_FAILED]
+            else [f for f in recipe.failures if f.check in _CARRIED]
         )
         failures += check_catalogue(recipe.draft, deps.catalogue, rules)
         if recipe.nutrition is not None:
@@ -507,14 +535,21 @@ def _repair_jobs(
     attempt: int,
     busy: set[str],
 ) -> list[Job]:
-    """One job for each slot not already being written whose recipes still fail."""
+    """One job for each slot not already being written whose recipes still fail.
+
+    A recipe whose numbers could not be had from nutrition-mcp is left out: the writer cannot
+    fix that, and rewriting it would only spend a call.
+    """
     rank = _rank(deps)
     jobs: list[Job] = []
     for slot in deps.rules.slots:
         failing = [
-            evaluation.recipes[key]
+            recipe
             for key in sorted(repairable, key=rank)
-            if key[1] == slot.id and key in evaluation.recipes and evaluation.recipes[key].failures
+            if key[1] == slot.id
+            and (recipe := evaluation.recipes.get(key)) is not None
+            and recipe.failures
+            and not any(f.check == NUTRITION_UNAVAILABLE for f in recipe.failures)
         ]
         # A call that gave nothing because the model could not be reached was already retried
         # by the model client: leave the slot, and its recipes keep the failures they have.
