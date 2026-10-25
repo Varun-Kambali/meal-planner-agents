@@ -119,6 +119,74 @@ def test_day_type_ids_unique() -> None:
 
 
 @pytest.mark.parametrize(
+    ("nutrient", "field"),
+    [
+        ("kcal", "kcal"),
+        ("protein_g", "protein_g"),
+        ("sat_fat_g", "sat_fat_g_max"),
+        ("fibre_g", "fibre_g_min"),
+        ("carbs_available_g", "carbs_g"),
+        ("fat_g", "fat_g"),
+    ],
+)
+def test_an_extra_target_may_not_repeat_a_target_the_day_type_already_has(
+    nutrient: str, field: str
+) -> None:
+    plan = set_at(load_plan(), ("day_types", 1, "extra", 0, "nutrient"), nutrient)
+
+    with pytest.raises(ValidationError) as err:
+        PlanRules.model_validate(plan)
+
+    (error,) = err.value.errors()
+    assert error["loc"] == ("day_types", 1, "extra")
+    assert error["msg"] == (
+        f"Value error, extra: '{nutrient}' repeats a target the day type already has; "
+        f"set it in {field} and take it out of extra"
+    )
+
+
+def test_every_repeated_core_target_is_named_at_once() -> None:
+    extra = [
+        {"nutrient": "kcal", "kind": "max", "value": 2500},
+        {"nutrient": "iron_mg", "kind": "min", "value": 15},
+        {"nutrient": "fat_g", "kind": "max", "value": 90},
+    ]
+    plan = set_at(load_plan(), ("day_types", 0, "extra"), extra)
+
+    with pytest.raises(ValidationError) as err:
+        PlanRules.model_validate(plan)
+
+    (error,) = err.value.errors()
+    assert "'kcal'" in error["msg"]
+    assert "'fat_g'" in error["msg"]
+    assert "iron_mg" not in error["msg"]
+
+
+def test_an_extra_target_may_not_be_listed_twice_for_one_nutrient() -> None:
+    extra = [
+        {"nutrient": "calcium_mg", "kind": "min", "value": 1000},
+        {"nutrient": "calcium_mg", "kind": "max", "value": 2500},
+    ]
+    plan = set_at(load_plan(), ("day_types", 0, "extra"), extra)
+
+    with pytest.raises(ValidationError) as err:
+        PlanRules.model_validate(plan)
+
+    (error,) = err.value.errors()
+    assert error["loc"] == ("day_types", 0, "extra")
+    assert error["msg"] == (
+        "Value error, extra: 'calcium_mg' is listed more than once; "
+        "a day type has one extra target for each nutrient"
+    )
+
+
+def test_extra_targets_for_other_nutrients_are_accepted() -> None:
+    rules = PlanRules.model_validate(load_plan())
+
+    assert [t.nutrient for t in rules.day_types[0].extra] == ["calcium_mg", "sodium_mg"]
+
+
+@pytest.mark.parametrize(
     "path",
     [
         ("surprise",),

@@ -13,6 +13,7 @@ from nutrition_mcp.schemas import MealResult
 
 from meal_planner.catalogue import Catalogue, CatalogueItem
 from meal_planner.checks import (
+    LABELS,
     check_catalogue,
     check_day,
     check_day_totals,
@@ -25,7 +26,15 @@ from meal_planner.checks import (
 )
 from meal_planner.config import Settings
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftIngredient, DraftRecipe, Failure
-from meal_planner.rules import DayKey, DayType, NutrientTarget, PlanRules, Slot, SlotSpec
+from meal_planner.rules import (
+    CORE_TARGET_FIELDS,
+    DayKey,
+    DayType,
+    NutrientTarget,
+    PlanRules,
+    Slot,
+    SlotSpec,
+)
 
 PLAN = Path(__file__).resolve().parent.parent / "fixtures" / "plans" / "office_weekday.json"
 
@@ -226,7 +235,9 @@ def only(failures: list[Failure]) -> Failure:
 
 def test_every_nutrient_key_can_be_a_day_target() -> None:
     """Each key nutrition-mcp reports has a name and a unit for the messages."""
-    for key in NUTRIENT_KEYS:
+    assert set(LABELS) == set(NUTRIENT_KEYS)
+    # The day type's own targets are fields of it, and the rules refuse them as extras.
+    for key in (k for k in NUTRIENT_KEYS if k not in CORE_TARGET_FIELDS):
         target = NutrientTarget(nutrient=key, kind="min", value=10)
         failures, _ = check_day_totals(
             day_total(**{key: 1}), {}, day_type(extra=[target]), settings()
