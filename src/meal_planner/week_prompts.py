@@ -35,7 +35,8 @@ class Job:
 
 
 @cache
-def _template(name: str) -> str:
+def template(name: str) -> str:
+    """The text of a file in `prompts/`."""
     return resources.files("meal_planner").joinpath("prompts", name).read_text(encoding="utf-8")
 
 
@@ -88,17 +89,17 @@ def _system(name: str, rules: PlanRules, allowed: list[CatalogueItem], hints: bo
     return re.sub(
         r"\{\{(catalogue|catalogue_format|per_100g_note|cuisine_rule)\}\}",
         lambda m: values[m[1]],
-        _template(name),
+        template(name),
     )
 
 
-def _quote(text: str) -> str:
+def quote(text: str) -> str:
     """The text as a JSON string with angle brackets escaped, so it cannot close the data block."""
     return json.dumps(text, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
 
 
 def _ident(text: str) -> str:
-    return text if re.fullmatch(r"[a-z][a-z0-9_]*", text) else _quote(text)
+    return text if re.fullmatch(r"[a-z][a-z0-9_]*", text) else quote(text)
 
 
 def _target(spec: SlotSpec, s: Settings) -> str:
@@ -157,16 +158,16 @@ def _slot_lines(
         return f"{line}; the slot's share of the day's limits: {limits}"
 
     return [
-        f"slot_id: {_quote(slot.id)}",
-        f"slot_name: {_quote(slot.name)}",
-        f"style: {_quote(slot.style)}",
+        f"slot_id: {quote(slot.id)}",
+        f"slot_name: {quote(slot.name)}",
+        f"style: {quote(slot.style)}",
         f"cook_when: {slot.cook_when}",
         f"max_active_min: {slot.max_active_min}",
         f"max_total_min: {slot.max_total_min}",
         f"diet: {food.diet}",
         f"gear: {', '.join(rules.gear)}",
-        f"cuisines: {', '.join(_quote(c) for c in food.cuisines)}",
-        f"liked_foods: {', '.join(_quote(f) for f in liked) or 'none'}",
+        f"cuisines: {', '.join(quote(c) for c in food.cuisines)}",
+        f"liked_foods: {', '.join(quote(f) for f in liked) or 'none'}",
         "days:",
         *(day_line(spec) for spec in specs),
     ]
@@ -176,7 +177,7 @@ def _summary(recipe: CheckedRecipe) -> str:
     draft = recipe.draft
     ids = ", ".join(_ident(i.id) for i in draft.ingredients)
     return (
-        f"- {recipe.spec.day}: {_quote(draft.title)}, cuisine {_quote(draft.cuisine)}, "
+        f"- {recipe.spec.day}: {quote(draft.title)}, cuisine {quote(draft.cuisine)}, "
         f"ingredients {ids}"
     )
 
@@ -186,8 +187,8 @@ def _fix_lines(recipe: CheckedRecipe) -> list[str]:
     grams = ", ".join(f"{_ident(i.id)} {i.grams:g} g" for i in draft.ingredients)
     lines = [
         f"- day: {recipe.spec.day}",
-        f"  title: {_quote(draft.title)}",
-        f"  cuisine: {_quote(draft.cuisine)}",
+        f"  title: {quote(draft.title)}",
+        f"  cuisine: {quote(draft.cuisine)}",
         f"  ingredients: {grams}",
         f"  minutes: active {draft.active_min}, total {draft.total_min}",
         f"  gear: {', '.join(draft.gear) or 'none'}",
@@ -205,7 +206,7 @@ def _fix_lines(recipe: CheckedRecipe) -> list[str]:
     return [
         *lines,
         "  failed checks:",
-        *(f"  - {_quote(failure.message)}" for failure in recipe.failures),
+        *(f"  - {quote(failure.message)}" for failure in recipe.failures),
     ]
 
 
@@ -223,7 +224,7 @@ def _user(
         ]
     text = "\n".join(["<data>", *lines, "</data>"])
     if job.rejected:
-        text += f"\nYour previous reply was rejected: {_quote(job.rejected)}. Fix that."
+        text += f"\nYour previous reply was rejected: {quote(job.rejected)}. Fix that."
     return f"{text}\n{closing}"
 
 
