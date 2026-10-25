@@ -221,3 +221,5 @@ async def test_the_readers_foods_are_the_ones_the_server_lists(live: NutritionCl
         assert listed.units == {"g": 1.0, **units}, food_id
         assert listed.name == NAMES[food_id], food_id
         assert listed.kind == KINDS.get(food_id, "ingredient"), food_id
+    for food_id, aliases in ALIASES.items():
+        assert (await live.nutrition(food_id, 1, "g")).food.aliases == aliases, food_id

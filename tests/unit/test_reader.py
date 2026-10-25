@@ -299,6 +299,48 @@ async def test_two_eggs_uses_catalogue_measure(unit: str | None, shown: str) -> 
     assert nutrition.asked[1][1].startswith("egg 2 ")
 
 
+@pytest.mark.parametrize(
+    ("name", "food_id", "grams", "kcal"),
+    [("idli", "idli", 80, 96), ("roti", "chapati", 80, 240)],
+)
+async def test_a_count_of_the_food_itself_reads_through_the_piece_measure(
+    name: str, food_id: str, grams: float, kcal: float
+) -> None:
+    # "2 idlis" and "2 rotis": the unit word is the food, so the model leaves the unit null.
+    nutrition = ReaderNutrition()
+    model = model_of(reading(said(name, 2, None, "2")))
+
+    result = await read(f"2 {name}s", model, nutrition)
+
+    (item,) = result.items
+    assert (item.status, item.food_id, item.amount, item.unit, item.grams) == (
+        "matched",
+        food_id,
+        2,
+        "piece",
+        grams,
+    )
+    assert item.nutrition is not None
+    assert item.nutrition.nutrients.kcal == kcal
+    assert nutrition.asked[1:] == [
+        ("nutrition", f"{food_id} 2 piece"),
+        ("meal", f"{food_id} 2 piece"),
+    ]
+    assert tasks(model) == ["read_meal"]
+
+
+async def test_the_prompt_tells_the_model_to_leave_the_unit_null_when_the_unit_is_the_food() -> (
+    None
+):
+    model = model_of(reading())
+
+    await read("2 idlis", model)
+
+    _, system, _ = model.calls[0]
+    assert '"2 rotis", "2 eggs", "2 idlis"' in system
+    assert "unit word is the food itself" in system
+
+
 async def test_a_unit_nutrition_mcp_has_wins_before_the_catalogue_is_asked() -> None:
     nutrition = ReaderNutrition()
     model = model_of(reading(said("egg", 100, "gram", "100 g")))

@@ -31,6 +31,7 @@ PER_100G: dict[str, dict[str, float]] = {
     "whole_milk": {"kcal": 60.0, "protein_g": 3.2},
     "curd": {"kcal": 60.0, "protein_g": 3.1},
     "curd_rice": {"kcal": 110.0, "protein_g": 3.0},
+    "idli": {"kcal": 120.0, "protein_g": 4.0},
 }
 NAMES = {
     "chapati": "Chapati",
@@ -45,20 +46,26 @@ NAMES = {
     "whole_milk": "Doodh (whole milk)",
     "curd": "Dahi (curd)",
     "curd_rice": "Curd rice",
+    "idli": "Idli",
 }
-ALIASES = {"chapati": ["roti", "phulka", "fulka", "poli", "rotli", "ruti"]}
+ALIASES = {
+    "chapati": ["roti", "phulka", "fulka", "poli", "rotli", "ruti"],
+    "idli": ["idly", "idlis"],
+}
 UNITS = {
     "chapati": {"roti": 40.0, "piece": 40.0, "serving": 80.0},
     "dal_tadka": {"katori": 150.0, "serving": 150.0},
     "dimer_dalna": {"katori": 150.0, "serving": 300.0},
     "whole_milk": {"ml": 1.03, "tbsp": 15.47, "tsp": 5.16, "cup": 247.51, "glass": 257.83},
     "curd_rice": {"katori": 150.0, "serving": 210.0},
+    "idli": {"piece": 40.0, "plate": 80.0, "serving": 120.0},
 }
 KINDS: dict[str, Kind] = {
     "chapati": "dish",
     "dal_tadka": "dish",
     "dimer_dalna": "dish",
     "curd_rice": "dish",
+    "idli": "dish",
 }
 
 # The catalogue's own measures: the whole egg, which nutrition-mcp has only in grams.
