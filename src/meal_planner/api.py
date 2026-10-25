@@ -38,6 +38,7 @@ from meal_planner.reader import ReadError, ReadResult, read_meal
 from meal_planner.recipes import CheckedRecipe, DraftRecipe
 from meal_planner.rules import Allergen, DayKey, Diet, PlanRules, Slug, expand
 from meal_planner.startup import Services, start_services
+from meal_planner.summary import LogRejected, MealLog, SummaryError, WeekSummary, summarise
 from meal_planner.week import replace_recipe, run_week, with_numbers
 from meal_planner.week_events import WeekDone, WeekEvent, WeekResult
 
@@ -45,6 +46,7 @@ logger = get_logger(__name__)
 
 REPLACE_PATH = "/v1/week/replace"
 READ_PATH = "/v1/log/read"
+SUMMARY_PATH = "/v1/summary"
 # A week has a recipe for each of 7 days and each slot, and a plan has at most 8 slots.
 MAX_WEEK_RECIPES = 7 * 8
 # The most times one recipe is tried: the writing, then `max_repair_attempts` repairs, which is 3
@@ -66,6 +68,11 @@ class _Body(BaseModel):
 
 class ReadRequest(_Body):
     text: str
+
+
+class SummaryRequest(_Body):
+    rules: PlanRules
+    log: MealLog
 
 
 class ReplaceEntry(_Body):
@@ -373,6 +380,31 @@ async def read_typed_meal(
     except ReadError as exc:
         # The message names the step and holds nothing that was typed.
         logger.error("read_failed", extra={"task": "read", "error_type": type(exc).__name__})
+        raise HTTPException(status_code=503 if exc.unavailable else 502, detail=str(exc)) from exc
+
+
+@router.post(SUMMARY_PATH, response_model=WeekSummary)
+async def summarise_log(
+    body: SummaryRequest,
+    services: Annotated[Services, Depends(_services)],
+    settings: Annotated[Settings, Depends(_settings)],
+) -> WeekSummary:
+    """What was eaten, day by day, added up by nutrition-mcp and held to the plan's targets."""
+    try:
+        return await summarise(
+            body.rules, body.log, nutrition=services.nutrition, settings=settings
+        )
+    except LogRejected as exc:
+        # The problems are located from the log, which sits at body.log. They name the entry by
+        # its date and slot, and the message is nutrition-mcp's own for a food it refused.
+        problems: list[Problem] = [
+            {"loc": ["body", "log", *problem["loc"]], "msg": problem["msg"]}
+            for problem in exc.problems
+        ]
+        raise _invalid(problems) from exc
+    except SummaryError as exc:
+        # The message names the step and holds nothing from the log.
+        logger.error("summary_failed", extra={"task": "summary", "error_type": type(exc).__name__})
         raise HTTPException(status_code=503 if exc.unavailable else 502, detail=str(exc)) from exc
 
 
