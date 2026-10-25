@@ -264,11 +264,10 @@ _NUMBER = r"(?<![\w.,])\d+(?:[.,]\d+)*(?![.,]?\d)"
 _UNIT = r"(?:k?cals?|kj|g|gms?|grams?|mg|milligrams?|mcg|ug|µg|%)(?![a-z])"
 # What can join a number to its unit or word: a space, a hyphen ("400-kcal") or a plus ("25+ g").
 _JOIN = r"(?:-|\s*\+\s*|\s*)"
-# What can join a unit to the word: a space or a hyphen ("30g-protein"), not a plus, so the "+" in
-# "100 g + salt and pepper" does not tie the 100 g to the salt.
-_JOIN_AFTER_UNIT = r"(?:-|\s*)"
-# The nutrition word ends here. "fat-free" and "protein-rich" describe a food, not a quantity.
-_WORD_END = r"(?![a-z]|-[a-z])"
+# What can join a unit to the word: a space, a hyphen ("30g-protein") or a plus tight to the unit
+# ("25g+ protein"), but not a spaced plus, so the "+" in "100 g + salt and pepper" does not tie the
+# 100 g to the salt.
+_JOIN_AFTER_UNIT = r"(?:-|\+\s*|\s*)"
 # Words that can stand between a nutrition word and its number: "protein of 28 g", "fat under 9",
 # "protein at least 30 g". Longer phrases come first so "no more than" is not cut at "more than".
 _LINK = (
@@ -277,13 +276,18 @@ _LINK = (
     r"|under|over|below|above)\s+)"
 )
 # After "salt 2" or "sugar 1", a measure, a fraction or a time means an amount or a moment, not a
-# figure: "salt 2 tsp", "sugar 1/2 cup", "salt 2 minutes".
+# figure: "salt 2 tsp", "sugar 1/2 cup", "salt 2 minutes". A slash before a word is a rate
+# ("calories 400/day"), which is one.
 _NOT_A_FIGURE = (
-    r"(?:/|(?:tsps?|tbsps?|teaspoons?|tablespoons?|cups?|ml|l|litres?|liters?|pinch(?:es)?"
+    r"(?:/\s*\d|(?:tsps?|tbsps?|teaspoons?|tablespoons?|cups?|ml|l|litres?|liters?|pinch(?:es)?"
     r"|secs?|seconds?|mins?|minutes?|hrs?|hours?|days?|times?|pieces?|whistles?)(?![a-z]))"
 )
+# "fat-free" and "protein-rich" describe a food, not a quantity: "100 g fat-free yogurt". It is
+# one only when the number reaches the word by spaces alone and a food follows the hyphenated
+# word, so "30 g protein-rich." and "a 400-calorie-controlled plan" are still figures.
+_DESCRIBES = rf"(?!{_NUMBER}\s*(?:{_UNIT}\s*)?(?:of\s+)?{_NUTRIENT}-[a-z]+\s+[a-z])"
 _NUMBER_THEN_WORD = (
-    rf"{_NUMBER}{_JOIN}(?:{_UNIT}{_JOIN_AFTER_UNIT})?(?:of\s+)?{_NUTRIENT}{_WORD_END}"
+    rf"{_DESCRIBES}{_NUMBER}{_JOIN}(?:{_UNIT}{_JOIN_AFTER_UNIT})?(?:of\s+)?{_NUTRIENT}(?![a-z])"
 )
 _WORD_THEN_NUMBER = (
     rf"(?<![a-z]){_NUTRIENT}\s*{_LINK}*~?{_NUMBER}(?:\s*{_UNIT})?(?!\s*{_NOT_A_FIGURE})"

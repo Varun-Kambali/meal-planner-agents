@@ -637,6 +637,15 @@ FIGURES = [
     "saturated fat at most 7 g",
     "sodium at most 575 mg",
     "fibre no more than 9 g",
+    "30 g protein-rich",
+    "A 400-calorie-controlled plan",
+    "your 1,800-calorie-a-day plan",
+    "a 400-kcal-per-meal cap",
+    "30g+ protein",
+    "Packs 25g+ protein",
+    "calories 400/day",
+    "kcal 450/serving",
+    "protein 30/meal",
 ]
 
 # Each phrase that can stand between a nutrition word and its number.
@@ -683,6 +692,7 @@ NOT_FIGURES = [
     "sugar 1/2 cup",
     "salt up to 1/2 tsp",
     "Paneer 100 g + salt and pepper",
+    "100 g protein-rich paneer",
 ]
 
 
