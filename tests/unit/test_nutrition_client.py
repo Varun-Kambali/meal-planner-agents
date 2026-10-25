@@ -62,6 +62,29 @@ async def test_tool_error_maps_to_nutrition_error() -> None:
     assert caught.value.unreachable is False
 
 
+async def test_valid_units_are_read_from_the_end_of_the_message() -> None:
+    """The message echoes the unit as typed, and the typed text can say "valid units: " too."""
+    echoed = "unknown unit 'x; valid units: evil' for rajma; valid units: g, katori"
+    client = NutritionClient(StandInSession(tool_error(echoed)))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.nutrition("rajma", 1, "x; valid units: evil")
+
+    assert caught.value.valid_units == ["g", "katori"]
+    assert str(caught.value) == echoed
+
+
+async def test_valid_units_in_a_meal_error_are_read_from_the_end_too() -> None:
+    message = "item 1 (rajma): unknown unit 'valid units: evil' for rajma; valid units: g, katori"
+    client = NutritionClient(StandInSession(tool_error(message)))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.meal([MealItemIn(food_id="rajma", amount=1, unit="valid units: evil")])
+
+    assert caught.value.food_id == "rajma"
+    assert caught.value.valid_units == ["g", "katori"]
+
+
 async def test_meal_error_names_the_failing_food() -> None:
     # The SDK puts "Error executing tool <name>: " in front of what the tool raised.
     message = "item 2 (test_rotti): unknown food id 'test_rotti'; close matches: test_roti"
