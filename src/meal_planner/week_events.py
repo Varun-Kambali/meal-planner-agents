@@ -95,7 +95,8 @@ class WeekResult(BaseModel):
     cost_usd: float | None
 
     # JSON has no tuple keys, so the warnings travel as a list of rows and come back as a dict.
-    @field_validator("no_waste", mode="before")
+    # The schema says what a file holds, which is the rows.
+    @field_validator("no_waste", mode="before", json_schema_input_type=list[_NoWasteRow])
     @classmethod
     def _rows_to_dict(cls, value: Any) -> Any:
         if isinstance(value, list):
