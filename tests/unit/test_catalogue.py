@@ -382,6 +382,16 @@ async def test_grams_is_none_for_a_unit_the_catalogue_lacks(tmp_path: Path) -> N
     assert catalogue.grams("moong_dal", 1, "piece") is None
 
 
+@pytest.mark.parametrize("unit", ["gm", "gram", "Grams"])
+async def test_grams_leaves_the_gram_spellings_to_nutrition_mcp(tmp_path: Path, unit: str) -> None:
+    """nutrition-mcp reads these as grams, so a measure that borrows one of the names is not what
+    a caller who typed it gets: the catalogue answers None and nutrition-mcp takes the grams."""
+    entries = [entry("egg", category="egg", measures={"gm": 5, "gram": 6, "grams": 7})]
+    catalogue = await load(tmp_path, entries)
+
+    assert catalogue.grams("egg", 100, unit) is None
+
+
 async def test_grams_for_an_unknown_id_names_it(tmp_path: Path) -> None:
     catalogue = await two_eggs_catalogue(tmp_path)
 

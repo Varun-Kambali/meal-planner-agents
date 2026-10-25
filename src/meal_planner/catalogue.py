@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
+from nutrition_mcp.units import normalise_unit
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -130,10 +131,11 @@ class Catalogue:
         """Grams in `amount` of a household unit, or None when this catalogue has no such unit.
 
         None means "ask nutrition-mcp": a unit it accepts for the food is passed through to it.
-        Units are read as nutrition-mcp reads them: case and spaces ignored, a plural accepted.
+        Units are read as nutrition-mcp reads them: its own `normalise_unit` (case and spaces
+        ignored, gram spellings read as g), then a plural accepted.
         """
         measures = self.get(food_id).measures
-        word = unit.strip().lower()
+        word = normalise_unit(unit)
         for candidate in (word, word.removesuffix("s"), word.removesuffix("es")):
             if candidate in measures:
                 return amount * measures[candidate]
