@@ -25,6 +25,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from nutrition_mcp.schemas import MealItemIn, MealResult, SearchResult
 from pydantic import BaseModel
+from reader_helpers import ReaderNutrition, reading, said, write_reader_catalogue
 from week_helpers import (
     SLOTS,
     SlotModel,
@@ -37,9 +38,10 @@ from week_helpers import (
 
 from meal_planner.api import MAX_ATTEMPTS, app_factory, create_app
 from meal_planner.config import Settings, get_settings
-from meal_planner.llm import ModelPort, ModelReply
+from meal_planner.llm import RATE_LIMITED, SCHEMA_MISMATCH, FakeModel, ModelPort, ModelReply
 from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.reader import ReadResult
 from meal_planner.startup import StartupError
 from meal_planner.week_events import WeekResult
 
@@ -1008,3 +1010,174 @@ def test_replace_ends_with_an_error_event_when_the_run_fails(
     assert MARK not in captured.err + captured.out
     (failed,) = [e for e in log_entries(captured.err) if e["event"] == "run_failed"]
     assert failed["task"] == "replace"
+
+
+# The meal reader route
+
+
+def reader_model(*replies: str, choices: tuple[str, ...] = ()) -> FakeModel:
+    return FakeModel({"read_meal": list(replies), "choose_food": list(choices)})
+
+
+@contextmanager
+def reading_meals(
+    folder: Path, model: ModelPort, nutrition: NutritionPort | None = None, **changes: Any
+) -> Iterator[TestClient]:
+    """The app with the foods typed meals name, for the reader."""
+    catalogue = write_reader_catalogue(folder)
+    nutrition = nutrition or ReaderNutrition()
+    with serving(
+        folder, model=model, nutrition=nutrition, catalogue_path=catalogue, **changes
+    ) as c:
+        yield c
+
+
+def test_a_typed_meal_comes_back_as_foods_amounts_and_a_total(tmp_path: Path) -> None:
+    text = "2 rotis and some pulao"
+    model = reader_model(
+        reading(said("roti", 2, "roti", "2"), said("pulao", None, None, "some")),
+    )
+
+    with reading_meals(tmp_path, model) as client:
+        response = client.post("/v1/log/read", json={"text": text})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    result = ReadResult.model_validate(response.json())
+    assert result.text_length == len(text)
+    assert [(item.name, item.status) for item in result.items] == [
+        ("roti", "matched"),
+        ("pulao", "missing"),
+    ]
+    assert result.items[0].grams == 80
+    assert result.missing == ["pulao"]
+    assert result.total is not None
+    assert result.total.total.kcal == 240
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"text": ""}, {"text": "  \n "}, {}, {"text": 5}, {"text": "2 rotis", "rules": {}}],
+)
+def test_text_that_is_empty_or_not_text_is_422_without_a_model_call(
+    tmp_path: Path, body: dict[str, Any]
+) -> None:
+    model = reader_model()
+
+    with reading_meals(tmp_path, model) as client:
+        response = client.post("/v1/log/read", json=body)
+
+    assert response.status_code == 422
+    assert all(set(p) == {"loc", "msg"} for p in response.json()["detail"])
+    assert all(p["loc"][:1] == ["body"] for p in response.json()["detail"])
+    assert model.calls == []
+
+
+def test_text_over_500_is_422(tmp_path: Path) -> None:
+    model = reader_model(reading())
+
+    with reading_meals(tmp_path, model) as client:
+        too_long = client.post("/v1/log/read", json={"text": "x" * 501})
+        longest = client.post("/v1/log/read", json={"text": "x" * 500})
+
+    assert too_long.status_code == 422
+    (problem,) = too_long.json()["detail"]
+    assert problem["loc"] == ["body", "text"]
+    assert "500" in problem["msg"]
+    assert "xxxxx" not in too_long.text
+    assert longest.status_code == 200
+    assert len(model.calls) == 1
+
+
+def test_the_text_limit_is_the_setting(tmp_path: Path) -> None:
+    with reading_meals(tmp_path, reader_model(reading()), max_meal_text_chars=10) as client:
+        too_long = client.post("/v1/log/read", json={"text": "a" * 11})
+        fits = client.post("/v1/log/read", json={"text": "a" * 10})
+
+    assert (too_long.status_code, fits.status_code) == (422, 200)
+    assert "10" in too_long.json()["detail"][0]["msg"]
+
+
+def test_a_read_body_over_the_limit_is_413(tmp_path: Path) -> None:
+    body = json.dumps({"text": "2 rotis"}).encode() + b" " * 65536
+    model = reader_model()
+
+    with reading_meals(tmp_path, model) as client:
+        response = client.post(
+            "/v1/log/read", content=body, headers={"content-type": "application/json"}
+        )
+
+    assert response.status_code == 413
+    assert model.calls == []
+
+
+def test_the_read_route_is_rate_limited(tmp_path: Path) -> None:
+    with reading_meals(tmp_path, reader_model(reading()), rate_limit_per_minute=1) as client:
+        first = client.post("/v1/log/read", json={"text": "nothing"})
+        second = client.post("/v1/log/read", json={"text": "nothing"})
+
+    assert (first.status_code, second.status_code) == (200, 429)
+    assert 1 <= int(second.headers["retry-after"]) <= 60
+
+
+class AnsweringWith:
+    """A model that answers every call with an error, or with a reply that cannot be read."""
+
+    def __init__(self, error: str) -> None:
+        self.error = error
+
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        return ModelReply(value=None, raw="", error=self.error)
+
+
+def test_a_model_that_cannot_be_reached_is_a_503_naming_the_step(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    with reading_meals(tmp_path, AnsweringWith(RATE_LIMITED)) as client:
+        response = client.post("/v1/log/read", json={"text": "2 rotis"})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "the model could not be reached (step: read_meal)"}
+    (failed,) = [e for e in log_entries(capfd.readouterr().err) if e["event"] == "read_failed"]
+    assert failed["error_type"] == "ReadError"
+    assert failed["request_id"] == response.headers["x-request-id"]
+
+
+def test_a_reply_that_cannot_be_used_is_a_502_naming_the_step(tmp_path: Path) -> None:
+    with reading_meals(tmp_path, AnsweringWith(SCHEMA_MISMATCH)) as client:
+        response = client.post("/v1/log/read", json={"text": "2 rotis"})
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "the model's reply could not be used (step: read_meal)"}
+
+
+class SearchDown(ReaderNutrition):
+    """nutrition-mcp gone once the app has started: every search fails as unreachable."""
+
+    async def search(
+        self, query: str, kind: Literal["dish", "ingredient"] | None = None, limit: int = 5
+    ) -> SearchResult:
+        raise NutritionError("nutrition-mcp could not answer search_food", unreachable=True)
+
+
+def test_nutrition_mcp_being_down_is_a_503_naming_the_step(tmp_path: Path) -> None:
+    model = reader_model(reading(said("roti", 2, "roti", "2")))
+
+    with reading_meals(tmp_path, model, SearchDown()) as client:
+        response = client.post("/v1/log/read", json={"text": "2 rotis"})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "nutrition-mcp could not be reached (step: nutrition)"}
+
+
+def test_a_failing_read_does_not_stop_the_next_one(tmp_path: Path) -> None:
+    model = reader_model(reading(said("roti", 1, "roti", "1")))
+
+    with reading_meals(tmp_path, AnsweringWith(RATE_LIMITED)) as client:
+        client.post("/v1/log/read", json={"text": "a roti"})
+    with reading_meals(tmp_path, model) as client:
+        again = client.post("/v1/log/read", json={"text": "a roti"})
+
+    assert again.status_code == 200

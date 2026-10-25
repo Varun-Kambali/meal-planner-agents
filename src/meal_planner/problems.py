@@ -9,6 +9,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any, TypedDict
 
 from meal_planner.catalogue import Catalogue, check_rules_against
+from meal_planner.config import Settings
 from meal_planner.rules import PlanRules
 
 
@@ -40,3 +41,20 @@ def unknown_foods(
 def where(problem: Problem) -> str:
     """The location as a dotted path, such as slots.0.kcal_share."""
     return ".".join(str(part) for part in problem["loc"])
+
+
+def meal_text_problems(
+    text: str, settings: Settings, *, under: tuple[str, ...] = ("body",)
+) -> list[Problem]:
+    """A problem when a typed meal is blank or longer than `max_meal_text_chars`.
+
+    Only the length is in the message: the text is what the user typed.
+    """
+    if not text.strip():
+        return [{"loc": [*under, "text"], "msg": "type what you ate: the text is blank"}]
+    if len(text) > settings.max_meal_text_chars:
+        message = (
+            f"the text has {len(text)} characters and the most is {settings.max_meal_text_chars}"
+        )
+        return [{"loc": [*under, "text"], "msg": message}]
+    return []
