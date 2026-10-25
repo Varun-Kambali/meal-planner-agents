@@ -12,8 +12,10 @@ After the first round a slot gets at most `max_repair_attempts` more, so a week 
 one writing call plus that many repair calls per slot, and a recipe is tried at most
 `1 + max_repair_attempts` times. A reply that cannot be used (broken JSON, an amount out of
 range, the wrong recipes for the days asked) fails the attempt for the whole slot and the rest
-of the week goes on. A rate limit or timeout is not tried again here: the model client has
-already retried it, so the slot is reported unwritten with the reason.
+of the week goes on. A rate limit or timeout is not tried again here, because the model client
+has already retried it, and neither is a call that raised. A slot being written is then reported
+unwritten with the reason; a slot being repaired keeps its recipes as they were, with their
+failures, and is not asked again.
 
 When nutrition-mcp cannot be reached for a recipe's numbers, it is asked once more; if it still
 cannot be, the recipe is marked `nutrition_unavailable` and not repaired, because the writer
@@ -746,9 +748,10 @@ async def replace_recipe(
 ) -> AsyncIterator[WeekEvent]:
     """Write one recipe again inside the rest of the week, yielding progress events.
 
-    The other recipes are not sent to the model or changed. They are there for the day and
-    variety checks and to show the writer what to stay different from. The old recipe leaves the
-    week before the new one is checked, and stays in the result if no new one could be written.
+    The other recipes are not changed. The writer is sent a one-line summary of each other
+    recipe of the slot (day, title, cuisine and ingredient ids) to stay different from, and every
+    recipe of the week is there for the day and variety checks. The old recipe leaves the week
+    before the new one is checked, and stays in the result if no new one could be written.
     """
     if slot_id not in {slot.id for slot in rules.slots}:
         raise ValueError(f"the plan has no slot '{slot_id}'")

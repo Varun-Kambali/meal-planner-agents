@@ -53,7 +53,8 @@ class Settings(BaseSettings):
     # Input bounds.
     max_meal_text_chars: int = Field(default=500, ge=1)
     max_body_bytes: int = Field(default=65536, ge=1)
-    # Replacing a recipe sends the rest of the week back (up to 28 drafts), so its bound is larger.
+    # Replacing a recipe sends the rest of the week back (up to 56 drafts: 7 days of at most 8
+    # slots), so its bound is larger.
     max_replace_body_bytes: int = Field(default=131072, ge=1)
 
     # Requests one client address may make to the /v1 routes in a minute; over it, 429.

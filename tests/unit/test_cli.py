@@ -281,6 +281,16 @@ def test_a_run_that_fails_says_only_what_kind_of_failure_it_was(
     assert "Traceback" not in captured.err
 
 
+def test_ctrl_c_exits_with_130(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def interrupted(coroutine: Any) -> None:
+        coroutine.close()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("meal_planner.cli.asyncio.run", interrupted)
+
+    assert run_cli(tmp_path, "week", str(rules_file(tmp_path))) == 130
+
+
 def test_a_week_that_cannot_be_written_to_the_out_path_exits_non_zero(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
