@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # only, as before. Either way no number it writes is used.
     writer_nutrient_hints: bool = True
 
+    # Seconds one call to read a typed meal may take. A call reads a sentence or two, so this is
+    # shorter than a slot's.
+    reader_call_timeout_s: float = Field(default=30, gt=0)
+
     # Input bounds.
     max_meal_text_chars: int = Field(default=500, ge=1)
     max_body_bytes: int = Field(default=65536, ge=1)

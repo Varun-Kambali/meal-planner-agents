@@ -33,7 +33,8 @@ from meal_planner.middleware import (
     RequestContext,
 )
 from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.problems import Problem, problems_from, unknown_foods
+from meal_planner.problems import Problem, meal_text_problems, problems_from, unknown_foods
+from meal_planner.reader import ReadError, ReadResult, read_meal
 from meal_planner.recipes import CheckedRecipe, DraftRecipe
 from meal_planner.rules import Allergen, DayKey, Diet, PlanRules, Slug, expand
 from meal_planner.startup import Services, start_services
@@ -43,6 +44,7 @@ from meal_planner.week_events import WeekDone, WeekEvent, WeekResult
 logger = get_logger(__name__)
 
 REPLACE_PATH = "/v1/week/replace"
+READ_PATH = "/v1/log/read"
 # A week has a recipe for each of 7 days and each slot, and a plan has at most 8 slots.
 MAX_WEEK_RECIPES = 7 * 8
 # The most times one recipe is tried: the writing, then `max_repair_attempts` repairs, which is 3
@@ -60,6 +62,10 @@ class CatalogueRow(BaseModel):
 
 class _Body(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class ReadRequest(_Body):
+    text: str
 
 
 class ReplaceEntry(_Body):
@@ -214,6 +220,16 @@ async def _replacement(
     return _Replacement(rules, week, body.day, body.slot_id)
 
 
+async def _checked_text(
+    body: ReadRequest, settings: Annotated[Settings, Depends(_settings)]
+) -> str:
+    """The typed meal, once it is known to be neither blank nor longer than the limit."""
+    problems = meal_text_problems(body.text, settings)
+    if problems:
+        raise _invalid(problems)
+    return body.text
+
+
 async def _cleanup() -> AsyncIterator[AsyncExitStack]:
     """An exit stack that unwinds once the response is over, however it ended."""
     async with AsyncExitStack() as stack:
@@ -337,6 +353,27 @@ async def write_one_again(
     )
     async for message in _stream("replace", run, settings, cleanup):
         yield message
+
+
+@router.post(READ_PATH, response_model=ReadResult)
+async def read_typed_meal(
+    text: Annotated[str, Depends(_checked_text)],
+    services: Annotated[Services, Depends(_services)],
+    settings: Annotated[Settings, Depends(_settings)],
+) -> ReadResult:
+    """What a person ate, typed in their own words, as nutrition-mcp foods and numbers."""
+    try:
+        return await read_meal(
+            text,
+            model=services.model,
+            nutrition=services.nutrition,
+            catalogue=services.catalogue,
+            settings=settings,
+        )
+    except ReadError as exc:
+        # The message names the step and holds nothing that was typed.
+        logger.error("read_failed", extra={"task": "read", "error_type": type(exc).__name__})
+        raise HTTPException(status_code=503 if exc.unavailable else 502, detail=str(exc)) from exc
 
 
 def create_app(

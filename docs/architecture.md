@@ -1,8 +1,8 @@
 # Architecture
 
-Status: agreed at kickoff on 2026-10-21, and brought in line with the code when the recipe pipeline was finished, on 2026-10-24. What the system must do is in [requirements.md](requirements.md); why it is built this way is in [case-study.md](case-study.md).
+Status: agreed at kickoff on 2026-10-21, and brought in line with the code when the recipe pipeline was finished, on 2026-10-24, and again when the meal reader was added, on 2026-10-25. What the system must do is in [requirements.md](requirements.md); why it is built this way is in [case-study.md](case-study.md).
 
-Built so far: the week graph, the checks, the HTTP API for writing and replacing a week, and a command line. The meal reader, the day and week totals, tracing, the frontend, the evals and the deployed demo are still to come, and the sections on them say so.
+Built so far: the week graph, the checks, the meal reader, the HTTP API for writing and replacing a week and for reading a typed meal, and a command line with `week` and `read`. The day and week totals, tracing, the frontend, the evals and the deployed demo are still to come, and the sections on them say so.
 
 ## Overview
 
@@ -60,16 +60,17 @@ The browser holds everything about the user. Each request sends the plan rules (
 | `portions.py` | Fits a recipe's grams to its slot's calories: the scale factor and the scaled draft. Arithmetic on grams only |
 | `week.py` | The LangGraph graph that writes, checks and repairs a week, and `run_week` and `replace_recipe`, which run it |
 | `week_events.py` | The events the graph streams to the client and the `WeekResult` that the last one carries |
-| `week_prompts.py` | The writer and repair prompts: the system prompt with the catalogue filled in, and the user message built from the slot, the failures and the summaries of the slot's other recipes. String building only; it makes no model call |
-| `prompts/` | The two system prompts as Markdown (`writer.md`, `repair.md`), with a placeholder for the catalogue |
+| `week_prompts.py` | The writer and repair prompts: the system prompt with the catalogue filled in, and the user message built from the slot, the failures and the summaries of the slot's other recipes. String building only; it makes no model call. Also the two helpers that load a prompt file and quote text into a data block, which the reader uses too |
+| `reader.py` | Turns a typed meal into nutrition-mcp foods, amounts and numbers (see Reading a typed meal). One model call to list the foods and one more for each name that nutrition-mcp's search cannot settle; code and nutrition-mcp decide the rest: the match, the amount, the unit and the status of each item |
+| `prompts/` | The system prompts as Markdown: `writer.md` and `repair.md`, with a placeholder for the catalogue, and `reader.md` and `choose_food.md` for the meal reader |
 | `startup.py` | What has to be true before the app answers: LangSmith tracing off, the model's key set, nutrition-mcp running, the catalogue loaded against it. Each way it fails ends in one line saying why. Shared by the API and the command line |
-| `problems.py` | Invalid input in one form for the API and the command line: where it is and what is wrong. The rejected value is dropped from validation errors, because it is the user's rules, and nothing is logged. A few messages name an id so it can be fixed, such as an unknown liked or excluded food, an undefined day type or a slot the plan lacks |
+| `problems.py` | Invalid input in one form for the API and the command line: where it is and what is wrong. The rejected value is dropped from validation errors, because it is the user's rules, and nothing is logged. A few messages name an id so it can be fixed, such as an unknown liked or excluded food, an undefined day type or a slot the plan lacks. A typed meal that is blank or too long is reported by its length only |
 | `middleware.py` | The request id, the body size limit and the rate limit, as plain ASGI middleware. Starlette's `BaseHTTPMiddleware` buffers around streams, and the week is a stream |
 | `api.py` | FastAPI routes, server-sent events and CORS |
-| `cli.py` | `meal-planner week <rules.json>`: the same graph without the web server, with progress on stderr and the week as JSON |
+| `cli.py` | `meal-planner week <rules.json>`: the same graph without the web server, with progress on stderr and the week as JSON. `meal-planner read "<text>"`: reads a typed meal and prints the result as JSON |
 | `config.py` | Settings from environment variables (`pydantic-settings`) |
 
-Not built yet: `reader.py` (turns a typed meal into foods and amounts), `summary.py` (day and week totals against targets) and `tracing.py` (Langfuse setup and the masking of user content). The frontend will live in `frontend/` (React, Vite, TypeScript), store the rules, the week and the log in the browser, and only display numbers the API returns.
+Not built yet: `summary.py` (day and week totals against targets) and `tracing.py` (Langfuse setup and the masking of user content). The frontend will live in `frontend/` (React, Vite, TypeScript), store the rules, the week and the log in the browser, and only display numbers the API returns.
 
 ## Writing a week
 
@@ -101,12 +102,26 @@ A week therefore takes one writing call per slot (4 for a four-slot plan) plus a
 
 ## Reading a typed meal
 
-Not built yet.
+```mermaid
+flowchart TD
+  A[Typed text] --> B[Extract the foods, amounts and units]
+  B --> C[Search nutrition-mcp for each name]
+  C -- "one result, or the top one is the name" --> E[Amount and unit]
+  C -- "several, none is the name" --> D[Model picks one by number]
+  D --> E
+  C -- "no result" --> M[Missing]
+  D -- "none, or a number outside the list" --> M
+  E --> F[Numbers from nutrition-mcp]
+  F --> G[Total of the matched items]
+```
 
-1. **Extract (model).** The typed text becomes a list of items as the user wrote them: a food name, an amount and a unit ("2", "roti"; "1", "katori", "dal"). The text is passed as data in its own field, never as instructions.
-2. **Match (nutrition-mcp).** Each name goes to `search_food`. A clear top match is taken. When several are close, the model picks one of nutrition-mcp's results, never a free-form id. With no result, the item is marked missing.
-3. **Amount.** A unit nutrition-mcp accepts for that food is passed through. Otherwise the catalogue's grams per measure turn it into grams ("2 eggs" becomes 100 g). A unit neither knows comes back to the user with the valid ones.
-4. **Numbers.** `compute_meal` gives the totals. The response lists each item, its match and any missing foods, and the user confirms or edits before the browser saves it.
+1. **Extract (model).** One call lists the foods the text names, up to 20, each with a name, an amount, a unit and the words the person used for the amount (`amount_text`). The text goes in as a JSON string inside a delimited data block, with angle brackets escaped so that it cannot close the block, and the prompt says it is data and never instructions. The reply has no field for a nutrition figure, and anything extra in it is ignored. An item with no name is dropped.
+2. **Match (nutrition-mcp).** Each name goes to `search_food`, for up to 5 results. The top result is taken when it is the only one, or when the name typed is its name, one of its aliases or its id, compared as nutrition-mcp's search spells words ("chapaati" is "chapati"). Otherwise one more model call is shown the name and the numbered results and picks one by number. It never writes an id. A name with no result, a name nutrition-mcp cannot search for (no letter or digit in it, or over 100 characters), a pick of `null` and a pick outside the list all leave the item `missing`.
+3. **Amount (code).** The model's number is used only when the person's own words for an amount are there and are neither vague nor a range. Blank amount text ("roti and dal"), a vague word (some, a little, a bit, few, handful, lots) or a range (2-3, 2 to 3, 2 or 3, two or three) makes the item `needs_amount` whatever number the model returned. So does an amount that is zero, negative, not a number or over 100,000. The item keeps its food and lists the units that would work, so that the person can give an amount.
+4. **Unit (nutrition-mcp, then the catalogue).** A number with no unit word counts pieces, and the prompt has the model leave the unit null when the unit word is the food itself ("2 rotis", "2 eggs", "2 idlis"). The unit goes to nutrition-mcp, which reads its spelling and plurals. If nutrition-mcp has no such unit for the food and the catalogue has the measure, the catalogue's grams per measure turn it into grams ("2 eggs" becomes 100 g) and nutrition-mcp is asked again in grams. A unit neither has makes the item `unknown_unit`, with the valid units of both; no measure is made up, so "2 pav" stays unknown. An amount nutrition-mcp refuses as too large (over 5000 g) makes the item `needs_amount`.
+5. **Numbers (nutrition-mcp).** Each matched item carries nutrition-mcp's numbers for its grams, and `compute_meal` adds up the matched items. A missing food is listed by name in `missing` and is not in the total, and neither is an item that needs an amount or has an unknown unit. The result has each item with its status (`matched`, `needs_amount`, `unknown_unit` or `missing`), the total, `missing` and the length of the text. The user is to confirm or edit it in the browser before it is saved; the frontend is not built yet.
+
+A typed meal costs one model call, plus one for each name that has several results when the top one is not the name typed. These calls are short, so they have their own timeout (`MEAL_PLANNER_READER_CALL_TIMEOUT_S`, default 30 seconds). The items are matched one after another.
 
 ## Day and week totals
 
@@ -116,16 +131,17 @@ The log holds, for each planned meal, its status and its items as food ids, amou
 
 ## API
 
-The API keeps no state. Four routes:
+The API keeps no state. Five routes:
 
 | Route | Does |
 |---|---|
 | `POST /v1/week` | Takes the plan rules as JSON and streams the week it writes |
 | `POST /v1/week/replace` | Takes the rules, the week's recipes and the day and slot to write again, and streams the week with that recipe replaced |
+| `POST /v1/log/read` | Takes `{"text": "..."}`, a typed meal, and returns the reader's result as JSON. It is not a stream |
 | `GET /v1/catalogue` | Lists the ingredients a plan form can offer (id, name, category) for a `diet` and the allergens to leave out (`exclude_allergens`, repeatable) |
 | `GET /healthz` | Returns `{"status": "ok"}` |
 
-Everything that can refuse a request is checked before the stream starts, so a refusal is a status code and not a stream that fails: the body is validated, every food the rules name is looked up in the catalogue, and nutrition-mcp has to answer (a small search for a new week, the kept recipes' numbers for a replacement; see Errors).
+Everything that can refuse a request is checked before the stream starts, so a refusal is a status code and not a stream that fails: the body is validated, every food the rules name is looked up in the catalogue, and nutrition-mcp has to answer (a small search for a new week, the kept recipes' numbers for a replacement; see Errors). Reading a typed meal is one request and one response, so there every refusal and every failure of the model or nutrition-mcp is a status code.
 
 **The stream.** A week is several model calls, so it goes out as server-sent events and the browser can show each slot as it is written and checked. An event is named by its kind and its data is JSON that repeats the kind:
 
@@ -141,6 +157,7 @@ Everything that can refuse a request is checked before the stream starts, so a r
 
 **Limits.**
 - Bodies: 64 KB, and 128 KB for replace because it carries the rest of the week (`MEAL_PLANNER_MAX_BODY_BYTES`, `MEAL_PLANNER_MAX_REPLACE_BODY_BYTES`). A larger one is a 413, refused at once when its declared length is over the limit and otherwise as its bytes are read.
+- Text: a typed meal is 1 to 500 characters (`MEAL_PLANNER_MAX_MEAL_TEXT_CHARS`), and blank or longer is a 422.
 - Rate: each client address may make 10 requests a minute to the `/v1/` routes (`MEAL_PLANNER_RATE_LIMIT_PER_MINUTE`). Past that is a 429 with `Retry-After`. The count is in memory, per process.
 - CORS: headers are added only for the origins in `MEAL_PLANNER_CORS_ORIGINS`, and by default there are none.
 
@@ -176,6 +193,7 @@ Startup problems stop the app with one line that says why. A request that cannot
 | nutrition-mcp doesn't start, or stops answering or sends an answer that cannot be read while the catalogue loads | Startup stops with nutrition-mcp's reason |
 | A catalogue id unknown to nutrition-mcp | Startup stops and names every such id |
 | Invalid rules, or a liked or excluded food that is not in the catalogue | 422 with a list of where and what. The rejected value is dropped from validation errors and nothing is logged; a few messages name an id so it can be fixed, such as an unknown liked or excluded food or an undefined day type |
+| A typed meal that is blank or too long | 422 naming `body.text`, with the length in the message and none of the text |
 | A body over the limit, or too many requests | 413, or 429 with `Retry-After` (see API) |
 | nutrition-mcp cannot be reached before a run starts | 503 naming the step: `nutrition` for a new week, which first asks it a small question so that no model call is spent on a server that is down, and `recompute` for a replacement, whose kept recipes need their numbers worked out. For a replacement, nutrition-mcp is asked twice before this, and its refusing one recipe is not a 503: that recipe is marked `nutrition_failed` |
 | nutrition-mcp cannot be reached in the middle of a run | It is asked once more. If that fails too, the recipe has no numbers and a `nutrition_unavailable` failure, is not sent back to the writer, which cannot fix that, and is reported failing. The run goes on. The recipe's day cannot pass, because a recipe with no numbers counts as missing every nutrient. A scaled recipe whose numbers cannot be had keeps the writer's grams and its first numbers |
@@ -183,6 +201,8 @@ Startup problems stop the app with one line that says why. A request that cannot
 | A model call gets no reply: a timeout, a rate limit, a server error, another refusal such as a bad key, or an unexpected exception | A timeout, rate limit or server error is tried 3 times in all, waiting 1 s and then 2 s between tries. When the tries are used up, or at once for any other refusal, the call counts as having no reply. A writing call: the slot's recipes are listed as not written, with the error code, a final `slot_failed` event goes out, and the other slots go on. A replacement keeps the old recipe. A repair call: the slot's failing recipes stay as they were, with their failures and one more attempt counted, and the slot is not repaired again. An exception counts as `model_error` for its slot only, and the log line holds only its class, so the rest of the week goes on |
 | Model output that isn't valid JSON, doesn't fit the schema, or has the wrong recipes for the days asked | A failed attempt for that slot, and the next call is told why. After the last attempt the slot ends up as in the row above |
 | The run fails after the stream has started | The status line has gone out, so the stream ends with one `error` event that names the step (`week` or `replace`) and says only that the run stopped. It holds no text from the exception, which can quote the request, and the log line holds only the exception's class |
+| The model or nutrition-mcp cannot be reached while a typed meal is read | 503 naming the step: `read_meal` or `choose_food` for a model that timed out, was rate limited or had a server error, `nutrition` for nutrition-mcp. Nothing is retried here beyond the model client's own tries. The log line holds `read_failed` and the class of the error. From the command line it is exit 1 and the same message |
+| The model's reply for a typed meal cannot be used (not valid JSON, not the schema, more than 20 foods, a model that raises or another refusal such as a bad key), or nutrition-mcp sends an answer that cannot be used | 502 naming the step in the same way. An error of nutrition-mcp that names no food is never taken for a bad amount |
 | Anything unhandled before the stream starts | 500 with `internal error`; only the exception's class is logged |
 | The client goes away during a run | The run is cancelled, so its model calls stop |
 
@@ -204,7 +224,7 @@ Not built yet: `make eval` and `make eval-smoke` are placeholders.
 
 Today only the local run and the image build exist. The rest is the plan.
 
-- **Local:** `make run` starts the API on 127.0.0.1:8000, which starts nutrition-mcp. The Vite dev server joins it once the frontend exists. `meal-planner week <rules.json>` runs the same graph without the server.
+- **Local:** `make run` starts the API on 127.0.0.1:8000, which starts nutrition-mcp. The Vite dev server joins it once the frontend exists. `meal-planner week <rules.json>` runs the same graph without the server, and `meal-planner read "<text>"` reads a typed meal the same way.
 - **Image:** the Dockerfile installs the app and nutrition-mcp (from its `v1.0.0` tag, through the lock file, so nothing is fetched at runtime), and CI builds it. Its entrypoint is still the `meal-planner` command. Running the API from it, with a smoke request against the container in CI, is still to come.
 - **Public demo (after a yes):** the API on a free Hugging Face Docker Space with its own low-quota key, rate limits and a spend cap; the frontend on GitHub Pages.
 

@@ -28,7 +28,9 @@ CALL_TIMEOUT_S = 30.0
 _SDK_PREFIX = re.compile(r"^Error executing tool \w+: ")
 # The two messages nutrition-mcp writes that hold what a caller can act on: "item 2 (toor_dal):
 # ..." names the meal item that failed, and "...; valid units: g, katori" lists the units a
-# food takes. The unit list ends at the next ";" or the end of the message.
+# food takes. The unit list ends at the next ";" or the end of the message. The message also echoes
+# the unit as it was typed, and typed text can say "valid units: " too, so the list that counts is
+# the last one: nutrition-mcp writes its own at the very end.
 _ITEM_FOOD = re.compile(r"^item \d+ \(([^)]+)\):")
 _VALID_UNITS = re.compile(r"valid units: ([^;]+)")
 
@@ -54,6 +56,20 @@ class NutritionError(Exception):
         self.food_id = food_id
         self.valid_units = valid_units or []
         self.unreachable = unreachable
+
+
+def refusal(message: str, food_id: str | None = None) -> NutritionError:
+    """The error for a call nutrition-mcp refused, from the message it wrote.
+
+    `food_id` is the food the call was about, when one food was asked about. A meal's message
+    names the item that failed instead, which is read from it. The units the message lists are
+    the food's valid units. Both the real client and the test fake build their errors here, so
+    they cannot read a message differently.
+    """
+    if food_id is None and (item := _ITEM_FOOD.match(message)):
+        food_id = item.group(1)
+    listed = _VALID_UNITS.findall(message)
+    return NutritionError(message, food_id, listed[-1].split(", ") if listed else [])
 
 
 @runtime_checkable
@@ -164,12 +180,7 @@ class NutritionClient:
             # echo the arguments, so it stays on the cause.
             raise NutritionError(unreadable) from exc
         if answer.is_error:
-            message = _message(answer)
-            if food_id is None and (item := _ITEM_FOOD.match(message)):
-                food_id = item.group(1)
-            units = _VALID_UNITS.search(message)
-            valid_units = units.group(1).split(", ") if units else []
-            raise NutritionError(message, food_id, valid_units)
+            raise refusal(_message(answer), food_id)
         content = answer.structured_content
         if not isinstance(content, dict):
             raise NutritionError(f"nutrition-mcp sent no structured content for {tool}")
