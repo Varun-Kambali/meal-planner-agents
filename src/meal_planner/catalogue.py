@@ -9,7 +9,7 @@ id against nutrition-mcp, which turns a typo in the file into a startup failure 
 from collections.abc import Container, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NamedTuple
 
 import yaml
 from nutrition_mcp.units import normalise_unit
@@ -179,11 +179,19 @@ async def load_catalogue(path: Path, nutrition: NutritionPort) -> Catalogue:
     return Catalogue(items)
 
 
-def check_rules_against(rules: PlanRules, catalogue: Catalogue) -> list[str]:
-    """One message for each excluded or liked food that is not in the catalogue."""
+class UnknownFood(NamedTuple):
+    """A food the plan names that the catalogue lacks, and where in the rules it is named."""
+
+    # The path to the list of foods, such as ("food", "liked_foods").
+    loc: tuple[str, ...]
+    message: str
+
+
+def check_rules_against(rules: PlanRules, catalogue: Catalogue) -> list[UnknownFood]:
+    """One entry for each excluded or liked food that is not in the catalogue."""
     food = rules.food
     return [
-        f"food.{field}: '{food_id}' is not in the catalogue"
+        UnknownFood(("food", field), f"'{food_id}' is not in the catalogue")
         for field, food_ids in (
             ("exclude_foods", food.exclude_foods),
             ("liked_foods", food.liked_foods),
