@@ -646,6 +646,10 @@ FIGURES = [
     "calories 400/day",
     "kcal 450/serving",
     "protein 30/meal",
+    "a 150 kcal sugar-free snack",
+    "180 cal fat-free biscuit",
+    "450 kcal protein-rich shake",
+    "800 kj fat-free yogurt",
 ]
 
 # Each phrase that can stand between a nutrition word and its number.

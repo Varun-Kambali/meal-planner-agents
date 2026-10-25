@@ -261,7 +261,8 @@ _NUTRIENT = (
 )
 # The whole number, so "12 minutes" is never read as "1" followed by something else.
 _NUMBER = r"(?<![\w.,])\d+(?:[.,]\d+)*(?![.,]?\d)"
-_UNIT = r"(?:k?cals?|kj|g|gms?|grams?|mg|milligrams?|mcg|ug|µg|%)(?![a-z])"
+_MASS = r"g|gms?|grams?|mg|milligrams?|mcg|ug|µg"
+_UNIT = rf"(?:k?cals?|kj|{_MASS}|%)(?![a-z])"
 # What can join a number to its unit or word: a space, a hyphen ("400-kcal") or a plus ("25+ g").
 _JOIN = r"(?:-|\s*\+\s*|\s*)"
 # What can join a unit to the word: a space, a hyphen ("30g-protein") or a plus tight to the unit
@@ -283,9 +284,10 @@ _NOT_A_FIGURE = (
     r"|secs?|seconds?|mins?|minutes?|hrs?|hours?|days?|times?|pieces?|whistles?)(?![a-z]))"
 )
 # "fat-free" and "protein-rich" describe a food, not a quantity: "100 g fat-free yogurt". It is
-# one only when the number reaches the word by spaces alone and a food follows the hyphenated
-# word, so "30 g protein-rich." and "a 400-calorie-controlled plan" are still figures.
-_DESCRIBES = rf"(?!{_NUMBER}\s*(?:{_UNIT}\s*)?(?:of\s+)?{_NUTRIENT}-[a-z]+\s+[a-z])"
+# one only when the number reaches the word by spaces alone, with at most a mass between them, and
+# a food follows the hyphenated word, so "30 g protein-rich.", "a 400-calorie-controlled plan" and
+# "150 kcal sugar-free snack" (an energy, not a mass) are still figures.
+_DESCRIBES = rf"(?!{_NUMBER}\s*(?:(?:{_MASS})(?![a-z])\s*)?(?:of\s+)?{_NUTRIENT}-[a-z]+\s+[a-z])"
 _NUMBER_THEN_WORD = (
     rf"{_DESCRIBES}{_NUMBER}{_JOIN}(?:{_UNIT}{_JOIN_AFTER_UNIT})?(?:of\s+)?{_NUTRIENT}(?![a-z])"
 )
