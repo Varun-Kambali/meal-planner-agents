@@ -34,6 +34,7 @@ def test_defaults() -> None:
     assert s.portion_scale_min == 0.5
     assert s.portion_scale_max == 2.0
     assert s.writer_nutrient_hints is True
+    assert s.reader_call_timeout_s == 30
     assert s.max_meal_text_chars == 500
     assert s.max_body_bytes == 65536
     assert s.max_replace_body_bytes == 131072

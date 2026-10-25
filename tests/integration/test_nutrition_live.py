@@ -10,6 +10,7 @@ import anyio
 import pytest
 from fakes import UNIT_SPELLINGS, FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, NutritionResult
+from reader_helpers import ALIASES, KINDS, NAMES, UNITS
 
 from meal_planner.nutrition import NutritionClient, NutritionError, NutritionPort
 
@@ -207,10 +208,16 @@ async def test_fake_reads_an_es_plural_as_the_server_does(live: NutritionClient)
     assert stand_in.measure_assumption == "2 glass = 515.7 g"
 
 
-async def test_roti_is_the_name_the_server_gives_chapati(live: NutritionClient) -> None:
-    # The reader's tests build their chapati the same way, so this keeps them honest.
+async def test_the_readers_foods_are_the_ones_the_server_lists(live: NutritionClient) -> None:
+    # The reader's tests build their foods from these tables, so this keeps them honest.
     found = await live.search("rotis")
 
     assert [food.id for food in found.results] == ["chapati"]
-    assert found.results[0].units == {"g": 1.0, "roti": 40.0, "piece": 40.0, "serving": 80.0}
-    assert "roti" in found.results[0].aliases
+    chapati = found.results[0]
+    assert chapati.name == NAMES["chapati"]
+    assert chapati.aliases == ALIASES["chapati"]
+    for food_id, units in UNITS.items():
+        listed = (await live.nutrition(food_id, 1, "g")).food
+        assert listed.units == {"g": 1.0, **units}, food_id
+        assert listed.name == NAMES[food_id], food_id
+        assert listed.kind == KINDS.get(food_id, "ingredient"), food_id
