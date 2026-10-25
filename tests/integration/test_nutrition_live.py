@@ -8,10 +8,10 @@ from pathlib import Path
 
 import anyio
 import pytest
-from fakes import UNIT_SPELLINGS
+from fakes import UNIT_SPELLINGS, FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, NutritionResult
 
-from meal_planner.nutrition import NutritionClient, NutritionError
+from meal_planner.nutrition import NutritionClient, NutritionError, NutritionPort
 
 pytestmark = pytest.mark.anyio
 
@@ -117,3 +117,100 @@ async def test_data_dirs_adds_foods_to_the_bundled_data() -> None:
         assert (await extended.nutrition("test_quinoa", 100, "g")).nutrients.kcal == 120
         # The bundled foods are still there.
         assert (await extended.search("rajma")).results
+
+
+# FakeNutrition says what the server says. A call is made to both and the refusals compared.
+
+
+@pytest.fixture
+def fake_chapati() -> FakeNutrition:
+    return FakeNutrition(
+        {"chapati": {"kcal": 300.0}},
+        units={"chapati": {"roti": 40.0, "piece": 40.0, "serving": 80.0}},
+    )
+
+
+async def refused(port: NutritionPort, call: str, *args: object) -> NutritionError:
+    with pytest.raises(NutritionError) as caught:
+        await getattr(port, call)(*args)
+    return caught.value
+
+
+@pytest.mark.parametrize(
+    ("call", "args"),
+    [
+        ("nutrition", ("no_such_food_xyz", 1, "g")),
+        ("nutrition", ("chapati", 1, "gallon")),
+        ("nutrition", ("chapati", 6000, "g")),
+        ("nutrition", ("chapati", 1000, "roti")),
+        ("meal", ([MealItemIn(food_id="chapati", amount=1, unit="gallon")],)),
+        ("meal", ([MealItemIn(food_id="no_such_food_xyz", amount=1, unit="g")],)),
+        ("meal", ([MealItemIn(food_id="chapati", amount=125.01, unit="roti")],)),
+        ("search", ("!!",)),
+    ],
+)
+async def test_fake_refuses_in_the_servers_words(
+    live: NutritionClient, fake_chapati: FakeNutrition, call: str, args: tuple[object, ...]
+) -> None:
+    real = await refused(live, call, *args)
+    fake = await refused(fake_chapati, call, *args)
+
+    assert str(fake) == str(real)
+    assert (fake.food_id, fake.valid_units) == (real.food_id, real.valid_units)
+    assert fake.unreachable is real.unreachable is False
+
+
+@pytest.mark.parametrize(
+    ("call", "args"),
+    [
+        ("nutrition", ("chapati", 0, "g")),
+        ("nutrition", ("chapati", -1, "roti")),
+        ("meal", ([],)),
+        ("search", ("x" * 101,)),
+        ("search", ("roti", None, 51)),
+    ],
+)
+async def test_fake_refuses_what_the_schema_refuses_in_the_servers_first_lines(
+    live: NutritionClient, fake_chapati: FakeNutrition, call: str, args: tuple[object, ...]
+) -> None:
+    # The server's message goes on with a link to Pydantic's documentation, and quotes only the
+    # start of a long value.
+    real = await refused(live, call, *args)
+    fake = await refused(fake_chapati, call, *args)
+
+    assert str(fake).splitlines()[:2] == str(real).splitlines()[:2]
+    assert (fake.food_id, fake.valid_units) == (real.food_id, real.valid_units)
+
+
+async def test_fake_reads_units_and_words_the_assumption_as_the_server_does(
+    live: NutritionClient, fake_chapati: FakeNutrition
+) -> None:
+    for amount, unit in [(2, "roti"), (1.5, " Rotis"), (3, "pieces"), (150, "grams"), (0.123, "g")]:
+        real = await live.nutrition("chapati", amount, unit)
+        fake = await fake_chapati.nutrition("chapati", amount, unit)
+
+        assert (fake.grams, fake.measure_assumption) == (real.grams, real.measure_assumption)
+        assert fake.food.units == real.food.units
+
+
+async def test_fake_reads_an_es_plural_as_the_server_does(live: NutritionClient) -> None:
+    fake = FakeNutrition({"whole_milk": {"kcal": 60.0}}, units={"whole_milk": {"glass": 257.83}})
+
+    real = await live.nutrition("whole_milk", 2, "Glasses")
+    stand_in = await fake.nutrition("whole_milk", 2, "Glasses")
+
+    # The server multiplies the unrounded grams in a glass; the fake has the rounded ones a
+    # search result lists.
+    assert stand_in.grams == pytest.approx(real.grams, abs=0.02)
+    # A unit the server works out from a density has a note after the grams; the fake adds none.
+    assert real.measure_assumption.startswith("2 glass = 515.7 g")
+    assert stand_in.measure_assumption == "2 glass = 515.7 g"
+
+
+async def test_roti_is_the_name_the_server_gives_chapati(live: NutritionClient) -> None:
+    # The reader's tests build their chapati the same way, so this keeps them honest.
+    found = await live.search("rotis")
+
+    assert [food.id for food in found.results] == ["chapati"]
+    assert found.results[0].units == {"g": 1.0, "roti": 40.0, "piece": 40.0, "serving": 80.0}
+    assert "roti" in found.results[0].aliases
