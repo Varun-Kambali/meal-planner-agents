@@ -50,7 +50,8 @@ MAX_ITEMS = 20
 OPTIONS = 5
 # The unit of a number with no unit word: "2 eggs" is two pieces.
 COUNTED = "piece"
-# No unit gets under nutrition-mcp's 5000 g limit past this, and it keeps the arithmetic finite.
+# More than this of any unit is over nutrition-mcp's 5000 g limit. The bound also keeps the
+# arithmetic finite.
 MAX_AMOUNT = 100_000
 
 # A range of amounts: "2-3", "2 to 3", "2 or 3", "two or three". The dashes are a hyphen, an en
