@@ -1,6 +1,6 @@
 # Case study: meal-planner-agents
 
-Written at kickoff on 2026-10-21, before any code, and agreed with the plan. It is updated as each milestone lands, and the results arrive with the evals.
+Written at kickoff on 2026-10-21, updated 2026-10-24 for the recipe pipeline.
 
 ## Why: the problem
 
@@ -48,15 +48,15 @@ Out of scope for v1, and why:
 
 ## How: design and trade-offs
 
-The browser keeps the user's rules, recipes and log. A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (all slots in parallel), gets every recipe's numbers from nutrition-mcp, checks recipes, days and the week in plain Python, and sends failing recipes back with the exact failures, at most 3 times. The diagram is in [architecture.md](architecture.md).
+A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. The diagram is in [architecture.md](architecture.md).
 
 The decisions that mattered:
 
-1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The original idea also covered shopping, prep and rotation, which is several products. Starting from the plan the user already has keeps v1 to the part that actually took me the longest.
-2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). Asking the model to check its own recipe lost, because its arithmetic is the problem nutrition-mcp measured. Picking recipes from a fixed list of dishes lost too: it can't fit a slot's style and limits, and it can't give variety.
-3. **One model call per slot for the whole week** instead of one per recipe or one for everything. Per recipe means 28 calls and no view of the other recipes, so variety suffers. One call for everything is the baseline the eval compares against.
-4. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)). My recipes need oats, fruit, seeds, olive oil, whey and chicken, which nutrition-mcp doesn't bundle. Adding them to nutrition-mcp itself would mix this project's needs into its release, and a second nutrition source in this project would split where numbers come from.
-5. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would mean building login and holding people's food logs on a public demo. A stateless API with browser storage and a file export is less to build and leaves nothing to leak.
+1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The first idea also covered shopping, prep and rotation: several products. Starting from the user's plan keeps v1 to the part that took longest.
+2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost, because its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost too, with no variety. One call per slot sits between one call per recipe (28 for a four-slot plan), where no call sees the others, and the single call that is the eval's baseline.
+3. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)). They come from USDA FoodData Central as a custom dataset, and the catalogue of ingredients the writer may use is checked against nutrition-mcp at startup, so a bad id stops the app. Editing nutrition-mcp would tie this project to its releases, and a second source would split where numbers come from.
+4. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would mean login and food logs on a public demo; browser storage with a file export leaves nothing to leak.
+5. **Code fits portions, and the writer is shown nutrition** ([0005](decisions/0005-code-fits-portions.md)). In the first live week (one run, not an evaluation) the writer couldn't land on calories: it knows no ingredient's energy, so it guesses grams, and repair guesses again. Now code scales an off-target recipe's grams by one factor and nutrition-mcp works the result out again, so code never multiplies a nutrient. The writer also sees each ingredient's nutrition per 100 g and the slot's share of the day's limits. More repair rounds lost, since they spend model calls on arithmetic. A solver that picks grams lost, since it would replace the writer's proportions where scaling keeps the dish. Each change has a switch, so the eval can measure it.
 
 ## Results
 
@@ -64,10 +64,13 @@ The decisions that mattered:
 
 ## Limits, and what better inputs would change
 
-- **Time is the model's claim.** Active and total minutes are what the recipe states, checked against the slot's limits but not measured. Cooking a sample of recipes is the only real check.
-- **Glycemic load is often unknown.** USDA data has no glycemic index, so any meal with a food from this project's food file has no glycemic load. A licensed GI table loaded through nutrition-mcp would fill this in.
-- **The catalogue limits variety.** The model can only use foods that have sourced numbers. A larger licensed food table widens the recipes without code changes.
-- **Free-tier models.** Quality and speed depend on the free Gemini tier. A stronger model is a config change, and the eval measures what it buys.
+- **Time is the model's claim.** Minutes are what the recipe states, checked against the slot's limits, never measured.
+- **A style like "no-cook" is free text** that no code checks, though the prompts call it binding.
+- **Saturated fat went over the day's cap** on several days in the first live run, which was not an evaluation. The plan was vegetarian, with paneer among its liked foods. The writer now sees each ingredient's saturated fat, and the eval will show whether that helps.
+- **Scaling is uniform,** so a piece-counted ingredient such as an egg can land on a fraction of a piece.
+- **Glycemic load is often unknown.** USDA foods carry none; a licensed table loaded through nutrition-mcp would fill it in.
+- **The catalogue limits variety.** A larger licensed table widens it without code changes.
+- **Free-tier models.** A stronger model is a config change, and the eval measures what it buys.
 - **Browser storage.** Clearing the browser loses the data unless it was exported.
 
 ## What I learned
