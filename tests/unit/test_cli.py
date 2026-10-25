@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from app_helpers import MARK, ExplodingNutrition, marked_plan, renamed_replies
+from reader_helpers import ReaderNutrition, reading, said, write_reader_catalogue
 from week_helpers import (
     PLAN,
     SpyNutrition,
@@ -20,6 +21,8 @@ from week_helpers import (
 
 from meal_planner.cli import main
 from meal_planner.config import Settings
+from meal_planner.llm import RATE_LIMITED, FakeModel, ModelReply
+from meal_planner.reader import ReadResult
 from meal_planner.week_events import WeekResult
 
 EXTRA_FOODS = ("brinjal",)
@@ -135,6 +138,147 @@ def test_the_plans_words_never_reach_the_terminal_except_in_the_week_file(
     assert MARK in out.read_text(encoding="utf-8")
     assert MARK not in captured.err
     assert MARK not in captured.out
+
+
+# Reading a meal
+
+
+def meal_model(*replies: str) -> FakeModel:
+    return FakeModel({"read_meal": list(replies), "choose_food": []})
+
+
+def read_cli(folder: Path, text: str, model: Any, nutrition: Any = None, **settings: Any) -> int:
+    return run_cli(
+        folder,
+        "read",
+        text,
+        model=model,
+        nutrition=nutrition or ReaderNutrition(),
+        **({"catalogue_path": write_reader_catalogue(folder)} | settings),
+    )
+
+
+def test_read_prints_the_result_as_json_and_nothing_else(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    model = meal_model(reading(said("roti", 2, "roti", "2"), said("pulao", None, None, "some")))
+
+    code = read_cli(tmp_path, "2 rotis and some pulao", model)
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.err == ""
+    result = ReadResult.model_validate_json(captured.out)
+    assert [(item.name, item.status) for item in result.items] == [
+        ("roti", "matched"),
+        ("pulao", "missing"),
+    ]
+    assert result.missing == ["pulao"]
+    assert result.total is not None
+    assert result.total.total.kcal == 240
+
+
+@pytest.mark.parametrize(
+    ("text", "said_of"),
+    [
+        pytest.param("", "blank", id="empty"),
+        pytest.param("  \n", "blank", id="spaces"),
+        pytest.param("x" * 501, "501", id="long"),
+    ],
+)
+def test_text_that_cannot_be_used_exits_2_naming_the_field_and_asks_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], text: str, said_of: str
+) -> None:
+    model = meal_model(reading())
+
+    code = read_cli(tmp_path, text, model)
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert captured.err.startswith("meal-planner: read: text: ")
+    assert said_of in captured.err
+    assert "xxxx" not in captured.err
+    assert model.calls == []
+
+
+def test_the_text_limit_is_the_setting_here_too(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert read_cli(tmp_path, "a" * 11, meal_model(reading()), max_meal_text_chars=10) == 2
+    assert "10" in capsys.readouterr().err
+    assert read_cli(tmp_path, "a" * 10, meal_model(reading()), max_meal_text_chars=10) == 0
+
+
+def test_a_model_that_cannot_be_reached_exits_1_naming_the_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class Down:
+        async def structured(self, **_: Any) -> Any:
+            return ModelReply(value=None, raw="", error=RATE_LIMITED)
+
+    code = read_cli(tmp_path, f"2 rotis {MARK}", Down())
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.out == ""
+    assert lines(captured.err) == ["meal-planner: the model could not be reached (step: read_meal)"]
+
+
+def test_a_read_that_breaks_says_only_what_kind_of_failure_it_was(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class Breaking(ReaderNutrition):
+        async def search(self, *args: Any, **kwargs: Any) -> Any:
+            raise RuntimeError(f"stand-in echoed the request: {MARK}")
+
+    model = meal_model(reading(said("roti", 2, "roti", "2")))
+
+    code = read_cli(tmp_path, f"2 rotis {MARK}", model, Breaking())
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert MARK not in captured.err + captured.out
+    assert "RuntimeError" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_a_failed_start_exits_1_with_one_line_for_a_read_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+
+    code = read_cli(tmp_path, "2 rotis", meal_model(reading()))
+
+    err = lines(capsys.readouterr().err)
+    assert code == 1
+    assert len(err) == 1
+    assert "LANGSMITH_TRACING" in err[0]
+
+
+def test_ctrl_c_while_reading_exits_with_130(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def interrupted(coroutine: Any) -> None:
+        coroutine.close()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("meal_planner.cli.asyncio.run", interrupted)
+
+    assert read_cli(tmp_path, "2 rotis", meal_model(reading())) == 130
+
+
+def test_the_typed_text_never_reaches_the_terminal_except_in_the_result(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    model = meal_model(reading(said("roti", 2, "roti", MARK), said(f"food {MARK}", 1, "g", MARK)))
+
+    code = read_cli(tmp_path, f"2 rotis and food {MARK}", model)
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert MARK in captured.out
+    assert MARK not in captured.err
 
 
 # Input that cannot be used
@@ -292,3 +436,10 @@ def test_the_installed_command_has_help() -> None:
 
     assert done.returncode == 0
     assert "--out" in done.stdout
+
+
+def test_the_installed_command_has_help_for_reading() -> None:
+    done = subprocess.run([command(), "read", "--help"], capture_output=True, text=True)
+
+    assert done.returncode == 0
+    assert "text" in done.stdout
