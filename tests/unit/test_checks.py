@@ -675,6 +675,14 @@ NOT_FIGURES = [
     "add salt at least 5 minutes before the end",
     "salt up to 2 tsp",
     "protein bar, then 2-3 tbsp curd",
+    "100 g fat-free yogurt",
+    "Take 2 protein-rich rotis",
+    "2 sugar-free biscuits",
+    "salt-free",
+    "Salt 1/2 tsp",
+    "sugar 1/2 cup",
+    "salt up to 1/2 tsp",
+    "Paneer 100 g + salt and pepper",
 ]
 
 
