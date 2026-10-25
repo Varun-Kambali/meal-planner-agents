@@ -394,6 +394,32 @@ async def test_a_clash_in_the_first_writing_goes_to_the_later_day() -> None:
     assert all(r.failures == [] for r in week.recipes)
 
 
+async def test_a_clash_is_not_blamed_on_a_recipe_that_cannot_be_repaired() -> None:
+    """Monday and Tuesday are both Japanese, but Tuesday has no numbers and is never rewritten."""
+
+    class DownForTuesday(SpyNutrition):
+        async def meal(self, items: list[MealItemIn]) -> MealResult:
+            if "carrot" in [i.food_id for i in items]:
+                raise NutritionError("could not answer compute_meal: closed", unreachable=True)
+            return await super().meal(items)
+
+    model = model_for(
+        writes={"snack": [changed("snack", japanese, "mon")]},
+        repairs={"snack": [repair_reply("snack", "mon")]},
+    )
+
+    events, week = await run(model, nutrition=DownForTuesday())
+
+    recipes = by_key(week)
+    mon, tue = recipes[("mon", "snack")], recipes[("tue", "snack")]
+    assert (mon.attempts, mon.failures) == (2, [])
+    assert (tue.attempts, [f.check for f in tue.failures]) == (1, ["nutrition_unavailable"])
+    started = [(e.slot_id, e.days) for e in events if isinstance(e, RepairStarted)]
+    assert started == [("snack", ["mon"])]
+    ((_, user),) = model.of_task("repair_slot")
+    assert "the day after (tue)" in user
+
+
 # A reply that cannot be used
 
 

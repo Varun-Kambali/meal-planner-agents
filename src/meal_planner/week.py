@@ -430,6 +430,13 @@ async def _compute(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     return {"recipes": dict(zip(keys, numbered, strict=True))}
 
 
+def _is_unavailable(recipe: CheckedRecipe) -> bool:
+    """Whether nutrition-mcp could not be reached for this recipe: the writer cannot fix that."""
+    return recipe.nutrition is None and any(
+        f.check == NUTRITION_UNAVAILABLE for f in recipe.failures
+    )
+
+
 @dataclass(frozen=True)
 class _Evaluation:
     recipes: dict[_RecipeKey, CheckedRecipe]
@@ -445,13 +452,15 @@ def _evaluate(
 ) -> _Evaluation:
     """Every check on the week as it stands, with the failures each recipe is to fix.
 
-    A clash between two recipes goes to the one this run may rewrite (`repairable`): a
-    replacement is checked inside the rest of the week, and what clashes with the rest is its to
-    fix. Between two that may both be rewritten it goes to the one written in the latest round
-    (`fresh`), so a recipe that already passed is not rewritten because another changed; when
-    both or neither are, to the later day. A day that misses its targets is blamed on a recipe in
-    `repairable`, once per failed check, only when every slot of the day is there and none of
-    them fails on its own: those are rewritten first, and the day is then worked out again.
+    A clash between two recipes goes to the one this run may rewrite (`repairable`), leaving out
+    a recipe with no numbers because nutrition-mcp could not be reached, which is never sent to
+    repair: a replacement is checked inside the rest of the week, and what clashes with the rest
+    is its to fix. Between two that may both be rewritten it goes to the one written in the
+    latest round (`fresh`), so a recipe that already passed is not rewritten because another
+    changed; when both or neither are, to the later day. A day that misses its targets is blamed
+    on a recipe in `repairable`, once per failed check, only when every slot of the day is there
+    and none of them fails on its own: those are rewritten first, and the day is then worked out
+    again.
     """
     rules, s = deps.rules, deps.settings
     found: dict[_RecipeKey, list[Failure]] = {}
@@ -468,7 +477,10 @@ def _evaluate(
         failures += check_gear_and_time(recipe.draft, rules, recipe.spec.slot)
         failures += check_model_figures(recipe.draft)
         found[key] = failures
-    variety = check_variety(list(recipes.values()), rules, s, prefer=[repairable, fresh])
+    may_rewrite = frozenset(
+        key for key in repairable if key in recipes and not _is_unavailable(recipes[key])
+    )
+    variety = check_variety(list(recipes.values()), rules, s, prefer=[may_rewrite, fresh])
     for key, failures in variety.items():
         found[key] += failures
 
@@ -563,7 +575,7 @@ def _repair_jobs(
             if key[1] == slot.id
             and (recipe := evaluation.recipes.get(key)) is not None
             and recipe.failures
-            and not any(f.check == NUTRITION_UNAVAILABLE for f in recipe.failures)
+            and not _is_unavailable(recipe)
         ]
         # A call that gave nothing because the model could not be reached was already retried
         # by the model client: leave the slot, and its recipes keep the failures they have.
