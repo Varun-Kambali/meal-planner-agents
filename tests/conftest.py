@@ -1,4 +1,6 @@
+import logging
 import os
+from collections.abc import Iterator
 
 import pytest
 
@@ -26,3 +28,38 @@ TRACING_VARIABLES = (
 def tracing_off(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in TRACING_VARIABLES:
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A MEAL_PLANNER_ variable in a developer's shell must not change a test's settings."""
+    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
+        monkeypatch.delenv(name)
+
+
+class _Collector(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@pytest.fixture
+def records() -> Iterator[list[logging.LogRecord]]:
+    """Every logging record, including those of our own loggers, which do not propagate."""
+    collector = _Collector()
+    loggers = [logging.getLogger()] + [
+        logging.getLogger(name)
+        for name in list(logging.root.manager.loggerDict)
+        if name.startswith("meal_planner")
+    ]
+    root_level = logging.getLogger().level
+    logging.getLogger().setLevel(logging.DEBUG)
+    for logger in loggers:
+        logger.addHandler(collector)
+    yield collector.records
+    for logger in loggers:
+        logger.removeHandler(collector)
+    logging.getLogger().setLevel(root_level)

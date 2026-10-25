@@ -1,21 +1,17 @@
 """The meal-planner command: arguments, progress on stderr, the week as JSON, and its exit codes."""
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
-from nutrition_mcp.schemas import MealItemIn, MealResult
+from app_helpers import MARK, ExplodingNutrition, marked_plan, renamed_replies
 from week_helpers import (
     PLAN,
-    SLOTS,
-    SlotModel,
     SpyNutrition,
     changed,
-    good,
     model_for,
     repair_reply,
     without_protein,
@@ -26,14 +22,7 @@ from meal_planner.cli import main
 from meal_planner.config import Settings
 from meal_planner.week_events import WeekResult
 
-MARK = "ZXQ-MARKER-5512"
 EXTRA_FOODS = ("brinjal",)
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
-        monkeypatch.delenv(name)
 
 
 def rules_file(folder: Path, **changes: Any) -> Path:
@@ -135,27 +124,11 @@ def test_a_slot_that_could_not_be_written_is_reported_and_the_week_still_comes_o
 def test_the_plans_words_never_reach_the_terminal_except_in_the_week_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    plan = json.loads(PLAN.read_text(encoding="utf-8"))
-    plan["name"] = f"Plan {MARK}"
-    plan["slots"][0] = plan["slots"][0] | {"style": f"style {MARK}", "name": f"Breakfast {MARK}"}
-    plan["food"]["cuisines"] = [f"South {MARK}", f"Japan {MARK}", f"Med {MARK}"]
-    names = {
-        "South Indian": f"South {MARK}",
-        "Japanese": f"Japan {MARK}",
-        "Mediterranean": f"Med {MARK}",
-    }
-
-    def renamed(text: str) -> str:
-        for old, new in names.items():
-            text = text.replace(old, new)
-        return text
-
-    model = SlotModel({s: {"write_slot": [renamed(good(s))]} for s in SLOTS})
     path = tmp_path / "marked.json"
-    path.write_text(json.dumps(plan), encoding="utf-8")
+    path.write_text(json.dumps(marked_plan()), encoding="utf-8")
     out = tmp_path / "week.json"
 
-    code = run_cli(tmp_path, "week", str(path), "--out", str(out), model=model)
+    code = run_cli(tmp_path, "week", str(path), "--out", str(out), model=renamed_replies())
 
     captured = capsys.readouterr()
     assert code == 0
@@ -258,13 +231,6 @@ def test_a_failed_start_exits_non_zero_with_one_line(
     assert len(err) == 1
     assert err[0].startswith("meal-planner: ")
     assert "LANGSMITH_TRACING" in err[0]
-
-
-class ExplodingNutrition(SpyNutrition):
-    """Breaks the nutrition port's contract during the run, with text that must stay unseen."""
-
-    async def meal(self, items: list[MealItemIn]) -> MealResult:
-        raise RuntimeError(f"stand-in echoed the request: {MARK}")
 
 
 def test_a_run_that_fails_says_only_what_kind_of_failure_it_was(
