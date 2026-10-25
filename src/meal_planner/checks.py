@@ -253,29 +253,48 @@ def _gear_names(names: Iterable[str]) -> str:
 
 
 # A nutrition figure in the model's words: a number beside a nutrition word, either way round,
-# with or without a unit ("450 kcal", "28 g protein", "protein: 28 g", "~30g of protein").
+# with or without a unit ("450 kcal", "28 g protein", "A 400-kcal dinner", "25+ g protein",
+# "protein: 28 g", "fat less than 10 g", "~30g of protein").
 _NUTRIENT = (
     r"(?:k?cals?|kj|calories?|protein|carb(?:ohydrate)?s?|(?:sat(?:urated)?\s+)?fat|fib(?:re|er)"
     r"|sugars?|sodium|salt)"
 )
 # The whole number, so "12 minutes" is never read as "1" followed by something else.
 _NUMBER = r"(?<![\w.,])\d+(?:[.,]\d+)*(?![.,]?\d)"
-_UNIT = r"(?:k?cals?|kj|g|gms?|grams?|mg|milligrams?|mcg|ug|µg|%)(?![a-z])"
-# Words that can stand between a nutrition word and its number: "protein of 28 g", "fat under 9".
+_MASS = r"g|gms?|grams?|mg|milligrams?|mcg|ug|µg"
+_UNIT = rf"(?:k?cals?|kj|{_MASS}|%)(?![a-z])"
+# What can join a number to its unit or word: a space, a hyphen ("400-kcal") or a plus ("25+ g").
+_JOIN = r"(?:-|\s*\+\s*|\s*)"
+# What can join a unit to the word: a space, a hyphen ("30g-protein") or a plus tight to the unit
+# ("25g+ protein"), but not a spaced plus, so the "+" in "100 g + salt and pepper" does not tie the
+# 100 g to the salt.
+_JOIN_AFTER_UNIT = r"(?:-|\+\s*|\s*)"
+# Words that can stand between a nutrition word and its number: "protein of 28 g", "fat under 9",
+# "protein at least 30 g". Longer phrases come first so "no more than" is not cut at "more than".
 _LINK = (
-    r"(?:[:=(~-]\s*|(?:of|is|at|about|around|approx(?:imately)?|roughly|nearly|under|over"
-    r"|below|above|only|just)\s+)"
+    r"(?:[:=(~-]\s*|(?:of|is|about|around|approx(?:imately)?|roughly|nearly|only|just"
+    r"|at\s+least|at\s+most|at|no\s+more\s+than|less\s+than|more\s+than|up\s+to"
+    r"|under|over|below|above)\s+)"
 )
-# After "salt 2" or "sugar 1", a measure or a time means an amount or a moment, not a figure.
+# After "salt 2" or "sugar 1", a measure, a fraction or a time means an amount or a moment, not a
+# figure: "salt 2 tsp", "sugar 1/2 cup", "salt 2 minutes". A slash before a word is a rate
+# ("calories 400/day"), which is one.
 _NOT_A_FIGURE = (
-    r"(?:tsps?|tbsps?|teaspoons?|tablespoons?|cups?|ml|l|litres?|liters?|pinch(?:es)?"
-    r"|secs?|seconds?|mins?|minutes?|hrs?|hours?|days?|times?|pieces?|whistles?)(?![a-z])"
+    r"(?:/\s*\d|(?:tsps?|tbsps?|teaspoons?|tablespoons?|cups?|ml|l|litres?|liters?|pinch(?:es)?"
+    r"|secs?|seconds?|mins?|minutes?|hrs?|hours?|days?|times?|pieces?|whistles?)(?![a-z]))"
 )
-_FIGURE = re.compile(
-    rf"{_NUMBER}\s*(?:{_UNIT}\s*)?(?:of\s+)?{_NUTRIENT}(?![a-z])"
-    rf"|(?<![a-z]){_NUTRIENT}\s*{_LINK}*~?{_NUMBER}(?:\s*{_UNIT})?(?!\s*{_NOT_A_FIGURE})",
-    re.IGNORECASE,
+# "fat-free" and "protein-rich" describe a food, not a quantity: "100 g fat-free yogurt". It is
+# one only when the number reaches the word by spaces alone, with at most a mass between them, and
+# a food follows the hyphenated word, so "30 g protein-rich.", "a 400-calorie-controlled plan" and
+# "150 kcal sugar-free snack" (an energy, not a mass) are still figures.
+_DESCRIBES = rf"(?!{_NUMBER}\s*(?:(?:{_MASS})(?![a-z])\s*)?(?:of\s+)?{_NUTRIENT}-[a-z]+\s+[a-z])"
+_NUMBER_THEN_WORD = (
+    rf"{_DESCRIBES}{_NUMBER}{_JOIN}(?:{_UNIT}{_JOIN_AFTER_UNIT})?(?:of\s+)?{_NUTRIENT}(?![a-z])"
 )
+_WORD_THEN_NUMBER = (
+    rf"(?<![a-z]){_NUTRIENT}\s*{_LINK}*~?{_NUMBER}(?:\s*{_UNIT})?(?!\s*{_NOT_A_FIGURE})"
+)
+_FIGURE = re.compile(f"{_NUMBER_THEN_WORD}|{_WORD_THEN_NUMBER}", re.IGNORECASE)
 
 
 def check_model_figures(draft: DraftRecipe) -> list[Failure]:
