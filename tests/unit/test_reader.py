@@ -189,7 +189,7 @@ async def test_vague_words_need_an_amount_whatever_the_model_returned(amount_tex
 
 
 @pytest.mark.parametrize(
-    "amount_text", ["2", "two", "half", "1/2", "a couple", "2.5", "", "bitter"]
+    "amount_text", ["2", "two", "half", "1/2", "a couple", "2.5", "a", "bitter"]
 )
 async def test_a_stated_amount_is_read(amount_text: str) -> None:
     model = model_of(reading(said("roti", 2, "roti", amount_text)))
@@ -197,6 +197,49 @@ async def test_a_stated_amount_is_read(amount_text: str) -> None:
     (item,) = (await read("2 rotis", model)).items
 
     assert (item.status, item.amount, item.grams) == ("matched", 2, 80)
+
+
+@pytest.mark.parametrize("amount_text", ["", " ", "\n "])
+async def test_an_amount_the_person_did_not_type_needs_amount(amount_text: str) -> None:
+    # The model said 1 although the words for an amount are empty: it made the number up.
+    nutrition = ReaderNutrition()
+    model = model_of(reading(said("roti", 1, "roti", amount_text)))
+
+    result = await read("roti", model, nutrition)
+
+    (item,) = result.items
+    assert (item.status, item.food_id, item.unit) == ("needs_amount", "chapati", "roti")
+    assert (item.amount, item.grams, item.nutrition) == (None, None, None)
+    assert item.valid_units == ["g", "roti", "piece", "serving"]
+    assert result.total is None
+    assert [call[0] for call in nutrition.asked] == ["search"]
+
+
+async def test_roti_and_dal_with_no_amounts_need_amounts_whatever_the_model_returned() -> None:
+    nutrition = ReaderNutrition()
+    model = model_of(reading(said("roti", 1, None, ""), said("dal", 1, "katori", "")), choosing(0))
+
+    result = await read("roti and dal", model, nutrition)
+
+    roti, dal = result.items
+    assert (roti.status, roti.food_id, roti.amount, roti.grams) == (
+        "needs_amount",
+        "chapati",
+        None,
+        None,
+    )
+    assert (dal.status, dal.food_id, dal.amount, dal.grams) == (
+        "needs_amount",
+        "dal_tadka",
+        None,
+        None,
+    )
+    assert (roti.valid_units, dal.valid_units) == (
+        ["g", "roti", "piece", "serving"],
+        ["g", "katori", "serving"],
+    )
+    assert (result.total, result.missing) == (None, [])
+    assert [call[0] for call in nutrition.asked] == ["search", "search"]
 
 
 @pytest.mark.parametrize("amount", [0, -2, 1e999])

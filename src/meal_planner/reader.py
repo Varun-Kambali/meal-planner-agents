@@ -8,8 +8,9 @@ nutrition figure, and nothing it adds to a reply is used. Code decides the rest:
 - A food is nutrition-mcp's top search result when it is the only one or its name, an alias or
   its id is the name typed; with several, the model picks one; a name with no result, or a pick
   that is none of the results, is `missing` and left out of the total.
-- An amount that is missing, vague ("some", "a handful") or a range ("2-3") is `needs_amount`
-  whatever number the model returned. The person is asked, never given a guess.
+- An amount that is missing (no words for it in the text), vague ("some", "a handful") or a range
+  ("2-3") is `needs_amount` whatever number the model returned. The person is asked, never given
+  a guess.
 - A unit nutrition-mcp has for the food passes through to it. Otherwise the catalogue's measure
   for the food is used, if it has one. Otherwise the item is `unknown_unit`, with the units that
   would work. No measure is made up: "2 pav" has no sourced weight, so it stays unknown.
@@ -239,13 +240,14 @@ def _unread(
 def _stated_amount(item: ExtractedItem) -> float | None:
     """The amount the person gave, or None when they gave none a meal can be worked out from.
 
-    Decided here and not by the model: a range or a vague word in the amount's own words
-    cancels whatever number the model chose.
+    Decided here and not by the model: no words for an amount ("roti and dal"), a range or a
+    vague word in them cancels whatever number the model chose.
     """
     amount = item.amount
     if amount is None or not math.isfinite(amount) or not 0 < amount <= MAX_AMOUNT:
         return None
-    if _VAGUE.search(item.amount_text) or _RANGE.search(item.amount_text):
+    words = item.amount_text.strip()
+    if not words or _VAGUE.search(words) or _RANGE.search(words):
         return None
     return amount
 
