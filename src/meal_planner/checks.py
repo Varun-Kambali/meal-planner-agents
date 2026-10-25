@@ -16,6 +16,7 @@ Two conventions run through the nutrition checks:
 """
 
 import math
+import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from typing import Literal
@@ -240,6 +241,60 @@ def check_gear_and_time(draft: DraftRecipe, rules: PlanRules, slot: Slot) -> lis
 
 def _gear_names(names: Iterable[str]) -> str:
     return ", ".join(name.replace("_", " ") for name in names)
+
+
+# A nutrition figure in the model's words: a number beside a nutrition word, either way round,
+# with or without a unit ("450 kcal", "28 g protein", "protein: 28 g", "~30g of protein").
+_NUTRIENT = (
+    r"(?:k?cals?|kj|calories?|protein|carb(?:ohydrate)?s?|(?:sat(?:urated)?\s+)?fat|fib(?:re|er)"
+    r"|sugars?|sodium|salt)"
+)
+# The whole number, so "12 minutes" is never read as "1" followed by something else.
+_NUMBER = r"(?<![\w.,])\d+(?:[.,]\d+)*(?![.,]?\d)"
+_UNIT = r"(?:k?cals?|kj|g|gms?|grams?|mg|milligrams?|mcg|ug|µg|%)(?![a-z])"
+# Words that can stand between a nutrition word and its number: "protein of 28 g", "fat under 9".
+_LINK = (
+    r"(?:[:=(~-]\s*|(?:of|is|at|about|around|approx(?:imately)?|roughly|nearly|under|over"
+    r"|below|above|only|just)\s+)"
+)
+# After "salt 2" or "sugar 1", a measure or a time means an amount or a moment, not a figure.
+_NOT_A_FIGURE = (
+    r"(?:tsps?|tbsps?|teaspoons?|tablespoons?|cups?|ml|l|litres?|liters?|pinch(?:es)?"
+    r"|secs?|seconds?|mins?|minutes?|hrs?|hours?|days?|times?|pieces?|whistles?)(?![a-z])"
+)
+_FIGURE = re.compile(
+    rf"{_NUMBER}\s*(?:{_UNIT}\s*)?(?:of\s+)?{_NUTRIENT}(?![a-z])"
+    rf"|(?<![a-z]){_NUTRIENT}\s*{_LINK}*~?{_NUMBER}(?:\s*{_UNIT})?(?!\s*{_NOT_A_FIGURE})",
+    re.IGNORECASE,
+)
+
+
+def check_model_figures(draft: DraftRecipe) -> list[Failure]:
+    """No nutrition figure in the text the user reads: the title, the steps, store, swap, fits.
+
+    The model is never asked for a figure, and one it writes anyway would be a guess shown next
+    to the numbers nutrition-mcp worked out. A field that names one fails, quoting what it says.
+    """
+    fields = [
+        ("title", draft.title),
+        *((f"step {n}", step) for n, step in enumerate(draft.steps, start=1)),
+        ("store", draft.store),
+        ("swap", draft.swap),
+        ("fits", draft.fits),
+    ]
+    failures: list[Failure] = []
+    for name, text in fields:
+        found = list(dict.fromkeys(match.group().strip() for match in _FIGURE.finditer(text)))
+        if found:
+            quoted = ", ".join(f"'{phrase}'" for phrase in found)
+            failures.append(
+                Failure(
+                    check="model_figure",
+                    message=f"{name} names a nutrition figure ({quoted}); nutrition figures are "
+                    "worked out in code and must be left out of the text",
+                )
+            )
+    return failures
 
 
 # Day checks

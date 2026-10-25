@@ -39,6 +39,7 @@ from meal_planner.checks import (
     check_catalogue,
     check_day,
     check_gear_and_time,
+    check_model_figures,
     check_no_waste,
     check_slot_targets,
     check_variety,
@@ -470,6 +471,7 @@ def _evaluate(
         if recipe.nutrition is not None:
             failures += check_slot_targets(recipe.nutrition, recipe.spec, s)
         failures += check_gear_and_time(recipe.draft, rules, recipe.spec.slot)
+        failures += check_model_figures(recipe.draft)
         found[key] = failures
     for key, failures in _variety(recipes, deps, repairable).items():
         found[key] += failures

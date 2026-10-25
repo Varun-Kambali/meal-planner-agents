@@ -218,6 +218,32 @@ async def test_repair_fixes_low_protein() -> None:
     assert "Banana overnight oats" in user
 
 
+async def test_a_nutrition_figure_the_model_wrote_is_repaired_out() -> None:
+    """The figure is the model's guess, so it fails and the recipe is written again without it."""
+    boast = changed("breakfast", lambda r: r | {"fits": "Packs 32 g protein before work."}, "mon")
+    model = model_for(
+        writes={"breakfast": [boast]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    events, week = await run(model)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert "32 g" not in mon.draft.fits
+    first = next(
+        e
+        for e in events
+        if isinstance(e, RecipeChecked) and e.day == "mon" and e.slot_id == "breakfast"
+    )
+    assert [f.check for f in first.failures] == ["model_figure"]
+    assert "'32 g protein'" in first.failures[0].message
+    ((_, user),) = model.of_task("repair_slot")
+    assert "32 g protein" in user
+    assert week.calls == 5
+
+
 async def test_a_day_that_fails_only_because_of_a_failing_recipe_blames_no_other() -> None:
     """Without the sugar breakfast the day's protein is short too, but only it is rewritten."""
     model = model_for(
@@ -1269,6 +1295,27 @@ async def test_both_prompts_keep_amounts_out_of_the_steps(hints: bool) -> None:
             "- In the steps, name ingredients without amounts: the amounts are in the ingredient "
             "list, and code may change them.\n"
         ) in system
+
+
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_keep_nutrition_figures_out_of_the_text(hints: bool) -> None:
+    """A figure in the text is not ignored: it fails `model_figure`, so the prompts say why."""
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert (
+            "- The reply has no fields for calories, protein or any other nutrient, and its text "
+            '(the title, the steps, "store", "swap" and "fits") must not contain any nutrition '
+            "figure, such as calories or grams of protein, because every figure is worked out "
+            "afterwards in code from your ingredients and grams.\n"
+        ) in system
+        assert "ignored" not in system
 
 
 async def test_writer_prompt_snapshot() -> None:

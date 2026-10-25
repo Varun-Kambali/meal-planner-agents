@@ -12,7 +12,7 @@ The user message holds a block between <data> and </data>. It describes the slot
 - The grams are the weight of the ingredient as listed below.
 - The slot's style in the data block is binding: an air-fryer dish is made in the air fryer, and a no-cook dish uses no heat at all.
 - In the steps, name ingredients without amounts: the amounts are in the ingredient list, and code may change them.
-- The reply has no fields for calories, protein or any other nutrient. They are worked out afterwards from your ingredients and grams, and a figure you guessed would be ignored.
+- The reply has no fields for calories, protein or any other nutrient, and its text (the title, the steps, "store", "swap" and "fits") must not contain any nutrition figure, such as calories or grams of protein, because every figure is worked out afterwards in code from your ingredients and grams.
 - Make the slot's recipes different dishes. No two share a title, and no two rest on mostly the same ingredients. Do not use the same cuisine on two days in a row.
 - Name each recipe's cuisine exactly as one of the listed cuisines.
 - Use only the listed gear. Keep active minutes and total minutes within the limits in the data block, and set "cook_when" to the slot's value.
