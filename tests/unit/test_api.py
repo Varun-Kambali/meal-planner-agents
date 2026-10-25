@@ -1181,3 +1181,93 @@ def test_a_failing_read_does_not_stop_the_next_one(tmp_path: Path) -> None:
         again = client.post("/v1/log/read", json={"text": "a roti"})
 
     assert again.status_code == 200
+
+
+# Typed meals stay out of the logs
+
+
+class TypedTextEchoed(ReaderNutrition):
+    """nutrition-mcp breaking its contract part way: a plain exception with the text in it."""
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        raise RuntimeError(f"stand-in echoed the request: {MARK}")
+
+
+class ModelEchoing:
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        raise RuntimeError(f"the provider echoed the prompt: {user}")
+
+
+def test_no_typed_text_in_logs(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    text = f"2 rotis, a plate of pulao and 3 {MARK}"
+    model = reader_model(
+        reading(
+            said("roti", 2, "roti", "2"),
+            said("pulao", 1, "plate", "a plate"),
+            # A food that is not in the data, and a unit that is refused in a message quoting it.
+            said(f"food {MARK}", 3, f"unit {MARK}", f"3 {MARK}"),
+            said("curd", 1, f"katori {MARK}", MARK),
+        )
+    )
+
+    with reading_meals(tmp_path, model) as client:
+        response = client.post("/v1/log/read", json={"text": text})
+
+    assert response.status_code == 200
+    # The words come back to the person who typed them, in the response and nowhere else.
+    assert MARK in response.text
+    assert records
+    assert_no_marker(records, capfd.readouterr())
+
+
+def test_no_typed_text_in_logs_when_the_text_is_rejected(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    with reading_meals(tmp_path, reader_model()) as client:
+        too_long = client.post("/v1/log/read", json={"text": MARK * 40})
+        wrong_type = client.post("/v1/log/read", json={"text": [MARK]})
+        extra = client.post("/v1/log/read", json={"text": "2 rotis", "note": MARK})
+        not_json = client.post(
+            "/v1/log/read", content=MARK.encode(), headers={"content-type": "application/json"}
+        )
+
+    for response in (too_long, wrong_type, extra, not_json):
+        assert response.status_code == 422
+        assert MARK not in response.text
+    assert_no_marker(records, capfd.readouterr())
+
+
+def test_no_typed_text_in_logs_when_the_model_fails(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    with reading_meals(tmp_path, ModelEchoing()) as client:
+        response = client.post("/v1/log/read", json={"text": f"2 rotis {MARK}"})
+
+    assert response.status_code == 502
+    assert MARK not in response.text
+    assert_no_marker(records, capfd.readouterr())
+
+
+def test_no_typed_text_in_logs_when_nutrition_mcp_breaks(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    model = reader_model(reading(said("roti", 2, "roti", MARK)))
+
+    with reading_meals(tmp_path, model, TypedTextEchoed()) as client:
+        response = client.post("/v1/log/read", json={"text": f"2 rotis {MARK}"})
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "internal error"}
+    assert_no_marker(records, capfd.readouterr())
