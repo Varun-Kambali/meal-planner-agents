@@ -9,7 +9,7 @@ from functools import cache
 from importlib import resources
 
 from meal_planner.catalogue import CatalogueItem
-from meal_planner.checks import LABELS
+from meal_planner.checks import LABELS, spreads_cuisines
 from meal_planner.config import Settings
 from meal_planner.recipes import CheckedRecipe
 from meal_planner.rules import DayType, PlanRules, Slot, SlotSpec
@@ -69,15 +69,24 @@ def _catalogue_line(item: CatalogueItem, hints: bool) -> str:
     return f"{item.id}: {item.name} (per 100 g: {shown})"
 
 
-def _system(name: str, allowed: list[CatalogueItem], hints: bool) -> str:
+# The rule against a cuisine on two days in a row, as each prompt words it. It is left out when
+# the plan lists one cuisine, because then the check lets every recipe use it.
+_CUISINE_RULE = {
+    "writer.md": " Do not use the same cuisine on two days in a row.",
+    "repair.md": " Do not give it the same cuisine as the day before or the day after.",
+}
+
+
+def _system(name: str, rules: PlanRules, allowed: list[CatalogueItem], hints: bool) -> str:
     values = {
         "catalogue": "\n".join(_catalogue_line(item, hints) for item in allowed),
         "catalogue_format": _FORMAT_WITH_HINTS if hints else _FORMAT,
         "per_100g_note": _PER_100G_NOTE if hints else "",
+        "cuisine_rule": _CUISINE_RULE[name] if spreads_cuisines(rules) else "",
     }
     # One pass, so text that looks like a placeholder inside a value is not replaced again.
     return re.sub(
-        r"\{\{(catalogue|catalogue_format|per_100g_note)\}\}",
+        r"\{\{(catalogue|catalogue_format|per_100g_note|cuisine_rule)\}\}",
         lambda m: values[m[1]],
         _template(name),
     )
@@ -124,11 +133,21 @@ def _share_of_limits(day_type: DayType, share: float) -> str:
 
 
 def _slot_lines(
-    rules: PlanRules, settings: Settings, slot: Slot, specs: Sequence[SlotSpec]
+    rules: PlanRules,
+    settings: Settings,
+    allowed: list[CatalogueItem],
+    slot: Slot,
+    specs: Sequence[SlotSpec],
 ) -> list[str]:
-    """The slot, the plan's kitchen and tastes, and the target for each day, as data lines."""
+    """The slot, the plan's kitchen and tastes, and the target for each day, as data lines.
+
+    Only liked foods the writer may use are listed: one the plan's diet, allergens or excluded
+    foods rule out would invite a recipe that fails the catalogue check.
+    """
     food = rules.food
     day_types = {d.id: d for d in rules.day_types}
+    allowed_ids = {item.id for item in allowed}
+    liked = [food_id for food_id in food.liked_foods if food_id in allowed_ids]
 
     def day_line(spec: SlotSpec) -> str:
         line = f"- {spec.day}: {_target(spec, settings)}"
@@ -147,7 +166,7 @@ def _slot_lines(
         f"diet: {food.diet}",
         f"gear: {', '.join(rules.gear)}",
         f"cuisines: {', '.join(_quote(c) for c in food.cuisines)}",
-        f"liked_foods: {', '.join(_quote(f) for f in food.liked_foods) or 'none'}",
+        f"liked_foods: {', '.join(_quote(f) for f in liked) or 'none'}",
         "days:",
         *(day_line(spec) for spec in specs),
     ]
@@ -190,9 +209,11 @@ def _fix_lines(recipe: CheckedRecipe) -> list[str]:
     ]
 
 
-def _user(rules: PlanRules, settings: Settings, job: Job, closing: str) -> str:
+def _user(
+    rules: PlanRules, settings: Settings, allowed: list[CatalogueItem], job: Job, closing: str
+) -> str:
     slot = next(s for s in rules.slots if s.id == job.slot_id)
-    lines = _slot_lines(rules, settings, slot, job.specs)
+    lines = _slot_lines(rules, settings, allowed, slot, job.specs)
     if job.fix:
         lines += ["recipes to fix:", *(line for r in job.fix for line in _fix_lines(r))]
     if job.others:
@@ -211,8 +232,8 @@ def writer_prompt(
 ) -> tuple[str, str]:
     n = len(job.specs)
     closing = f'Write {n} recipe{"" if n == 1 else "s"}, one for each day under "days".'
-    system = _system("writer.md", allowed, settings.writer_nutrient_hints)
-    return system, _user(rules, settings, job, closing)
+    system = _system("writer.md", rules, allowed, settings.writer_nutrient_hints)
+    return system, _user(rules, settings, allowed, job, closing)
 
 
 def repair_prompt(
@@ -220,5 +241,5 @@ def repair_prompt(
 ) -> tuple[str, str]:
     n = len(job.fix)
     closing = f'Fix the {n} recipe{"" if n == 1 else "s"} under "recipes to fix", same days.'
-    system = _system("repair.md", allowed, settings.writer_nutrient_hints)
-    return system, _user(rules, settings, job, closing)
+    system = _system("repair.md", rules, allowed, settings.writer_nutrient_hints)
+    return system, _user(rules, settings, allowed, job, closing)

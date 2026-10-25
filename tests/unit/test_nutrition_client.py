@@ -9,6 +9,7 @@ from fakes import UNIT_SPELLINGS, FakeNutrition
 from mcp import MCPError
 from mcp.types import CallToolResult, TextContent
 from nutrition_mcp.schemas import MealItemIn, MealResult, NutritionResult, SearchResult
+from pydantic import ValidationError
 
 from meal_planner.nutrition import (
     NutritionClient,
@@ -58,6 +59,7 @@ async def test_tool_error_maps_to_nutrition_error() -> None:
     assert str(caught.value) == message
     assert caught.value.food_id == "rajma"
     assert caught.value.valid_units == ["g", "katori"]
+    assert caught.value.unreachable is False
 
 
 async def test_meal_error_names_the_failing_food() -> None:
@@ -72,13 +74,86 @@ async def test_meal_error_names_the_failing_food() -> None:
     assert str(caught.value) == message
     assert caught.value.food_id == "test_rotti"
     assert caught.value.valid_units == []
+    assert caught.value.unreachable is False
 
 
 async def test_error_without_text_still_raises() -> None:
     client = NutritionClient(StandInSession(CallToolResult(content=[], is_error=True)))
 
-    with pytest.raises(NutritionError, match="no text"):
+    with pytest.raises(NutritionError, match="no text") as caught:
         await client.search("rajma")
+    assert caught.value.unreachable is False
+
+
+async def test_a_refusal_without_a_food_id_is_not_unreachable() -> None:
+    """nutrition-mcp answered, so the server is there: only the food is unknown to the caller."""
+    message = "the meal has no items"
+    client = NutritionClient(StandInSession(tool_error(message)))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.meal([MealItemIn(food_id="rajma", amount=100, unit="g")])
+
+    assert str(caught.value) == message
+    assert caught.value.food_id is None
+    assert caught.value.unreachable is False
+
+
+async def call_each_tool(client: NutritionClient, tool: str) -> None:
+    if tool == "search_food":
+        await client.search("rajma")
+    elif tool == "get_nutrition":
+        await client.nutrition("rajma", 150, "g")
+    else:
+        await client.meal([MealItemIn(food_id="rajma", amount=150, unit="g")])
+
+
+TOOLS = ["search_food", "get_nutrition", "compute_meal"]
+
+
+@pytest.mark.parametrize("tool", TOOLS)
+async def test_a_result_that_does_not_fit_its_model_is_a_nutrition_error(tool: str) -> None:
+    session = StandInSession(
+        CallToolResult(content=[], structured_content={"query": "rajma", "results": "rajma"})
+    )
+
+    with pytest.raises(NutritionError) as caught:
+        await call_each_tool(NutritionClient(session), tool)
+
+    assert str(caught.value) == f"nutrition-mcp's result for {tool} could not be read"
+    assert caught.value.food_id is None
+    assert caught.value.unreachable is False
+    assert isinstance(caught.value.__cause__, ValidationError)
+
+
+def sdk_validation_error() -> ValidationError:
+    try:
+        SearchResult.model_validate({"query": "rajma"})
+    except ValidationError as exc:
+        return exc
+    raise AssertionError("the result was expected not to fit")
+
+
+@pytest.mark.parametrize("tool", TOOLS)
+@pytest.mark.parametrize(
+    "error",
+    [
+        sdk_validation_error(),
+        RuntimeError("Invalid structured content returned by tool x: 'rajma' is not a number"),
+    ],
+    ids=["protocol", "output_schema"],
+)
+async def test_the_sdk_refusing_a_result_is_a_nutrition_error(tool: str, error: Exception) -> None:
+    """The SDK checks a result against the protocol and against the tool's output schema."""
+    client = NutritionClient(BrokenSession(error))
+
+    with pytest.raises(NutritionError) as caught:
+        await call_each_tool(client, tool)
+
+    assert str(caught.value) == f"nutrition-mcp's result for {tool} could not be read"
+    assert caught.value.unreachable is False
+    assert caught.value.__cause__ is error
+    # The arguments, and the result that may echo them, stay out of the message.
+    assert "rajma" not in str(caught.value)
 
 
 class BrokenSession:
@@ -112,9 +187,19 @@ async def test_transport_failure_maps_to_nutrition_error(error: Exception, shown
     # No food is to blame and no unit would help, unlike a refusal of one item.
     assert caught.value.food_id is None
     assert caught.value.valid_units == []
+    assert caught.value.unreachable is True
     assert caught.value.__cause__ is error
     # What the user asked about is not repeated in the message.
     assert "rajma" not in str(caught.value)
+
+
+async def test_an_mcp_error_is_named_by_its_message_not_its_code() -> None:
+    client = NutritionClient(BrokenSession(MCPError(-32000, "Connection\n closed")))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.meal([MealItemIn(food_id="rajma", amount=100, unit="g")])
+
+    assert str(caught.value) == "nutrition-mcp could not answer compute_meal: Connection closed"
 
 
 async def test_every_call_names_its_tool_when_the_connection_fails() -> None:

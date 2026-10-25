@@ -1,9 +1,10 @@
 """The `meal-planner` command: write a week from a rules file, without the web server.
 
-Progress goes to stderr one line per event and holds only names the app made up (the kind of
-event, a slot id, days, an attempt number, the names of checks), never the plan's words. The week
-goes to `--out`, or to stdout. Exit codes: 0 a week was written (recipes that still fail are in
-it), 1 the app could not start or the run failed, 2 the rules could not be used.
+Progress goes to stderr one line per event. It holds the kind of event, slot ids (the plan's own
+slugs, such as "breakfast"), days, an attempt number and the names of checks, never the plan's
+free text or what the model wrote. The week goes to `--out`, or to stdout. Exit codes: 0 a week
+was written (recipes that still fail are in it), 1 the app could not start or the run failed,
+2 the rules could not be used, 130 the run was stopped with Ctrl-C.
 
 Settings come from the environment only; the command does not read a .env file, so run it with
 `uv run --env-file .env meal-planner ...` to use one.
@@ -50,7 +51,7 @@ def _refuse(problems: Sequence[Problem], source: str) -> int:
 
 
 def progress_line(event: WeekEvent) -> str:
-    """One line for an event, made only of names the app chose."""
+    """One line for an event: the app's own names and the plan's slot ids, no free text."""
     match event:
         case SlotStarted() | SlotWritten() | RepairStarted():
             return (

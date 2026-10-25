@@ -70,6 +70,18 @@ def test_out_of_bounds_recipes_are_refused(changes: dict[str, Any]) -> None:
         DraftRecipe.model_validate(recipe_fields(**changes))
 
 
+@pytest.mark.parametrize("field", ["active_min", "total_min"])
+def test_negative_minutes_are_refused(field: str) -> None:
+    with pytest.raises(ValidationError, match=field):
+        DraftRecipe.model_validate(recipe_fields(**{field: -1}))
+
+
+def test_zero_minutes_are_allowed() -> None:
+    recipe = DraftRecipe.model_validate(recipe_fields(active_min=0, total_min=0))
+
+    assert (recipe.active_min, recipe.total_min) == (0, 0)
+
+
 def test_fifteen_ingredients_ten_steps_and_the_longest_title_are_allowed() -> None:
     recipe = DraftRecipe.model_validate(
         recipe_fields(

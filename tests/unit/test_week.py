@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from fakes import FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, MealResult
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from week_helpers import (
     FIXTURES,
     PLAN,
@@ -36,11 +36,11 @@ from week_helpers import (
 
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
-from meal_planner.llm import ModelPort
+from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.recipes import CheckedRecipe, SlotDraft
-from meal_planner.rules import DayKey, PlanRules
-from meal_planner.week import replace_recipe, run_week
+from meal_planner.recipes import CheckedRecipe, DraftRecipe, SlotDraft
+from meal_planner.rules import DayKey, PlanRules, expand
+from meal_planner.week import replace_recipe, run_week, with_numbers
 from meal_planner.week_events import (
     RecipeChecked,
     RepairStarted,
@@ -50,6 +50,7 @@ from meal_planner.week_events import (
     WeekEvent,
     WeekResult,
 )
+from meal_planner.week_prompts import Job, repair_prompt, writer_prompt
 
 pytestmark = pytest.mark.anyio
 
@@ -218,6 +219,32 @@ async def test_repair_fixes_low_protein() -> None:
     assert "Banana overnight oats" in user
 
 
+async def test_a_nutrition_figure_the_model_wrote_is_repaired_out() -> None:
+    """The figure is the model's guess, so it fails and the recipe is written again without it."""
+    boast = changed("breakfast", lambda r: r | {"fits": "Packs 32 g protein before work."}, "mon")
+    model = model_for(
+        writes={"breakfast": [boast]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    events, week = await run(model)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.attempts == 2
+    assert mon.failures == []
+    assert "32 g" not in mon.draft.fits
+    first = next(
+        e
+        for e in events
+        if isinstance(e, RecipeChecked) and e.day == "mon" and e.slot_id == "breakfast"
+    )
+    assert [f.check for f in first.failures] == ["model_figure"]
+    assert "'32 g protein'" in first.failures[0].message
+    ((_, user),) = model.of_task("repair_slot")
+    assert "32 g protein" in user
+    assert week.calls == 5
+
+
 async def test_a_day_that_fails_only_because_of_a_failing_recipe_blames_no_other() -> None:
     """Without the sugar breakfast the day's protein is short too, but only it is rewritten."""
     model = model_for(
@@ -294,6 +321,77 @@ async def test_unmeetable_plan_finishes_with_the_shortfall_stated() -> None:
         assert recipe.attempts == 4
     assert week.calls == 4 + 3
     assert week.unwritten == []
+
+
+# Which recipe of a clashing pair is rewritten
+
+
+def japanese(recipe: dict[str, Any]) -> dict[str, Any]:
+    """Tuesday's snack is Japanese, so this puts the recipe in its cuisine."""
+    return recipe | {"cuisine": "Japanese"}
+
+
+def mon_snack_repaired_into_tuesdays_cuisine(*then: str) -> SlotModel:
+    """Monday's snack lacks protein; its repair fixes that and takes Tuesday's cuisine."""
+    return model_for(
+        writes={"snack": [changed("snack", without_protein, "mon")]},
+        repairs={
+            "snack": [
+                raw({"slot_id": "snack", "recipes": [japanese(recipe_of("snack", "mon"))]}),
+                *then,
+            ]
+        },
+    )
+
+
+async def test_a_clash_made_in_the_last_round_stays_on_the_recipe_that_changed() -> None:
+    model = mon_snack_repaired_into_tuesdays_cuisine()
+
+    _, week = await run(model, max_repair_attempts=1)
+
+    recipes = by_key(week)
+    mon, tue = recipes[("mon", "snack")], recipes[("tue", "snack")]
+    assert [f.check for f in mon.failures] == ["variety_cuisine"]
+    assert "repeats the day after (tue)" in mon.failures[0].message
+    assert tue.failures == []
+    assert tue.attempts == 1
+    assert week.calls == 5
+
+
+async def test_a_clash_made_by_a_repair_is_repaired_on_that_recipe() -> None:
+    """Tuesday passed and stays as it was: Monday, which changed, is written again."""
+    model = mon_snack_repaired_into_tuesdays_cuisine(repair_reply("snack", "mon"))
+
+    events, week = await run(model)
+
+    recipes = by_key(week)
+    assert recipes[("mon", "snack")].attempts == 3
+    assert recipes[("mon", "snack")].failures == []
+    assert recipes[("tue", "snack")].attempts == 1
+    started = [(e.slot_id, e.days) for e in events if isinstance(e, RepairStarted)]
+    assert started == [("snack", ["mon"]), ("snack", ["mon"])]
+    assert "tue" not in [e.day for e in events if isinstance(e, RecipeChecked) and e.attempt > 1]
+    second, third = [user for _, user in model.of_task("repair_slot")]
+    assert "the day after (tue)" in third
+    assert "the day after" not in second
+
+
+async def test_a_clash_in_the_first_writing_goes_to_the_later_day() -> None:
+    model = model_for(
+        writes={"snack": [changed("snack", lambda r: r | {"cuisine": "South Indian"}, "tue")]},
+        repairs={"snack": [repair_reply("snack", "tue")]},
+    )
+
+    events, week = await run(model)
+
+    checked = {
+        (e.day, e.slot_id): e for e in events if isinstance(e, RecipeChecked) and e.attempt == 1
+    }
+    assert [f.check for f in checked[("tue", "snack")].failures] == ["variety_cuisine"]
+    assert "the day before (mon)" in checked[("tue", "snack")].failures[0].message
+    assert checked[("mon", "snack")].failures == []
+    assert by_key(week)[("tue", "snack")].attempts == 2
+    assert all(r.failures == [] for r in week.recipes)
 
 
 # A reply that cannot be used
@@ -472,7 +570,9 @@ async def test_nutrition_mcp_refusing_a_recipe_is_a_failure_not_a_crash() -> Non
     odd = changed("snack", lambda r: r | {"ingredients": [{"id": "mystery", "grams": 100}]}, "fri")
     model = model_for(writes={"snack": [odd]}, repairs={"snack": [repair_reply("snack", "fri")]})
 
-    events, week = await run(model, cat=catalogue(item("mystery")))
+    nutrition = SpyNutrition()
+
+    events, week = await run(model, nutrition=nutrition, cat=catalogue(item("mystery")))
 
     friday = by_key(week)[("fri", "snack")]
     assert friday.attempts == 2
@@ -484,26 +584,163 @@ async def test_nutrition_mcp_refusing_a_recipe_is_a_failure_not_a_crash() -> Non
     )
     assert [f.check for f in first.failures] == ["nutrition_failed"]
     assert "mystery" in first.failures[0].message
+    # A refusal is an answer: it is not asked again, and the writer changes the ingredient.
+    assert sum("mystery" in meal for meal in nutrition.meals) == 1
+    assert [t for t, _, _ in model.calls].count("repair_slot") == 1
 
 
 class DownNutrition(SpyNutrition):
     """nutrition-mcp when its connection is gone: every call is refused the way the client does."""
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
-        raise NutritionError("nutrition-mcp could not answer compute_meal: Connection closed")
+        self.meals.append([i.food_id for i in items])
+        raise NutritionError(
+            "nutrition-mcp could not answer compute_meal: Connection closed", unreachable=True
+        )
 
 
-async def test_nutrition_mcp_going_away_fails_the_recipes_and_still_ends_the_week() -> None:
-    events, week = await run(model_for(), nutrition=DownNutrition(), max_repair_attempts=0)
+async def test_nutrition_mcp_going_away_is_not_repaired_and_still_ends_the_week() -> None:
+    """The recipes are not at fault, so no repair is asked for, and none is shown as passing."""
+    nutrition = DownNutrition()
+
+    events, week = await run(model_for(), nutrition=nutrition)
 
     assert len(week.recipes) == 28
     assert all(r.nutrition is None for r in week.recipes)
     for recipe in week.recipes:
-        assert [f.check for f in recipe.failures] == ["nutrition_failed"]
-        assert "Connection closed" in recipe.failures[0].message
+        assert [f.check for f in recipe.failures] == ["nutrition_unavailable"]
+        assert recipe.failures[0].message == (
+            "numbers not known: nutrition-mcp could not be reached"
+        )
+        assert recipe.attempts == 1
     assert all(day.failures for day in week.days)
     assert week.calls == 4
+    assert "repair_started" not in kinds(events)
+    # Each recipe was asked about twice: once, and once more after the first failed.
+    assert len(nutrition.meals) == 2 * 28
     assert kinds(events)[-1] == "week_done"
+
+
+async def test_a_recount_that_fails_once_passes_on_the_second_try() -> None:
+    nutrition = FailingNutrition(connection_closed())
+
+    events, week = await run(model_for(), nutrition=nutrition)
+
+    assert all(r.failures == [] and r.nutrition is not None for r in week.recipes)
+    assert all(d.failures == [] for d in week.days)
+    assert len(nutrition.meals) == 28 + 1
+    assert week.calls == 4
+    assert "repair_started" not in kinds(events)
+
+
+async def test_an_unavailable_recipe_is_left_while_its_slot_is_repaired() -> None:
+    """Only Monday's breakfast is counted while nutrition-mcp is down; Tuesday's still repairs."""
+
+    class DownForMonday(SpyNutrition):
+        async def meal(self, items: list[MealItemIn]) -> MealResult:
+            if "banana" in [i.food_id for i in items]:
+                raise NutritionError("could not answer compute_meal: closed", unreachable=True)
+            return await super().meal(items)
+
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "tue")]},
+        repairs={"breakfast": [repair_reply("breakfast", "tue")]},
+    )
+
+    events, week = await run(model, nutrition=DownForMonday())
+
+    recipes = by_key(week)
+    assert [f.check for f in recipes[("mon", "breakfast")].failures] == ["nutrition_unavailable"]
+    assert recipes[("mon", "breakfast")].attempts == 1
+    assert recipes[("tue", "breakfast")].failures == []
+    started = [(e.slot_id, e.days) for e in events if isinstance(e, RepairStarted)]
+    assert started == [("breakfast", ["tue"])]
+
+
+def monday_breakfast() -> CheckedRecipe:
+    spec = next(s for s in expand(plan_rules()) if (s.day, s.slot.id) == ("mon", "breakfast"))
+    draft = DraftRecipe.model_validate(recipe_of("breakfast", "mon"))
+    return CheckedRecipe(spec=spec, draft=draft, nutrition=None, failures=[], attempts=1)
+
+
+class FailingNutrition(SpyNutrition):
+    """Raises `errors` in turn for each meal it is asked about, then answers as usual."""
+
+    def __init__(self, *errors: NutritionError) -> None:
+        super().__init__()
+        self.errors = list(errors)
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        if self.errors:
+            self.meals.append([i.food_id for i in items])
+            raise self.errors.pop(0)
+        return await super().meal(items)
+
+
+def refusal_naming_no_food() -> NutritionError:
+    return NutritionError("compute_meal could not work out this meal")
+
+
+def connection_closed() -> NutritionError:
+    return NutritionError(
+        "nutrition-mcp could not answer compute_meal: Connection closed", unreachable=True
+    )
+
+
+async def test_with_numbers_raises_only_when_nutrition_mcp_cannot_be_reached() -> None:
+    """A refusal that names no food is still an answer, so it fails the recipe, not the call."""
+    refused = await with_numbers(
+        monday_breakfast(),
+        nutrition=FailingNutrition(refusal_naming_no_food()),
+        catalogue=catalogue(),
+        raise_if_unreachable=True,
+    )
+    assert [f.check for f in refused.failures] == ["nutrition_failed"]
+
+    with pytest.raises(NutritionError, match="Connection closed"):
+        await with_numbers(
+            monday_breakfast(),
+            nutrition=FailingNutrition(connection_closed(), connection_closed()),
+            catalogue=catalogue(),
+            raise_if_unreachable=True,
+        )
+
+
+@pytest.mark.parametrize("raise_if_unreachable", [True, False])
+async def test_with_numbers_asks_once_more_when_nutrition_mcp_cannot_be_reached(
+    raise_if_unreachable: bool,
+) -> None:
+    nutrition = FailingNutrition(connection_closed())
+
+    recipe = await with_numbers(
+        monday_breakfast(),
+        nutrition=nutrition,
+        catalogue=catalogue(),
+        raise_if_unreachable=raise_if_unreachable,
+    )
+
+    assert recipe.nutrition is not None
+    assert recipe.failures == []
+    assert len(nutrition.meals) == 2
+
+
+async def test_with_numbers_gives_up_after_the_second_try() -> None:
+    nutrition = FailingNutrition(connection_closed(), connection_closed())
+
+    recipe = await with_numbers(monday_breakfast(), nutrition=nutrition, catalogue=catalogue())
+
+    assert recipe.nutrition is None
+    assert [f.check for f in recipe.failures] == ["nutrition_unavailable"]
+    assert len(nutrition.meals) == 2
+
+
+async def test_with_numbers_does_not_ask_again_after_a_refusal() -> None:
+    nutrition = FailingNutrition(refusal_naming_no_food())
+
+    recipe = await with_numbers(monday_breakfast(), nutrition=nutrition, catalogue=catalogue())
+
+    assert [f.check for f in recipe.failures] == ["nutrition_failed"]
+    assert len(nutrition.meals) == 1
 
 
 async def test_rate_limited_slot_reported_unwritten() -> None:
@@ -522,6 +759,58 @@ async def test_rate_limited_slot_reported_unwritten() -> None:
     # The slots that were written are complete, and every day says it lacks its lunch.
     assert all(r.attempts == 1 and r.failures == [] for r in week.recipes)
     assert all(day.failures for day in week.days)
+    assert kinds(events)[-1] == "week_done"
+
+
+class RaisesFor:
+    """A model whose call for one slot and task raises, as a broken stand-in or library might."""
+
+    def __init__(self, inner: SlotModel, slot_id: str, task: str, error: Exception) -> None:
+        self.inner, self.slot_id, self.task, self.error = inner, slot_id, task, error
+
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        if task == self.task and f'slot_id: "{self.slot_id}"' in user:
+            raise self.error
+        return await self.inner.structured(
+            task=task, system=system, user=user, schema=schema, timeout_s=timeout_s
+        )
+
+
+async def test_a_model_call_that_raises_fails_only_its_slot(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    model = RaisesFor(model_for(), "lunch", "write_slot", RuntimeError("Vegetarian, no onions"))
+
+    events, week = await run(model)
+
+    assert week.unwritten == [
+        (day, "lunch", "model_error") for day in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    ]
+    assert len(week.recipes) == 21
+    assert all(r.failures == [] for r in week.recipes)
+    assert week.calls == 4
+    (failed,) = [e for e in events if isinstance(e, SlotFailed)]
+    assert (failed.slot_id, failed.reason, failed.final) == ("lunch", "model_error", True)
+    assert kinds(events)[-1] == "week_done"
+    err = capsys.readouterr().err
+    assert '"event": "model_call_raised"' in err
+    assert '"error_type": "RuntimeError"' in err
+    assert "onions" not in err
+
+
+async def test_a_repair_call_that_raises_leaves_the_recipes_as_they_were() -> None:
+    inner = model_for(writes={"breakfast": [changed("breakfast", without_protein, "mon")]})
+    model = RaisesFor(inner, "breakfast", "repair_slot", KeyError("usage"))
+
+    events, week = await run(model)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert [f.check for f in mon.failures] == ["slot_protein_g"]
+    assert mon.attempts == 2
+    assert week.unwritten == []
+    assert kinds(events).count("repair_started") == 1
     assert kinds(events)[-1] == "week_done"
 
 
@@ -753,7 +1042,8 @@ async def test_a_recount_that_nutrition_mcp_refuses_keeps_the_recipe_as_written(
         async def meal(self, items: list[MealItemIn]) -> MealResult:
             if all(i.amount == round(i.amount) for i in items):
                 raise NutritionError(
-                    "nutrition-mcp could not answer compute_meal: Connection closed"
+                    "nutrition-mcp could not answer compute_meal: Connection closed",
+                    unreachable=True,
                 )
             return await super().meal(items)
 
@@ -1269,6 +1559,116 @@ async def test_both_prompts_keep_amounts_out_of_the_steps(hints: bool) -> None:
             "- In the steps, name ingredients without amounts: the amounts are in the ingredient "
             "list, and code may change them.\n"
         ) in system
+
+
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_keep_nutrition_figures_out_of_the_text(hints: bool) -> None:
+    """A figure in the text is not ignored: it fails `model_figure`, so the prompts say why."""
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert (
+            "- The reply has no fields for calories, protein or any other nutrient, and its text "
+            '(the title, the steps, "store", "swap" and "fits") must not contain any nutrition '
+            "figure, such as calories or grams of protein, because every figure is worked out "
+            "afterwards in code from your ingredients and grams.\n"
+        ) in system
+        assert "ignored" not in system
+
+
+def prompts_for(rules: PlanRules, cat: Catalogue | None = None) -> dict[str, tuple[str, str]]:
+    """The writer's and the repairer's (system, user) prompts for the plan's breakfast."""
+    specs = [spec for spec in expand(rules) if spec.slot.id == "breakfast"]
+    job = Job("breakfast", specs, 1, None, [], [])
+    allowed = (cat or catalogue()).allowed_for(rules)
+    return {
+        "writer": writer_prompt(rules, Settings(), allowed, job),
+        "repair": repair_prompt(rules, Settings(), allowed, job),
+    }
+
+
+WRITER_CUISINE_RULE = "Do not use the same cuisine on two days in a row."
+REPAIR_CUISINE_RULE = "Do not give it the same cuisine as the day before or the day after."
+
+
+@pytest.mark.parametrize(
+    "cuisines",
+    [["South Indian"], ["South Indian", "south-indian"]],
+    ids=["one", "one_spelled_twice"],
+)
+def test_a_plan_with_one_cuisine_is_not_told_to_vary_it(cuisines: list[str]) -> None:
+    """The check lets a one-cuisine plan repeat it, so the prompts must not forbid that."""
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    plan["food"]["cuisines"] = cuisines
+
+    prompts = prompts_for(PlanRules.model_validate(plan))
+
+    writer, repair = prompts["writer"][0], prompts["repair"][0]
+    assert WRITER_CUISINE_RULE not in writer
+    assert REPAIR_CUISINE_RULE not in repair
+    assert "no two rest on mostly the same ingredients.\n- Name each recipe's cuisine" in writer
+    assert (
+        "- Keep each fixed recipe different from the slot's other recipes in the data block: "
+        "another title and mostly different ingredients.\n- Name each recipe's cuisine"
+    ) in repair
+
+
+def test_a_plan_with_more_cuisines_is_told_not_to_repeat_one_the_next_day() -> None:
+    prompts = prompts_for(plan_rules())
+
+    assert (
+        "no two rest on mostly the same ingredients. Do not use the same cuisine on two days in "
+        "a row.\n"
+    ) in prompts["writer"][0]
+    assert (
+        "another title and mostly different ingredients. Do not give it the same cuisine as the "
+        "day before or the day after.\n"
+    ) in prompts["repair"][0]
+
+
+def test_only_liked_foods_the_plan_allows_are_listed() -> None:
+    """Curd is excluded by name, almonds by allergen and eggs by diet: none may be suggested."""
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    plan["food"] |= {
+        "exclude_allergens": ["peanut", "tree_nuts"],
+        "exclude_foods": ["brinjal", "curd"],
+        "liked_foods": ["curd", "paneer", "almonds", "egg", "moong_dal"],
+    }
+    rules = PlanRules.model_validate(plan)
+    almonds = catalogue().items["almonds"].model_copy(update={"allergens": ["tree_nuts"]})
+    egg = item("egg").model_copy(update={"diet": "egg"})
+    cat = Catalogue({**catalogue().items, "almonds": almonds, "egg": egg})
+
+    for _, user in prompts_for(rules, cat).values():
+        assert '\nliked_foods: "paneer", "moong_dal"\n' in user
+
+
+def test_no_liked_food_the_plan_allows_reads_none() -> None:
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    plan["food"] |= {"exclude_foods": ["paneer", "moong_dal"]}
+
+    for _, user in prompts_for(PlanRules.model_validate(plan)).values():
+        assert "\nliked_foods: none\n" in user
+
+
+@pytest.mark.parametrize("hints", [True, False])
+async def test_both_prompts_say_active_minutes_are_part_of_the_total(hints: bool) -> None:
+    model = model_for(
+        writes={"breakfast": [changed("breakfast", without_protein, "mon")]},
+        repairs={"breakfast": [repair_reply("breakfast", "mon")]},
+    )
+
+    await run(model, writer_nutrient_hints=hints)
+
+    for task in ("write_slot", "repair_slot"):
+        system = model.of_task(task)[0][0]
+        assert "with active minutes no more than total minutes" in system
 
 
 async def test_writer_prompt_snapshot() -> None:

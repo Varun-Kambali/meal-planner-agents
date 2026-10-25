@@ -12,8 +12,14 @@ After the first round a slot gets at most `max_repair_attempts` more, so a week 
 one writing call plus that many repair calls per slot, and a recipe is tried at most
 `1 + max_repair_attempts` times. A reply that cannot be used (broken JSON, an amount out of
 range, the wrong recipes for the days asked) fails the attempt for the whole slot and the rest
-of the week goes on. A rate limit or timeout is not tried again here: the model client has
-already retried it, so the slot is reported unwritten with the reason.
+of the week goes on. A rate limit or timeout is not tried again here, because the model client
+has already retried it, and neither is a call that raised. A slot being written is then reported
+unwritten with the reason; a slot being repaired keeps its recipes as they were, with their
+failures, and is not asked again.
+
+When nutrition-mcp cannot be reached for a recipe's numbers, it is asked once more; if it still
+cannot be, the recipe is marked `nutrition_unavailable` and not repaired, because the writer
+cannot fix that, and it is reported as failing.
 
 Progress goes out as events while the graph runs. The model is only ever asked for words and
 for grams of catalogue ingredients; every nutrition number comes from nutrition-mcp.
@@ -31,7 +37,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import Overwrite, Send
-from nutrition_mcp.schemas import MealItemIn
+from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import ValidationError
 
 from meal_planner.catalogue import Catalogue, CatalogueItem
@@ -39,13 +45,15 @@ from meal_planner.checks import (
     check_catalogue,
     check_day,
     check_gear_and_time,
+    check_model_figures,
     check_no_waste,
     check_slot_targets,
     check_variety,
     worst_recipe_for_day,
 )
 from meal_planner.config import Settings
-from meal_planner.llm import INVALID_JSON, SCHEMA_MISMATCH, ModelPort, ModelReply
+from meal_planner.llm import INVALID_JSON, MODEL_ERROR, SCHEMA_MISMATCH, ModelPort, ModelReply
+from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.portions import portion_factor, scale_draft
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure, SlotDraft
@@ -63,11 +71,18 @@ from meal_planner.week_events import (
 )
 from meal_planner.week_prompts import Job, repair_prompt, writer_prompt
 
+logger = get_logger(__name__)
+
 _RecipeKey = tuple[DayKey, str]
 
 # The check name of a recipe that nutrition-mcp refused. Every other failure is worked out again
 # on each pass; this one is carried, because the refusal is not repeated.
 NUTRITION_FAILED = "nutrition_failed"
+# The check name of a recipe whose numbers are not known because nutrition-mcp could not be
+# reached, even when asked twice. That is not the recipe's fault, so it is never sent to repair;
+# it is carried to the end like a refusal, and the recipe is reported as failing.
+NUTRITION_UNAVAILABLE = "nutrition_unavailable"
+_CARRIED = (NUTRITION_FAILED, NUTRITION_UNAVAILABLE)
 
 
 # Graph state and the work handed to a node
@@ -213,13 +228,22 @@ async def _ask(
     emit = get_stream_writer()
     async with deps.gate:
         emit(started)
-        reply = await deps.model.structured(
-            task=task,
-            system=system,
-            user=user,
-            schema=SlotDraft,
-            timeout_s=deps.settings.slot_call_timeout_s,
-        )
+        try:
+            reply = await deps.model.structured(
+                task=task,
+                system=system,
+                user=user,
+                schema=SlotDraft,
+                timeout_s=deps.settings.slot_call_timeout_s,
+            )
+        except Exception as exc:
+            # The model port promises a reply, never an exception. If one comes anyway it is a
+            # final refusal for this slot only, so the rest of the week goes on. Only the class
+            # is logged: the message could hold the prompt.
+            logger.error(
+                "model_call_raised", extra={"task": task, "error_type": type(exc).__name__}
+            )
+            reply = ModelReply(value=None, raw="", error=MODEL_ERROR)
     usage = _Usage(1, reply.input_tokens, reply.output_tokens, reply.cost_usd)
     days = [spec.day for spec in job.specs]
     last_try = job.attempt > deps.settings.max_repair_attempts
@@ -331,10 +355,12 @@ async def with_numbers(
 ) -> CheckedRecipe:
     """The recipe with its numbers from nutrition-mcp, or with the reason it has none.
 
-    A recipe nutrition-mcp refuses gets no numbers and a `nutrition_failed` failure. When
-    nutrition-mcp could not be asked at all (the error names no food), the graph treats that the
-    same way, so one bad moment fails recipes and not the week. A caller that has no week to
-    protect passes `raise_if_unreachable` to get the error instead.
+    A recipe nutrition-mcp refuses gets no numbers and a `nutrition_failed` failure, which the
+    writer can fix by changing an ingredient. When nutrition-mcp could not be asked at all
+    (`NutritionError.unreachable`), it is asked once more; if that fails too, the recipe gets
+    `nutrition_unavailable`, so one bad moment fails recipes and not the week. A caller that has
+    no week to protect passes `raise_if_unreachable` to get that error instead; a refusal is the
+    recipe's either way.
     """
     ingredients = recipe.draft.ingredients
     if any(i.id not in catalogue.items for i in ingredients):
@@ -342,15 +368,33 @@ async def with_numbers(
         return recipe
     items = [MealItemIn(food_id=i.id, amount=i.grams, unit="g") for i in ingredients]
     try:
-        meal = await nutrition.meal(items)
+        meal = await _meal(nutrition, items)
     except NutritionError as exc:
-        if raise_if_unreachable and exc.food_id is None:
+        if exc.unreachable and raise_if_unreachable:
             raise
-        failure = Failure(
-            check=NUTRITION_FAILED, message=f"nutrition-mcp could not work out this recipe: {exc}"
+        failure = (
+            Failure(
+                check=NUTRITION_UNAVAILABLE,
+                message="numbers not known: nutrition-mcp could not be reached",
+            )
+            if exc.unreachable
+            else Failure(
+                check=NUTRITION_FAILED,
+                message=f"nutrition-mcp could not work out this recipe: {exc}",
+            )
         )
         return recipe.model_copy(update={"failures": [failure]})
     return recipe.model_copy(update={"nutrition": meal})
+
+
+async def _meal(nutrition: NutritionPort, items: list[MealItemIn]) -> MealResult:
+    """compute_meal, asked once more when nutrition-mcp could not be reached the first time."""
+    try:
+        return await nutrition.meal(items)
+    except NutritionError as exc:
+        if not exc.unreachable:
+            raise
+    return await nutrition.meal(items)
 
 
 async def _numbered(recipe: CheckedRecipe, deps: _Deps) -> CheckedRecipe:
@@ -393,85 +437,39 @@ class _Evaluation:
     no_waste: dict[tuple[str, DayKey], Failure]
 
 
-def _ref(recipe: CheckedRecipe) -> str:
-    """How `check_variety` names the earlier recipe of a pair in its messages."""
-    return f"the {recipe.spec.day} recipe '{recipe.draft.title}'"
-
-
-def _seen_from(failure: Failure, new: CheckedRecipe, other: CheckedRecipe) -> Failure:
-    """A clash `check_variety` put on `other`, which comes later, worded for `new`, the earlier."""
-    if failure.check == "variety_cuisine":
-        message = (
-            f"cuisine '{other.draft.cuisine}' repeats the day after ({other.spec.day}); "
-            "the plan lists other cuisines, so use a different one"
-        )
-    else:
-        message = failure.message.replace(_ref(new), _ref(other))
-    return Failure(check=failure.check, message=message)
-
-
-def _variety(
-    recipes: dict[_RecipeKey, CheckedRecipe], deps: _Deps, repairable: frozenset[_RecipeKey]
-) -> dict[_RecipeKey, list[Failure]]:
-    """The variety failures, each on a recipe this run is able to rewrite.
-
-    `check_variety` puts a clash on the later recipe of the pair. When one recipe is written
-    again among others that stay, a clash with a later one would land on a recipe nobody
-    rewrites, and the new one would pass. So the kept recipes are checked without the new one,
-    and a failure that only appears with it moves to it, worded as seen from the new recipe.
-    """
-    rules, s = deps.rules, deps.settings
-    found = check_variety(list(recipes.values()), rules, s)
-    kept = {key: recipe for key, recipe in recipes.items() if key not in repairable}
-    if not kept or len(kept) == len(recipes):
-        return found
-    without_new = check_variety(list(kept.values()), rules, s)
-    for key in kept:
-        old = list(without_new.get(key, []))
-        stay: list[Failure] = []
-        added: list[Failure] = []
-        for failure in found.get(key, []):
-            if failure in old:
-                old.remove(failure)
-                stay.append(failure)
-            else:
-                added.append(failure)
-        # Variety is within a slot, so the new recipe is the one of this slot that can change.
-        new_keys = [k for k in recipes if k in repairable and k[1] == key[1]]
-        if added and len(new_keys) == 1:
-            found[key] = stay
-            found.setdefault(new_keys[0], []).extend(
-                _seen_from(f, recipes[new_keys[0]], recipes[key]) for f in added
-            )
-    return found
-
-
 def _evaluate(
-    recipes: dict[_RecipeKey, CheckedRecipe], deps: _Deps, repairable: frozenset[_RecipeKey]
+    recipes: dict[_RecipeKey, CheckedRecipe],
+    deps: _Deps,
+    repairable: frozenset[_RecipeKey],
+    fresh: frozenset[_RecipeKey],
 ) -> _Evaluation:
     """Every check on the week as it stands, with the failures each recipe is to fix.
 
-    Failures only go to recipes in `repairable`, the ones this run may rewrite: a replacement
-    is checked inside the rest of the week, and what clashes with the rest is its to fix. A day
-    that misses its targets is blamed on one of them, once per failed check, only when every
-    slot of the day is there and none of them fails on its own: those are rewritten first,
-    and the day is then worked out again.
+    A clash between two recipes goes to the one this run may rewrite (`repairable`): a
+    replacement is checked inside the rest of the week, and what clashes with the rest is its to
+    fix. Between two that may both be rewritten it goes to the one written in the latest round
+    (`fresh`), so a recipe that already passed is not rewritten because another changed; when
+    both or neither are, to the later day. A day that misses its targets is blamed on a recipe in
+    `repairable`, once per failed check, only when every slot of the day is there and none of
+    them fails on its own: those are rewritten first, and the day is then worked out again.
     """
     rules, s = deps.rules, deps.settings
     found: dict[_RecipeKey, list[Failure]] = {}
     for key, recipe in recipes.items():
-        # A refusal is only carried while there are no numbers.
+        # Why there are no numbers is only carried while there are none.
         failures = (
             []
             if recipe.nutrition is not None
-            else [f for f in recipe.failures if f.check == NUTRITION_FAILED]
+            else [f for f in recipe.failures if f.check in _CARRIED]
         )
         failures += check_catalogue(recipe.draft, deps.catalogue, rules)
         if recipe.nutrition is not None:
             failures += check_slot_targets(recipe.nutrition, recipe.spec, s)
         failures += check_gear_and_time(recipe.draft, rules, recipe.spec.slot)
+        failures += check_model_figures(recipe.draft)
         found[key] = failures
-    for key, failures in _variety(recipes, deps, repairable).items():
+    variety = check_variety(list(recipes.values()), rules, s, prefer=[repairable, fresh])
+    for key, failures in variety.items():
         found[key] += failures
 
     day_types = {d.id: d for d in rules.day_types}
@@ -551,14 +549,21 @@ def _repair_jobs(
     attempt: int,
     busy: set[str],
 ) -> list[Job]:
-    """One job for each slot not already being written whose recipes still fail."""
+    """One job for each slot not already being written whose recipes still fail.
+
+    A recipe whose numbers could not be had from nutrition-mcp is left out: the writer cannot
+    fix that, and rewriting it would only spend a call.
+    """
     rank = _rank(deps)
     jobs: list[Job] = []
     for slot in deps.rules.slots:
         failing = [
-            evaluation.recipes[key]
+            recipe
             for key in sorted(repairable, key=rank)
-            if key[1] == slot.id and key in evaluation.recipes and evaluation.recipes[key].failures
+            if key[1] == slot.id
+            and (recipe := evaluation.recipes.get(key)) is not None
+            and recipe.failures
+            and not any(f.check == NUTRITION_UNAVAILABLE for f in recipe.failures)
         ]
         # A call that gave nothing because the model could not be reached was already retried
         # by the model client: leave the slot, and its recipes keep the failures they have.
@@ -601,7 +606,8 @@ async def _check(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     work, gave_up, restored = _settle_unwritten(state, deps, attempt, rounds_left)
     unwritten = {**state["unwritten"], **gave_up}
     repairable = state["scope"] - unwritten.keys()
-    evaluation = _evaluate({**state["recipes"], **restored}, deps, repairable)
+    fresh = frozenset(state["fresh"])
+    evaluation = _evaluate({**state["recipes"], **restored}, deps, repairable, fresh)
     _announce(state, deps, evaluation)
     if rounds_left:
         busy = {job.slot_id for job in work}
@@ -742,9 +748,10 @@ async def replace_recipe(
 ) -> AsyncIterator[WeekEvent]:
     """Write one recipe again inside the rest of the week, yielding progress events.
 
-    The other recipes are not sent to the model or changed. They are there for the day and
-    variety checks and to show the writer what to stay different from. The old recipe leaves the
-    week before the new one is checked, and stays in the result if no new one could be written.
+    The other recipes are not changed. The writer is sent a one-line summary of each other
+    recipe of the slot (day, title, cuisine and ingredient ids) to stay different from, and every
+    recipe of the week is there for the day and variety checks. The old recipe leaves the week
+    before the new one is checked, and stays in the result if no new one could be written.
     """
     if slot_id not in {slot.id for slot in rules.slots}:
         raise ValueError(f"the plan has no slot '{slot_id}'")

@@ -12,9 +12,9 @@ The user message holds a block between <data> and </data>. It describes the slot
 - The grams are the weight of the ingredient as listed below.
 - The slot's style in the data block is binding: an air-fryer dish is made in the air fryer, and a no-cook dish uses no heat at all.
 - In the steps, name ingredients without amounts: the amounts are in the ingredient list, and code may change them.
-- The reply has no fields for calories, protein or any other nutrient. They are worked out afterwards from your ingredients and grams, and a figure you guessed would be ignored.
-- Keep each fixed recipe different from the slot's other recipes in the data block: another title, mostly different ingredients, and not the same cuisine as the day before or after.
-- Name each recipe's cuisine exactly as one of the listed cuisines. Use only the listed gear, and keep active minutes and total minutes within the limits in the data block. Set "cook_when" to the slot's value.
+- The reply has no fields for calories, protein or any other nutrient, and its text (the title, the steps, "store", "swap" and "fits") must not contain any nutrition figure, such as calories or grams of protein, because every figure is worked out afterwards in code from your ingredients and grams.
+- Keep each fixed recipe different from the slot's other recipes in the data block: another title and mostly different ingredients.{{cuisine_rule}}
+- Name each recipe's cuisine exactly as one of the listed cuisines. Use only the listed gear, and keep active minutes and total minutes within the limits in the data block, with active minutes no more than total minutes. Set "cook_when" to the slot's value.
 - Keep the steps short: at most 10, each under 200 characters. The title is under 80 characters. "store" is one sentence on how to keep the dish, "swap" one ingredient swap, and "fits" one sentence on how the dish suits the slot.
 
 ## Ingredients you may use ({{catalogue_format}})
