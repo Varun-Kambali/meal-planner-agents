@@ -20,14 +20,9 @@ for grams of catalogue ingredients; every nutrition number comes from nutrition-
 """
 
 import asyncio
-import json
-import math
 import operator
-import re
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from functools import cache
-from importlib import resources
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.runnables import RunnableConfig
@@ -37,19 +32,10 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import Overwrite, Send
 from nutrition_mcp.schemas import MealItemIn
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    TypeAdapter,
-    ValidationError,
-    field_serializer,
-    field_validator,
-)
+from pydantic import ValidationError
 
 from meal_planner.catalogue import Catalogue, CatalogueItem
 from meal_planner.checks import (
-    LABELS,
     check_catalogue,
     check_day,
     check_gear_and_time,
@@ -63,7 +49,19 @@ from meal_planner.llm import INVALID_JSON, SCHEMA_MISMATCH, ModelPort, ModelRepl
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.portions import portion_factor, scale_draft
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure, SlotDraft
-from meal_planner.rules import DAYS, DayKey, DayType, PlanRules, Slot, SlotSpec, expand
+from meal_planner.rules import DAYS, DayKey, PlanRules, SlotSpec, expand
+from meal_planner.week_events import (
+    EVENTS,
+    RecipeChecked,
+    RepairStarted,
+    SlotFailed,
+    SlotStarted,
+    SlotWritten,
+    WeekDone,
+    WeekEvent,
+    WeekResult,
+)
+from meal_planner.week_prompts import Job, repair_prompt, writer_prompt
 
 _RecipeKey = tuple[DayKey, str]
 
@@ -71,118 +69,6 @@ _RecipeKey = tuple[DayKey, str]
 # on each pass; this one is carried, because the refusal is not repeated.
 NUTRITION_FAILED = "nutrition_failed"
 
-# Slack for the whole-number ranges shown to the writer, as in checks.py.
-_EPS = 1e-9
-
-# Events
-
-
-class _Event(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class SlotStarted(_Event):
-    """A model call to write recipes for a slot has begun. `attempt` counts the slot's calls."""
-
-    kind: Literal["slot_started"] = "slot_started"
-    slot_id: str
-    days: list[DayKey]
-    attempt: int
-
-
-class SlotWritten(_Event):
-    """The model's reply for the slot had the recipes asked for. They have not been checked."""
-
-    kind: Literal["slot_written"] = "slot_written"
-    slot_id: str
-    days: list[DayKey]
-    attempt: int
-
-
-class RecipeChecked(_Event):
-    """A recipe was checked, or its failures changed. `attempt` counts this recipe's tries."""
-
-    kind: Literal["recipe_checked"] = "recipe_checked"
-    day: DayKey
-    slot_id: str
-    attempt: int
-    failures: list[Failure]
-
-
-class RepairStarted(_Event):
-    """A model call to rewrite a slot's failing recipes has begun."""
-
-    kind: Literal["repair_started"] = "repair_started"
-    slot_id: str
-    days: list[DayKey]
-    attempt: int
-
-
-class SlotFailed(_Event):
-    """A model call gave nothing usable. `final` is false when the slot will be tried again."""
-
-    kind: Literal["slot_failed"] = "slot_failed"
-    slot_id: str
-    days: list[DayKey]
-    attempt: int
-    reason: str
-    final: bool
-
-
-class _NoWasteRow(BaseModel):
-    ingredient: str
-    window_start: DayKey
-    failure: Failure
-
-
-class WeekResult(BaseModel):
-    """The week as the graph leaves it: every recipe with its numbers, and what still fails."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    recipes: list[CheckedRecipe]
-    days: list[DayReport]
-    # Keyed by the ingredient and the first day of the shopping window. These are warnings: no
-    # recipe is to blame, so nothing is repaired for them.
-    no_waste: dict[tuple[str, DayKey], Failure]
-    # (day, slot id, reason) for each recipe asked for and not delivered. For a replacement the
-    # old recipe stays in `recipes`.
-    unwritten: list[tuple[DayKey, str, str]]
-    calls: int
-    input_tokens: int
-    output_tokens: int
-    # None when the model has no price in LiteLLM's list.
-    cost_usd: float | None
-
-    # JSON has no tuple keys, so the warnings travel as a list of rows and come back as a dict.
-    @field_validator("no_waste", mode="before")
-    @classmethod
-    def _rows_to_dict(cls, value: Any) -> Any:
-        if isinstance(value, list):
-            rows = [_NoWasteRow.model_validate(row) for row in value]
-            return {(row.ingredient, row.window_start): row.failure for row in rows}
-        return value
-
-    @field_serializer("no_waste", when_used="json")
-    def _dict_to_rows(self, value: dict[tuple[str, DayKey], Failure]) -> list[_NoWasteRow]:
-        return [
-            _NoWasteRow(ingredient=food_id, window_start=start, failure=failure)
-            for (food_id, start), failure in value.items()
-        ]
-
-
-class WeekDone(_Event):
-    """The last event of every run."""
-
-    kind: Literal["week_done"] = "week_done"
-    week: WeekResult
-
-
-WeekEvent = Annotated[
-    SlotStarted | SlotWritten | RecipeChecked | RepairStarted | SlotFailed | WeekDone,
-    Field(discriminator="kind"),
-]
-_EVENTS: TypeAdapter[WeekEvent] = TypeAdapter(WeekEvent)
 
 # Graph state and the work handed to a node
 
@@ -215,25 +101,11 @@ class _Refusal:
 
 
 @dataclass(frozen=True)
-class _Job:
-    """One model call: write the recipes for `specs`, or rewrite those in `fix`."""
-
-    slot_id: str
-    specs: list[SlotSpec]
-    attempt: int
-    # Why the slot's last reply was refused, for the model to avoid.
-    rejected: str | None
-    fix: list[CheckedRecipe]
-    # The slot's recipes this call leaves alone, which the new ones must stay different from.
-    others: list[CheckedRecipe]
-
-
-@dataclass(frozen=True)
 class _Send:
     """What a node that makes a model call receives. LangGraph names its input type's fields as
     channels, so the job travels inside one field that no state key shares."""
 
-    job: _Job
+    job: Job
 
 
 def _merge[K, V](old: dict[K, V], new: dict[K, V]) -> dict[K, V]:
@@ -252,7 +124,7 @@ class _State(TypedDict):
     refused: Annotated[dict[_RecipeKey, _Refusal], _merge]
     unwritten: dict[_RecipeKey, str]
     usage: Annotated[_Usage, _add_usage]
-    work: list[_Job]
+    work: list[Job]
     # How many rounds after the first have been started.
     round: int
     days: list[DayReport]
@@ -275,193 +147,6 @@ class _Deps:
     allowed: list[CatalogueItem]
 
 
-# Prompts
-
-
-@cache
-def _template(name: str) -> str:
-    return resources.files("meal_planner").joinpath("prompts", name).read_text(encoding="utf-8")
-
-
-# The nutrients shown beside each ingredient when the writer gets hints: nutrition-mcp's key, how
-# a value is read out, and the name used when there is no value.
-_HINT_COLUMNS = (
-    ("kcal", "kcal", "kcal"),
-    ("protein_g", "g protein", "protein"),
-    ("sat_fat_g", "g sat fat", "sat fat"),
-    ("fibre_g", "g fibre", "fibre"),
-    ("sodium_mg", "mg sodium", "sodium"),
-)
-
-# What the heading says each line is made of, and the note under it, for each setting.
-_FORMAT = "id: name"
-_FORMAT_WITH_HINTS = "id: name, then nutrition per 100 g"
-_PER_100G_NOTE = (
-    "The nutrition figures are there for choosing amounts. "
-    "They must not be reported back in the reply.\n\n"
-)
-
-
-def _catalogue_line(item: CatalogueItem, hints: bool) -> str:
-    if not hints:
-        return f"{item.id}: {item.name}"
-    # Whole numbers; a nutrient nutrition-mcp has no value for reads "fibre n/a", never 0.
-    shown = ", ".join(
-        f"{name} n/a" if (value := item.per_100g.get(key)) is None else f"{value:.0f} {label}"
-        for key, label, name in _HINT_COLUMNS
-    )
-    return f"{item.id}: {item.name} (per 100 g: {shown})"
-
-
-def _system(name: str, allowed: list[CatalogueItem], hints: bool) -> str:
-    values = {
-        "catalogue": "\n".join(_catalogue_line(item, hints) for item in allowed),
-        "catalogue_format": _FORMAT_WITH_HINTS if hints else _FORMAT,
-        "per_100g_note": _PER_100G_NOTE if hints else "",
-    }
-    # One pass, so text that looks like a placeholder inside a value is not replaced again.
-    return re.sub(
-        r"\{\{(catalogue|catalogue_format|per_100g_note)\}\}",
-        lambda m: values[m[1]],
-        _template(name),
-    )
-
-
-def _quote(text: str) -> str:
-    """The text as a JSON string with angle brackets escaped, so it cannot close the data block."""
-    return json.dumps(text, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
-
-
-def _ident(text: str) -> str:
-    return text if re.fullmatch(r"[a-z][a-z0-9_]*", text) else _quote(text)
-
-
-def _target(spec: SlotSpec, s: Settings) -> str:
-    low = math.ceil(spec.kcal * (1 - s.recipe_kcal_tolerance) - _EPS)
-    high = math.floor(spec.kcal * (1 + s.recipe_kcal_tolerance) + _EPS)
-    text = f"{low} to {high} kcal (target {round(spec.kcal)})"
-    if spec.protein_g > 0:
-        least = math.ceil(spec.protein_g * s.recipe_protein_min_share - _EPS)
-        return f"{text}, at least {least} g protein"
-    return f"{text}, no protein target"
-
-
-def _share_of_limits(day_type: DayType, share: float) -> str:
-    """The slot's share of the day type's saturated-fat cap, fibre floor and extra targets.
-
-    A cap is rounded down and a floor up, so the slots' shares together never allow more than the
-    cap or ask for less than the floor.
-    """
-    limits = [
-        ("sat_fat_g", "max", day_type.sat_fat_g_max),
-        ("fibre_g", "min", day_type.fibre_g_min),
-        *((t.nutrient, t.kind, t.value) for t in day_type.extra),
-    ]
-    parts: list[str] = []
-    for key, kind, value in limits:
-        name, unit = LABELS[key]
-        if kind == "max":
-            parts.append(f"{name} at most {math.floor(value * share + _EPS)} {unit}")
-        else:
-            parts.append(f"{name} at least {math.ceil(value * share - _EPS)} {unit}")
-    return ", ".join(parts)
-
-
-def _slot_lines(deps: _Deps, slot: Slot, specs: Sequence[SlotSpec]) -> list[str]:
-    """The slot, the plan's kitchen and tastes, and the target for each day, as data lines."""
-    food = deps.rules.food
-    day_types = {d.id: d for d in deps.rules.day_types}
-
-    def day_line(spec: SlotSpec) -> str:
-        line = f"- {spec.day}: {_target(spec, deps.settings)}"
-        if not deps.settings.writer_nutrient_hints:
-            return line
-        limits = _share_of_limits(day_types[spec.day_type], slot.kcal_share)
-        return f"{line}; the slot's share of the day's limits: {limits}"
-
-    return [
-        f"slot_id: {_quote(slot.id)}",
-        f"slot_name: {_quote(slot.name)}",
-        f"style: {_quote(slot.style)}",
-        f"cook_when: {slot.cook_when}",
-        f"max_active_min: {slot.max_active_min}",
-        f"max_total_min: {slot.max_total_min}",
-        f"diet: {food.diet}",
-        f"gear: {', '.join(deps.rules.gear)}",
-        f"cuisines: {', '.join(_quote(c) for c in food.cuisines)}",
-        f"liked_foods: {', '.join(_quote(f) for f in food.liked_foods) or 'none'}",
-        "days:",
-        *(day_line(spec) for spec in specs),
-    ]
-
-
-def _summary(recipe: CheckedRecipe) -> str:
-    draft = recipe.draft
-    ids = ", ".join(_ident(i.id) for i in draft.ingredients)
-    return (
-        f"- {recipe.spec.day}: {_quote(draft.title)}, cuisine {_quote(draft.cuisine)}, "
-        f"ingredients {ids}"
-    )
-
-
-def _fix_lines(recipe: CheckedRecipe) -> list[str]:
-    draft = recipe.draft
-    grams = ", ".join(f"{_ident(i.id)} {i.grams:g} g" for i in draft.ingredients)
-    lines = [
-        f"- day: {recipe.spec.day}",
-        f"  title: {_quote(draft.title)}",
-        f"  cuisine: {_quote(draft.cuisine)}",
-        f"  ingredients: {grams}",
-        f"  minutes: active {draft.active_min}, total {draft.total_min}",
-        f"  gear: {', '.join(draft.gear) or 'none'}",
-    ]
-    if recipe.nutrition is not None:
-        # Worked out by nutrition-mcp, so a rewrite can see how far it has to move.
-        total = recipe.nutrition.total
-        known = [
-            f"{value:.0f} {label}"
-            for key, label in (("kcal", "kcal"), ("protein_g", "g protein"))
-            if (value := total.get(key)) is not None
-        ]
-        if known:
-            lines.append(f"  now comes to: {', '.join(known)}")
-    return [
-        *lines,
-        "  failed checks:",
-        *(f"  - {_quote(failure.message)}" for failure in recipe.failures),
-    ]
-
-
-def _user(deps: _Deps, job: _Job, closing: str) -> str:
-    slot = next(s for s in deps.rules.slots if s.id == job.slot_id)
-    lines = _slot_lines(deps, slot, job.specs)
-    if job.fix:
-        lines += ["recipes to fix:", *(line for r in job.fix for line in _fix_lines(r))]
-    if job.others:
-        lines += [
-            "other recipes in this slot this week (the new ones must differ from these):",
-            *(_summary(r) for r in job.others),
-        ]
-    text = "\n".join(["<data>", *lines, "</data>"])
-    if job.rejected:
-        text += f"\nYour previous reply was rejected: {_quote(job.rejected)}. Fix that."
-    return f"{text}\n{closing}"
-
-
-def _writer_prompt(deps: _Deps, job: _Job) -> tuple[str, str]:
-    n = len(job.specs)
-    closing = f'Write {n} recipe{"" if n == 1 else "s"}, one for each day under "days".'
-    system = _system("writer.md", deps.allowed, deps.settings.writer_nutrient_hints)
-    return system, _user(deps, job, closing)
-
-
-def _repair_prompt(deps: _Deps, job: _Job) -> tuple[str, str]:
-    n = len(job.fix)
-    closing = f'Fix the {n} recipe{"" if n == 1 else "s"} under "recipes to fix", same days.'
-    system = _system("repair.md", deps.allowed, deps.settings.writer_nutrient_hints)
-    return system, _user(deps, job, closing)
-
-
 # Reading a reply
 
 
@@ -478,7 +163,7 @@ def _why_unreadable(raw: str) -> str:
     return "the reply did not fit the format: " + "; ".join(problems)
 
 
-def _wrong_recipes(draft: SlotDraft, job: _Job) -> str | None:
+def _wrong_recipes(draft: SlotDraft, job: Job) -> str | None:
     """What is wrong with the recipes for the days asked, or None when they are the ones asked."""
     if draft.slot_id != job.slot_id:
         return f"the reply is for slot '{draft.slot_id[:40]}' but '{job.slot_id}' was asked for"
@@ -507,7 +192,7 @@ def _wrong_recipes(draft: SlotDraft, job: _Job) -> str | None:
 
 
 def _read(
-    reply: ModelReply[SlotDraft], job: _Job, last_try: bool
+    reply: ModelReply[SlotDraft], job: Job, last_try: bool
 ) -> tuple[list[DraftRecipe], None] | tuple[None, _Refusal]:
     """The recipes in a reply, or why there are none."""
     if reply.error in (INVALID_JSON, SCHEMA_MISMATCH):
@@ -521,7 +206,7 @@ def _read(
 
 
 async def _ask(
-    deps: _Deps, task: str, prompt: tuple[str, str], job: _Job, started: WeekEvent
+    deps: _Deps, task: str, prompt: tuple[str, str], job: Job, started: WeekEvent
 ) -> tuple[list[DraftRecipe], None, _Usage] | tuple[None, _Refusal, _Usage]:
     """One model call, at most `max_concurrent_model_calls` at a time, read into recipes."""
     system, user = prompt
@@ -564,7 +249,7 @@ async def _expand(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     scope = frozenset(specs) if deps.only is None else frozenset({deps.only})
     kept = {key: recipe for key, recipe in state["previous"].items() if key not in scope}
     work = [
-        _Job(
+        Job(
             slot_id=slot.id,
             specs=[specs[(day, slot.id)] for day in DAYS if (day, slot.id) in scope],
             attempt=1,
@@ -582,7 +267,13 @@ async def _write_slot(send: _Send, *, runtime: Runtime[_Deps]) -> dict[str, Any]
     deps, job = runtime.context, send.job
     days = [spec.day for spec in job.specs]
     started = SlotStarted(slot_id=job.slot_id, days=days, attempt=job.attempt)
-    drafts, refusal, usage = await _ask(deps, "write_slot", _writer_prompt(deps, job), job, started)
+    drafts, refusal, usage = await _ask(
+        deps,
+        "write_slot",
+        writer_prompt(deps.rules, deps.settings, deps.allowed, job),
+        job,
+        started,
+    )
     if drafts is None:
         return {"refused": {(spec.day, job.slot_id): refusal for spec in job.specs}, "usage": usage}
     by_day = {spec.day: spec for spec in job.specs}
@@ -601,7 +292,11 @@ async def _repair_slot(send: _Send, *, runtime: Runtime[_Deps]) -> dict[str, Any
         slot_id=job.slot_id, days=[spec.day for spec in job.specs], attempt=job.attempt
     )
     drafts, refusal, usage = await _ask(
-        deps, "repair_slot", _repair_prompt(deps, job), job, started
+        deps,
+        "repair_slot",
+        repair_prompt(deps.rules, deps.settings, deps.allowed, job),
+        job,
+        started,
     )
     old = {recipe.spec.day: recipe for recipe in job.fix}
     if drafts is None:
@@ -815,14 +510,14 @@ def _rank(deps: _Deps) -> Callable[[_RecipeKey], int]:
 
 def _settle_unwritten(
     state: _State, deps: _Deps, attempt: int, rounds_left: bool
-) -> tuple[list[_Job], dict[_RecipeKey, str], dict[_RecipeKey, CheckedRecipe]]:
+) -> tuple[list[Job], dict[_RecipeKey, str], dict[_RecipeKey, CheckedRecipe]]:
     """Ask again for a slot with no recipes, or give up on it and say why.
 
     Giving up on a replacement puts the old recipe back, so a failed replacement never takes a
     recipe out of the week.
     """
     rank = _rank(deps)
-    jobs: list[_Job] = []
+    jobs: list[Job] = []
     gave_up: dict[_RecipeKey, str] = {}
     restored: dict[_RecipeKey, CheckedRecipe] = {}
     for slot in deps.rules.slots:
@@ -839,7 +534,7 @@ def _settle_unwritten(
                 if (day, slot.id) in state["recipes"]
             ]
             specs = [state["specs"][key] for key in missing]
-            jobs.append(_Job(slot.id, specs, attempt, refusal.reason, [], others))
+            jobs.append(Job(slot.id, specs, attempt, refusal.reason, [], others))
             continue
         for key in missing:
             gave_up[key] = refusal.reason
@@ -855,10 +550,10 @@ def _repair_jobs(
     repairable: frozenset[_RecipeKey],
     attempt: int,
     busy: set[str],
-) -> list[_Job]:
+) -> list[Job]:
     """One job for each slot not already being written whose recipes still fail."""
     rank = _rank(deps)
-    jobs: list[_Job] = []
+    jobs: list[Job] = []
     for slot in deps.rules.slots:
         failing = [
             evaluation.recipes[key]
@@ -879,7 +574,7 @@ def _repair_jobs(
         # If the last call for this slot was refused for what it said, the next one hears why.
         refusals = (state["refused"].get((r.spec.day, slot.id)) for r in failing)
         rejected = next((f.reason for f in refusals if f and f.attempt == attempt - 1), None)
-        jobs.append(_Job(slot.id, [r.spec for r in failing], attempt, rejected, failing, others))
+        jobs.append(Job(slot.id, [r.spec for r in failing], attempt, rejected, failing, others))
     return jobs
 
 
@@ -1013,7 +708,7 @@ async def _stream(
     # Each round is three steps (call, compute, check), and LangGraph stops a run at 25 steps.
     config: RunnableConfig = {"recursion_limit": 3 * settings.max_repair_attempts + 15}
     async for event in _GRAPH.astream(start, config, context=deps, stream_mode="custom"):
-        yield _EVENTS.validate_python(event)
+        yield EVENTS.validate_python(event)
 
 
 async def run_week(

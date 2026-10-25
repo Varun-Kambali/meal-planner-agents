@@ -34,7 +34,7 @@ from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.startup import StartupError
-from meal_planner.week import WeekResult
+from meal_planner.week_events import WeekResult
 
 # The fixture plan excludes brinjal, and the app refuses a plan that names a food it lacks.
 EXTRA_FOODS = ("brinjal",)
