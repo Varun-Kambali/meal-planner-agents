@@ -241,6 +241,18 @@ async def test_a_unit_the_reader_reads_through_a_catalogue_measure_is_summarised
     assert day.totals["kcal"] == 143 + 240
 
 
+async def test_kilograms_and_litres_are_sent_in_grams_and_millilitres() -> None:
+    nutrition = ReaderNutrition()
+    chicken = {"food_id": "chicken_breast", "amount": 0.5, "unit": "kg"}
+    milk = {"food_id": "whole_milk", "amount": 0.25, "unit": "litre"}
+    log = log_of(entry(MON, "lunch", "as_planned", chicken, milk))
+
+    (day,) = (await summary_of(log, nutrition=nutrition, catalogue=reader_catalogue())).days
+
+    assert nutrition.asked == [("meal", "chicken_breast 500 g, whole_milk 250 ml")]
+    assert day.totals["kcal"] == pytest.approx(825 + 154.5)
+
+
 async def test_a_unit_nobody_has_is_refused_in_nutrition_mcps_words() -> None:
     log = log_of(
         entry(MON, "breakfast", "as_planned", {"food_id": "egg", "amount": 1, "unit": "cup"})

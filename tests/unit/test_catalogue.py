@@ -427,11 +427,32 @@ async def test_a_food_the_catalogue_lacks_goes_to_nutrition_mcp_as_it_is(tmp_pat
     assert catalogue.meal_item("duck_egg", 1, "piece") == sent("duck_egg", 1, "piece")
 
 
+@pytest.mark.parametrize("unit", ["kg", "KG", "kgs", "kilo", "kilos", "kilogram", "Kilograms"])
+async def test_kilograms_are_sent_in_grams(tmp_path: Path, unit: str) -> None:
+    """nutrition-mcp reads g spellings only, and "half kg chicken" is a common way to say it."""
+    catalogue = await two_eggs_catalogue(tmp_path)
+
+    assert catalogue.meal_item("moong_dal", 0.5, unit) == sent("moong_dal", 500, "g")
+    # For a food the catalogue lacks too, which goes to nutrition-mcp as it is otherwise.
+    assert catalogue.meal_item("chicken", 2, unit) == sent("chicken", 2000, "g")
+
+
+@pytest.mark.parametrize("unit", ["l", "L", "litre", "litres", "liter", "Liters", "ltr", "ltrs"])
+async def test_litres_are_sent_in_millilitres(tmp_path: Path, unit: str) -> None:
+    catalogue = await two_eggs_catalogue(tmp_path)
+    milk = {"g": 1.0, "ml": 1.03}
+
+    assert catalogue.meal_item("whole_milk", 1.5, unit, milk) == sent("whole_milk", 1500, "ml")
+    # A food nutrition-mcp has no millilitre for has no litre either.
+    assert catalogue.meal_item("moong_dal", 1, unit) is None
+
+
 async def test_grams_too_many_for_a_float_stay_a_number(tmp_path: Path) -> None:
     """So that nutrition-mcp refuses them as over its limit, as it does any large amount."""
     catalogue = await two_eggs_catalogue(tmp_path)
 
     assert catalogue.meal_item("egg", 1e308, "piece") == sent("egg", sys.float_info.max, "g")
+    assert catalogue.meal_item("egg", 1e306, "kg") == sent("egg", sys.float_info.max, "g")
 
 
 # Rules against the catalogue

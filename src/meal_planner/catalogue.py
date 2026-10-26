@@ -53,6 +53,13 @@ _DIETS_ALLOWED: dict[Diet, frozenset[Diet]] = {
     "non_veg": frozenset({"non_veg", "egg", "veg", "vegan"}),
 }
 
+# Units nutrition-mcp does not read, each with the unit it does read and how many of that are in
+# one. People type "half kg chicken" and "1 litre milk", and nutrition-mcp reads only g and ml.
+_METRIC: dict[str, tuple[str, float]] = {
+    **dict.fromkeys(("kg", "kgs", "kilo", "kilos", "kilogram", "kilograms"), ("g", 1000.0)),
+    **dict.fromkeys(("l", "litre", "litres", "liter", "liters", "ltr", "ltrs"), ("ml", 1000.0)),
+}
+
 Grams = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 # A household unit is one lowercase word, so it reads the way nutrition-mcp reads units.
 Unit = Annotated[str, StringConstraints(pattern=r"^[a-z]+$")]
@@ -135,13 +142,18 @@ class Catalogue:
         """What to ask nutrition-mcp about for `amount` of `unit` of a food, or None when neither
         nutrition-mcp nor the catalogue has the unit for it.
 
-        nutrition-mcp's own unit for the food comes first and is sent by its own name. Otherwise
-        the catalogue's measure for the food turns the amount into grams. `own_units` are the
+        Kilograms and litres become grams and millilitres first. Then nutrition-mcp's own unit for
+        the food comes first and is sent by its own name. Otherwise the catalogue's measure for
+        the food turns the amount into grams. `own_units` are the
         units nutrition-mcp has for the food; when they are not given, the catalogue's copy of
         them is used, and a food the catalogue lacks goes to nutrition-mcp as it is, to be read or
         refused there. The reader and the summary both send units through here, so a meal the
         reader matched is one the summary accepts.
         """
+        metric = _METRIC.get(normalise_unit(unit))
+        if metric is not None:
+            unit, per_unit = metric
+            amount = _within_float(amount * per_unit)
         row = self.items.get(food_id)
         own = own_units if own_units is not None else (row.units if row else None)
         if own is None:
@@ -152,10 +164,14 @@ class Catalogue:
         measure = find_unit(row.measures, unit) if row else None
         if row is None or measure is None:
             return None
-        # Kept a number when the product is too large for a float, so that nutrition-mcp refuses
-        # it as over its limit, as it does any large amount.
-        grams = min(amount * row.measures[measure], sys.float_info.max)
+        grams = _within_float(amount * row.measures[measure])
         return MealItemIn(food_id=food_id, amount=grams, unit="g")
+
+
+def _within_float(amount: float) -> float:
+    """The amount, kept a number when it is too large for a float, so that nutrition-mcp refuses
+    it as over its limit, as it does any large amount."""
+    return min(amount, sys.float_info.max)
 
 
 def find_unit(units: Container[str], unit: str) -> str | None:

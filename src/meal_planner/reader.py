@@ -12,10 +12,11 @@ nothing it adds to a reply is used. Code decides the rest:
 - An amount that is missing (the model's words for it are not in the text the person typed),
   vague ("some", "a handful") or a range ("2-3") is `needs_amount` whatever number the model
   returned. The person is asked, never given a guess.
-- A unit nutrition-mcp has for the food goes to it. Otherwise the catalogue's measure for the
-  food turns the amount into grams, if it has one; the summary reads a logged unit the same way
-  (`Catalogue.meal_item`). Otherwise the item is `unknown_unit`, with the units that would work.
-  No measure is made up: "2 pav" has no sourced weight, so it stays unknown.
+- Kilograms and litres are read as grams and millilitres. A unit nutrition-mcp has for the food
+  goes to it. Otherwise the catalogue's measure for the food turns the amount into grams, if it
+  has one; the summary reads a logged unit the same way (`Catalogue.meal_item`). Otherwise the
+  item is `unknown_unit`, with the units that would work. No measure is made up: "2 pav" has no
+  sourced weight, so it stays unknown.
 - Every number comes from nutrition-mcp. The meal's total adds the matched items only.
 
 The text goes to the model as data, quoted so that it cannot close the data block. Nothing here

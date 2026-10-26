@@ -382,6 +382,38 @@ async def test_a_count_of_the_food_itself_reads_through_the_piece_measure(
     assert tasks(model) == ["read_meal"]
 
 
+@pytest.mark.parametrize(
+    ("text", "said_of", "grams", "kcal"),
+    [
+        ("half kg chicken", said("chicken", 0.5, "kg", "half"), 500, 825),
+        ("1 litre milk", said("milk", 1, "litre", "1"), 1030, 618),
+        ("a quarter liter of milk", said("milk", 0.25, "liter", "a quarter"), 257.5, 154.5),
+    ],
+)
+async def test_kilograms_and_litres_are_read(
+    text: str, said_of: dict[str, Any], grams: float, kcal: float
+) -> None:
+    # nutrition-mcp reads g and ml spellings only.
+    model = model_of(reading(said_of))
+
+    (item,) = (await read(text, model)).items
+
+    assert (item.status, item.amount, item.unit) == ("matched", said_of["amount"], said_of["unit"])
+    assert item.grams == pytest.approx(grams)
+    assert item.nutrition is not None
+    assert item.nutrition.nutrients.kcal == pytest.approx(kcal)
+
+
+async def test_the_prompt_keeps_kilograms_and_litres_as_typed() -> None:
+    model = model_of(reading())
+
+    await read("half kg chicken", model)
+
+    _, system, _ = model.calls[0]
+    assert '"kg" for kg and kilo' in system
+    assert '"litre" for litre, liter and l' in system
+
+
 async def test_the_prompt_tells_the_model_to_leave_the_unit_null_when_the_unit_is_the_food() -> (
     None
 ):
