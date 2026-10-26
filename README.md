@@ -27,7 +27,7 @@ make setup
 make test
 ```
 
-Each command and the API start nutrition-mcp themselves and need the model's key: copy `.env.example` to `.env` and set `GEMINI_API_KEY`.
+Each command and the API start nutrition-mcp themselves. `week`, `read` and the API also need the model's key: copy `.env.example` to `.env` and set `GEMINI_API_KEY`. `summary` calls no model and needs no key.
 
 ```bash
 uv run --env-file .env meal-planner week tests/fixtures/plans/office_weekday.json --out week.json

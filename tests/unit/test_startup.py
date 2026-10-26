@@ -117,6 +117,14 @@ async def test_a_model_given_by_the_caller_needs_no_key(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("no_keys")
+async def test_a_run_that_makes_no_model_call_needs_no_key(tmp_path: Path) -> None:
+    async with start_services(
+        settings_for(tmp_path), nutrition=SpyNutrition(), needs_model=False
+    ) as services:
+        assert services.catalogue.items
+
+
+@pytest.mark.usefixtures("no_keys")
 async def test_a_model_litellm_has_no_variable_for_is_let_through(tmp_path: Path) -> None:
     # LiteLLM says nothing is missing for a model it does not know, and a guess would be wrong.
     settings = Settings(model="unmapped/model", catalogue_path=write_catalogue_file(tmp_path))

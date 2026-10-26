@@ -490,6 +490,52 @@ def test_a_summary_that_breaks_says_only_what_kind_of_failure_it_was(
     assert "RuntimeError" in captured.err
 
 
+MODEL_KEYS = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+
+
+def without_model_keys(monkeypatch: pytest.MonkeyPatch, folder: Path) -> Settings:
+    """No model key in the environment, and settings for the default model."""
+    for name in MODEL_KEYS:
+        monkeypatch.delenv(name, raising=False)
+    return Settings(catalogue_path=write_catalogue_file(folder, *EXTRA_FOODS))
+
+
+def test_summary_needs_no_model_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It makes no model call, so it starts with no model given and no key set.
+    settings = without_model_keys(monkeypatch, tmp_path)
+    log = log_file(tmp_path, log_entry(MON, "lunch"))
+
+    code = main(
+        ["summary", str(rules_file(tmp_path)), str(log)],
+        settings=settings,
+        nutrition=SpyNutrition(*EXTRA_FOODS),
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.err == ""
+    assert WeekSummary.model_validate_json(captured.out).planned_meals == 4
+
+
+@pytest.mark.parametrize("command", ["week", "read"])
+def test_the_commands_that_call_a_model_still_need_its_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    settings = without_model_keys(monkeypatch, tmp_path)
+    argument = str(rules_file(tmp_path)) if command == "week" else "2 rotis"
+
+    code = main([command, argument], settings=settings, nutrition=SpyNutrition(*EXTRA_FOODS))
+
+    (line,) = lines(capsys.readouterr().err)
+    assert code == 1
+    assert "GEMINI_API_KEY" in line
+
+
 def test_ctrl_c_while_adding_up_exits_with_130(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

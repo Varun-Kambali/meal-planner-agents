@@ -64,7 +64,7 @@ The browser holds everything about the user. Each request sends the plan rules (
 | `summary.py` | The meal log (`MealLog`, its entries and foods), the export file (`Export`), and `summarise`, which works each eaten meal out with nutrition-mcp and holds each date's total to the targets of its day type (see Day and week totals) |
 | `reader.py` | Turns a typed meal into nutrition-mcp foods, amounts and numbers (see Reading a typed meal). One model call to list the foods and, when nutrition-mcp's search leaves names open, one more for all of them; code and nutrition-mcp decide the rest: the match, the amount, the unit and the status of each item |
 | `prompts/` | The system prompts as Markdown: `writer.md` and `repair.md`, with a placeholder for the catalogue, and `reader.md` and `choose_food.md` for the meal reader |
-| `startup.py` | What has to be true before the app answers: LangSmith tracing off, the model's key set, nutrition-mcp running, the catalogue loaded against it. Each way it fails ends in one line saying why. Shared by the API and the command line |
+| `startup.py` | What has to be true before the app answers: LangSmith tracing off, the model's key set (unless the work calls no model, as `meal-planner summary` does not), nutrition-mcp running, the catalogue loaded against it. Each way it fails ends in one line saying why. Shared by the API and the command line |
 | `problems.py` | Invalid input in one form for the API and the command line: where it is and what is wrong. The location of an unknown liked or excluded food comes from the catalogue check as data, not from the wording of its message. The rejected value is dropped from validation errors, because it is the user's rules, and nothing is logged. A few messages name an id so it can be fixed, such as an unknown liked or excluded food, an undefined day type or a slot the plan lacks. A typed meal that is blank or too long is reported by its length only |
 | `middleware.py` | The request id, the body size limit and the rate limit, as plain ASGI middleware. Starlette's `BaseHTTPMiddleware` buffers around streams, and the week is a stream |
 | `api.py` | FastAPI routes, server-sent events and CORS |
@@ -199,7 +199,7 @@ Startup problems stop the app with one line that says why. A request that cannot
 
 | Failure | Behaviour |
 |---|---|
-| The model's key is not set, or LangSmith tracing is switched on | Startup stops. The line names the variables to set, or the tracing variable to unset, because LangGraph would send the plan rules to LangSmith. Both are checked before nutrition-mcp starts |
+| The model's key is not set, or LangSmith tracing is switched on | Startup stops. The line names the variables to set, or the tracing variable to unset, because LangGraph would send the plan rules to LangSmith. Both are checked before nutrition-mcp starts. `meal-planner summary` calls no model, so it does not look for the key |
 | nutrition-mcp doesn't start, or stops answering or sends an answer that cannot be read while the catalogue loads | Startup stops with nutrition-mcp's reason |
 | A catalogue id unknown to nutrition-mcp | Startup stops and names every such id |
 | Invalid rules, or a liked or excluded food that is not in the catalogue | 422 with a list of where and what. The rejected value is dropped from validation errors and nothing is logged; a few messages name an id so it can be fixed, such as an unknown liked or excluded food or an undefined day type |

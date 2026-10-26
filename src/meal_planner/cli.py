@@ -97,10 +97,17 @@ async def _with_services[T](
     model: ModelPort | None,
     nutrition: NutritionPort | None,
     work: Callable[[Services], Awaitable[T | int]],
+    *,
+    needs_model: bool = True,
 ) -> T | int:
-    """Start the services, run `work` with them, and turn a failure into an exit code."""
+    """Start the services, run `work` with them, and turn a failure into an exit code.
+
+    `needs_model` is False for work that makes no model call, which then needs no model key.
+    """
     try:
-        async with start_services(settings, model=model, nutrition=nutrition) as services:
+        async with start_services(
+            settings, model=model, nutrition=nutrition, needs_model=needs_model
+        ) as services:
             return await work(services)
     except StartupError as exc:
         _say(f"{PROG}: {exc}")
@@ -269,6 +276,8 @@ def _summary(
                 model,
                 nutrition,
                 lambda services: _summarise_log(rules, log, log_path, settings, services),
+                # Adding up a log calls no model, so it runs without the model's key.
+                needs_model=False,
             )
         )
     except KeyboardInterrupt:
