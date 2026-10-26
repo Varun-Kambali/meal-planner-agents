@@ -48,7 +48,7 @@ Out of scope for v1, and why:
 
 ## How: design and trade-offs
 
-A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. The diagram is in [architecture.md](architecture.md).
+A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. Two more routes read a typed meal and add up a meal log. The diagram is in [architecture.md](architecture.md).
 
 The decisions that mattered:
 
@@ -57,6 +57,8 @@ The decisions that mattered:
 3. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)). They come from USDA FoodData Central as a custom dataset, and the catalogue of ingredients the writer may use is checked against nutrition-mcp at startup, so a bad id stops the app. Editing nutrition-mcp would tie this project to its releases, and a second source would split where numbers come from.
 4. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would mean login and food logs on a public demo; browser storage with a file export leaves nothing to leak.
 5. **Code fits portions, and the writer is shown nutrition** ([0005](decisions/0005-code-fits-portions.md)). In the first live week (one run, not an evaluation) the writer couldn't land on calories: it knows no ingredient's energy, so it guesses grams, and repair guesses again. Now code scales an off-target recipe's grams by one factor and nutrition-mcp works the result out again, so code never multiplies a nutrient. The writer also sees each ingredient's nutrition per 100 g and the slot's share of the day's limits. More repair rounds lost, since they spend model calls on arithmetic. A solver that picks grams lost, since it would replace the writer's proportions where scaling keeps the dish. Each change has a switch, so the eval can measure it.
+6. **The model names the foods; nutrition-mcp and code decide the rest** ([0006](decisions/0006-reading-a-typed-meal.md)). The model lists the foods, amounts and units in the typed text. nutrition-mcp's search finds each food, and one model call chooses among its options for names the search leaves open. Code settles the unit and the grams, and a vague amount or a range asks the person. The model returning food ids and grams lost, since it would invent the numbers this project exists to avoid. Matching without a model lost, since it cannot split "2 rotis, a bowl of dal and 2 eggs" into foods and amounts.
+7. **The log holds foods and amounts, never numbers** ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)). The server works every meal out again with nutrition-mcp and holds each day to its own day type, so a number in an edited or old file is never trusted. A log that does not fit is refused with the entry named, not partly summarised.
 
 ## Results
 
@@ -68,6 +70,10 @@ The decisions that mattered:
 - **A style like "no-cook" is free text** that no code checks, though the prompts call it binding.
 - **Saturated fat went over the day's cap** on several days in the first live run, which was not an evaluation. The plan was vegetarian, with paneer among its liked foods. The writer now sees each ingredient's saturated fat, and the eval will show whether that helps.
 - **Scaling is uniform,** so a piece-counted ingredient such as an egg can land on a fraction of a piece.
+- **A household measure with no sourced weight is not converted.** For a bowl, a plate or a pav the reader asks for a unit nutrition-mcp or the catalogue knows, such as a katori or grams.
+- **Which dish a general name means is the model's pick** among nutrition-mcp's options. The reading eval will measure how often it is right.
+- **An amount counts only if its words are in what was typed,** so one the model rewrites asks the person.
+- **The as-planned share counts a meal with no entry as not as planned.**
 - **Glycemic load is often unknown.** USDA foods carry none; a licensed table loaded through nutrition-mcp would fill it in.
 - **The catalogue limits variety.** A larger licensed table widens it without code changes.
 - **Free-tier models.** A stronger model is a config change, and the eval measures what it buys.
