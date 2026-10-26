@@ -293,10 +293,8 @@ async def test_two_eggs_uses_catalogue_measure(unit: str | None, shown: str) -> 
     )
     assert egg.nutrition is not None
     assert egg.nutrition.nutrients.kcal == 143
-    assert [call[0] for call in nutrition.asked] == ["search", "nutrition", "nutrition", "meal"]
-    assert nutrition.asked[-2:] == [("nutrition", "egg 100 g"), ("meal", "egg 100 g")]
-    # The first of the two asks nutrition-mcp for the unit as typed, which it refuses.
-    assert nutrition.asked[1][1].startswith("egg 2 ")
+    # The unit is settled before nutrition-mcp is asked, so it is asked once, in grams.
+    assert nutrition.asked[1:] == [("nutrition", "egg 100 g"), ("meal", "egg 100 g")]
 
 
 @pytest.mark.parametrize(

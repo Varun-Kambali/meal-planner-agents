@@ -11,9 +11,10 @@ nutrition figure, and nothing it adds to a reply is used. Code decides the rest:
 - An amount that is missing (no words for it in the text), vague ("some", "a handful") or a range
   ("2-3") is `needs_amount` whatever number the model returned. The person is asked, never given
   a guess.
-- A unit nutrition-mcp has for the food passes through to it. Otherwise the catalogue's measure
-  for the food is used, if it has one. Otherwise the item is `unknown_unit`, with the units that
-  would work. No measure is made up: "2 pav" has no sourced weight, so it stays unknown.
+- A unit nutrition-mcp has for the food goes to it. Otherwise the catalogue's measure for the
+  food turns the amount into grams, if it has one; the summary reads a logged unit the same way
+  (`Catalogue.meal_item`). Otherwise the item is `unknown_unit`, with the units that would work.
+  No measure is made up: "2 pav" has no sourced weight, so it stays unknown.
 - Every number comes from nutrition-mcp. The meal's total adds the matched items only.
 
 The text goes to the model as data, quoted so that it cannot close the data block. Nothing here
@@ -26,13 +27,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
-from nutrition_mcp.schemas import (
-    MAX_NAME_LENGTH,
-    FoodSummary,
-    MealItemIn,
-    MealResult,
-    NutritionResult,
-)
+from nutrition_mcp.schemas import FoodSummary, MealItemIn, MealResult, NutritionResult
 from nutrition_mcp.search import MAX_QUERY_LENGTH, normalise
 from pydantic import BaseModel, Field
 
@@ -185,20 +180,11 @@ async def _read_item(item: ExtractedItem, deps: _Deps) -> tuple[ReadItem, MealIt
     if amount is None:
         return _unread(name, food, None, typed_unit, "needs_amount", valid), None
     unit = typed_unit or COUNTED
-    if len(unit) > MAX_NAME_LENGTH:
-        # nutrition-mcp refuses a longer unit before it looks at the food.
+    # The search listed the food's units, so the unit is settled before nutrition-mcp is asked.
+    meal_item = deps.catalogue.meal_item(food.id, amount, unit, food.units)
+    if meal_item is None:
         return _unread(name, food, amount, unit, "unknown_unit", valid), None
-
-    meal_item = MealItemIn(food_id=food.id, amount=amount, unit=unit)
     answer = await _nutrition_for(deps, meal_item)
-    if isinstance(answer, NutritionError) and answer.valid_units:
-        # nutrition-mcp has no such unit for the food; the catalogue may have a measure.
-        grams = _catalogue_grams(deps.catalogue, food.id, amount, unit)
-        if grams is None:
-            valid = _valid_units(food, deps.catalogue, answer.valid_units)
-            return _unread(name, food, amount, unit, "unknown_unit", valid), None
-        meal_item = MealItemIn(food_id=food.id, amount=grams, unit="g")
-        answer = await _nutrition_for(deps, meal_item)
     if isinstance(answer, NutritionError):
         # The amount itself was refused: more than 5000 g.
         return _unread(name, food, None, unit, "needs_amount", valid), None
@@ -257,10 +243,6 @@ def _valid_units(food: FoodSummary, catalogue: Catalogue, own: Iterable[str]) ->
     units = list(own)
     row = catalogue.items.get(food.id)
     return [*units, *(unit for unit in (row.measures if row else {}) if unit not in units)]
-
-
-def _catalogue_grams(catalogue: Catalogue, food_id: str, amount: float, unit: str) -> float | None:
-    return catalogue.grams(food_id, amount, unit) if food_id in catalogue.items else None
 
 
 # Finding the food

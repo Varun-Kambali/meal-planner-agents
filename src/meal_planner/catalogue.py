@@ -6,12 +6,14 @@ from nutrition-mcp when the file is loaded, so they have one source. Loading als
 id against nutrition-mcp, which turns a typo in the file into a startup failure that names the id.
 """
 
+import sys
 from collections.abc import Container, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal, NamedTuple
 
 import yaml
+from nutrition_mcp.schemas import MealItemIn
 from nutrition_mcp.units import normalise_unit
 from pydantic import (
     BaseModel,
@@ -127,19 +129,47 @@ class Catalogue:
         food = rules.food
         return self.allowed(food.diet, food.exclude_allergens, food.exclude_foods)
 
-    def grams(self, food_id: str, amount: float, unit: str) -> float | None:
-        """Grams in `amount` of a household unit, or None when this catalogue has no such unit.
+    def meal_item(
+        self, food_id: str, amount: float, unit: str, own_units: Container[str] | None = None
+    ) -> MealItemIn | None:
+        """What to ask nutrition-mcp about for `amount` of `unit` of a food, or None when neither
+        nutrition-mcp nor the catalogue has the unit for it.
 
-        None means "ask nutrition-mcp": a unit it accepts for the food is passed through to it.
-        Units are read as nutrition-mcp reads them: its own `normalise_unit` (case and spaces
-        ignored, gram spellings read as g), then a plural accepted.
+        nutrition-mcp's own unit for the food comes first and is sent by its own name. Otherwise
+        the catalogue's measure for the food turns the amount into grams. `own_units` are the
+        units nutrition-mcp has for the food; when they are not given, the catalogue's copy of
+        them is used, and a food the catalogue lacks goes to nutrition-mcp as it is, to be read or
+        refused there. The reader and the summary both send units through here, so a meal the
+        reader matched is one the summary accepts.
         """
-        measures = self.get(food_id).measures
-        word = normalise_unit(unit)
-        for candidate in (word, word.removesuffix("s"), word.removesuffix("es")):
-            if candidate in measures:
-                return amount * measures[candidate]
-        return None
+        row = self.items.get(food_id)
+        own = own_units if own_units is not None else (row.units if row else None)
+        if own is None:
+            return MealItemIn(food_id=food_id, amount=amount, unit=unit)
+        name = find_unit(own, unit)
+        if name is not None:
+            return MealItemIn(food_id=food_id, amount=amount, unit=name)
+        measure = find_unit(row.measures, unit) if row else None
+        if row is None or measure is None:
+            return None
+        # Kept a number when the product is too large for a float, so that nutrition-mcp refuses
+        # it as over its limit, as it does any large amount.
+        grams = min(amount * row.measures[measure], sys.float_info.max)
+        return MealItemIn(food_id=food_id, amount=grams, unit="g")
+
+
+def find_unit(units: Container[str], unit: str) -> str | None:
+    """The unit in `units` that `unit` names, read the way nutrition-mcp reads units, or None.
+
+    Case and spaces are ignored and gram spellings are g (nutrition-mcp's own `normalise_unit`),
+    then a plural is accepted. The loop is a copy of the private `_find_unit` in nutrition-mcp's
+    units.py.
+    """
+    word = normalise_unit(unit)
+    for candidate in (word, word.removesuffix("s"), word.removesuffix("es")):
+        if candidate in units:
+            return candidate
+    return None
 
 
 async def load_catalogue(path: Path, nutrition: NutritionPort) -> Catalogue:

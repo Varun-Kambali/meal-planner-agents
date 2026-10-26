@@ -22,6 +22,7 @@ from app_helpers import (
     serving,
 )
 from nutrition_mcp.schemas import MealItemIn, MealResult
+from reader_helpers import ReaderNutrition, write_reader_catalogue
 from week_helpers import SpyNutrition
 
 from meal_planner.nutrition import NutritionError
@@ -80,6 +81,21 @@ def test_a_log_comes_back_as_a_week_summary(tmp_path: Path) -> None:
     assert tuesday.failures[0].message == (
         "calories 400 kcal, day needs at least 2138 kcal (2250 kcal target, within 5%)"
     )
+
+
+def test_a_unit_the_reader_reads_through_a_catalogue_measure_is_summarised(tmp_path: Path) -> None:
+    # nutrition-mcp has the egg in grams only; the app's catalogue says a piece is 50 g.
+    eggs = {"food_id": "egg", "amount": 2, "unit": "piece"}
+    catalogue = write_reader_catalogue(tmp_path)
+
+    with serving(tmp_path, nutrition=ReaderNutrition(), catalogue_path=catalogue) as client:
+        response = client.post(
+            "/v1/summary", json=body(entry(MON, "breakfast", "as_planned", eggs))
+        )
+
+    assert response.status_code == 200
+    (day,) = WeekSummary.model_validate(response.json()).days
+    assert day.totals["kcal"] == 143
 
 
 def test_the_summary_is_held_to_the_tolerance_in_the_settings(tmp_path: Path) -> None:

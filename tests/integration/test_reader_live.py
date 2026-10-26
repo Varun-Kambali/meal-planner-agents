@@ -4,20 +4,27 @@ The model is scripted, so this needs no key. The server loads its bundled data a
 project's food file, so it needs no network.
 """
 
+import datetime
+
 import pytest
 from reader_helpers import reading, said
+from week_helpers import plan_rules
 
-from meal_planner.catalogue import load_catalogue
+from meal_planner.catalogue import Catalogue, load_catalogue
 from meal_planner.config import Settings
 from meal_planner.llm import FakeModel
-from meal_planner.nutrition import NutritionClient
-from meal_planner.reader import read_meal
+from meal_planner.nutrition import NutritionClient, NutritionPort
+from meal_planner.reader import ReadResult, read_meal
+from meal_planner.summary import LogEntry, LogItem, MealLog, summarise
 
 pytestmark = pytest.mark.anyio
 
+TEXT = "2 rotis, 2 eggs, a banana, 2 pav, a plate of pulao and 200gm chicken"
 
-async def test_a_meal_is_read_with_the_servers_foods_units_and_the_catalogues_measures() -> None:
-    text = "2 rotis, 2 eggs, a banana, 2 pav, a plate of pulao and 200gm chicken"
+
+async def read_the_meal(
+    nutrition: NutritionPort, catalogue: Catalogue, settings: Settings
+) -> tuple[ReadResult, FakeModel]:
     # No reply for choose_food: every name here is settled without asking the model.
     model = FakeModel(
         {
@@ -34,13 +41,18 @@ async def test_a_meal_is_read_with_the_servers_foods_units_and_the_catalogues_me
             "choose_food": [],
         }
     )
+    result = await read_meal(
+        TEXT, model=model, nutrition=nutrition, catalogue=catalogue, settings=settings
+    )
+    return result, model
+
+
+async def test_a_meal_is_read_with_the_servers_foods_units_and_the_catalogues_measures() -> None:
     settings = Settings()
     async with NutritionClient.start(settings.nutrition_data_dirs) as nutrition:
         catalogue = await load_catalogue(settings.catalogue_path, nutrition)
 
-        result = await read_meal(
-            text, model=model, nutrition=nutrition, catalogue=catalogue, settings=settings
-        )
+        result, model = await read_the_meal(nutrition, catalogue, settings)
 
     roti, egg, banana, pav, pulao, chicken = result.items
     # nutrition-mcp's roti unit: 40 g.
@@ -61,3 +73,44 @@ async def test_a_meal_is_read_with_the_servers_foods_units_and_the_catalogues_me
     assert result.total.total.kcal == pytest.approx(
         sum(p.nutrients.kcal or 0 for p in parts), abs=0.1
     )
+
+
+async def test_what_the_reader_matched_is_a_log_the_summary_accepts() -> None:
+    """The items the person confirms are logged as the reader returned them, catalogue measures
+    and all, and the summary works them out to the reader's total."""
+    settings = Settings()
+    async with NutritionClient.start(settings.nutrition_data_dirs) as nutrition:
+        catalogue = await load_catalogue(settings.catalogue_path, nutrition)
+        result, _ = await read_the_meal(nutrition, catalogue, settings)
+        matched = [item for item in result.items if item.status == "matched"]
+        items = [
+            LogItem(food_id=item.food_id or "", amount=item.amount or 0, unit=item.unit or "")
+            for item in matched
+        ]
+        log = MealLog(
+            version=1,
+            entries=[
+                LogEntry(
+                    date=datetime.date(2026, 10, 26),
+                    slot_id="lunch",
+                    status="swapped",
+                    items=items,
+                )
+            ],
+        )
+
+        summary = await summarise(
+            plan_rules(), log, nutrition=nutrition, catalogue=catalogue, settings=settings
+        )
+
+    # The egg and the banana are logged in pieces, which nutrition-mcp has only from the catalogue.
+    assert [(i.food_id, i.amount, i.unit) for i in items] == [
+        ("chapati", 2, "roti"),
+        ("egg", 2, "piece"),
+        ("banana", 1, "piece"),
+        ("chicken_breast", 200, "gm"),
+    ]
+    assert result.total is not None
+    (day,) = summary.days
+    assert day.totals["kcal"] == pytest.approx(result.total.total.kcal, abs=0.1)
+    assert day.totals["protein_g"] == pytest.approx(result.total.total.protein_g, abs=0.1)

@@ -19,6 +19,7 @@ from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.schemas import MAX_NAME_LENGTH, MealItemIn, MealResult
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from meal_planner.catalogue import Catalogue
 from meal_planner.checks import add_up_meals, check_day_totals
 from meal_planner.config import Settings
 from meal_planner.nutrition import NutritionError, NutritionPort
@@ -193,12 +194,19 @@ def log_problems(rules: PlanRules, log: MealLog) -> list[Problem]:
 
 
 async def summarise(
-    rules: PlanRules, log: MealLog, *, nutrition: NutritionPort, settings: Settings
+    rules: PlanRules,
+    log: MealLog,
+    *,
+    nutrition: NutritionPort,
+    catalogue: Catalogue,
+    settings: Settings,
 ) -> WeekSummary:
     """Each date of the log against its day type, and the share eaten as planned.
 
-    Raises LogRejected for an entry the plan or nutrition-mcp does not accept, with every such
-    entry named, and SummaryError when nutrition-mcp cannot be used.
+    A unit is read as the meal reader reads it: nutrition-mcp's own unit for the food, else the
+    catalogue's measure, which goes to nutrition-mcp in grams. Raises LogRejected for an entry
+    the plan or nutrition-mcp does not accept, with every such entry named, and SummaryError when
+    nutrition-mcp cannot be used.
     """
     problems = log_problems(rules, log)
     if problems:
@@ -214,7 +222,7 @@ async def summarise(
         # A skipped meal has no foods to add up; it is not a meal with numbers missing.
         if entry.status == "skipped":
             continue
-        items = [MealItemIn(food_id=i.food_id, amount=i.amount, unit=i.unit) for i in entry.items]
+        items = [_to_send(item, catalogue) for item in entry.items]
         try:
             meals[index] = await nutrition.meal(items)
         except NutritionError as exc:
@@ -272,6 +280,13 @@ def _summarise_day(
         },
         gl_missing={entry.slot_id: len(meal.glycemic_load_missing) for entry, meal in eaten},
     )
+
+
+def _to_send(item: LogItem, catalogue: Catalogue) -> MealItemIn:
+    """The food as nutrition-mcp is asked about it. A unit neither nutrition-mcp nor the
+    catalogue has goes as it was logged, for nutrition-mcp to refuse in its own words."""
+    sent = catalogue.meal_item(item.food_id, item.amount, item.unit)
+    return sent or MealItemIn(food_id=item.food_id, amount=item.amount, unit=item.unit)
 
 
 def _targets(day_type: DayType) -> dict[str, float]:

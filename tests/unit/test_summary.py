@@ -16,6 +16,7 @@ from fakes import FakeNutrition
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import ValidationError
+from reader_helpers import ReaderNutrition, reader_catalogue
 from week_helpers import SLOTS, SpyNutrition, catalogue, item, model_for, plan_rules
 
 from meal_planner.catalogue import Catalogue
@@ -123,12 +124,14 @@ async def summary_of(
     *,
     rules: PlanRules | None = None,
     nutrition: FakeNutrition | None = None,
+    catalogue: Catalogue | None = None,
     **settings: Any,
 ) -> WeekSummary:
     return await summarise(
         rules or plan_rules(),
         log,
         nutrition=nutrition or Spy(),
+        catalogue=catalogue or Catalogue({}),
         settings=Settings(**settings),
     )
 
@@ -220,6 +223,37 @@ async def test_every_meal_is_worked_out_again_by_nutrition_mcp() -> None:
         [("rice", 100, "g"), ("dal", 1, "g")],
         [("rice", 2, "katori")],
     ]
+
+
+async def test_a_unit_the_reader_reads_through_a_catalogue_measure_is_summarised_in_grams() -> None:
+    # The reader returns "2 eggs" as egg, 2, piece: nutrition-mcp has the egg in grams only, and
+    # the catalogue says a piece is 50 g. The summary has to take what the reader returns.
+    nutrition = ReaderNutrition()
+    eggs = {"food_id": "egg", "amount": 2, "unit": "piece"}
+    rotis = {"food_id": "chapati", "amount": 2, "unit": "Rotis"}
+    log = log_of(entry(MON, "breakfast", "as_planned", eggs, rotis))
+
+    (day,) = (await summary_of(log, nutrition=nutrition, catalogue=reader_catalogue())).days
+
+    # The pieces go to nutrition-mcp as 100 g. Chapati is not in the catalogue, so its unit goes
+    # as it was logged and nutrition-mcp reads it.
+    assert nutrition.asked == [("meal", "egg 100 g, chapati 2 Rotis")]
+    assert day.totals["kcal"] == 143 + 240
+
+
+async def test_a_unit_nobody_has_is_refused_in_nutrition_mcps_words() -> None:
+    log = log_of(
+        entry(MON, "breakfast", "as_planned", {"food_id": "egg", "amount": 1, "unit": "cup"})
+    )
+
+    with pytest.raises(LogRejected) as err:
+        await summary_of(log, nutrition=ReaderNutrition(), catalogue=reader_catalogue())
+
+    (problem,) = err.value.problems
+    assert problem["loc"] == ["entries", 0, "items", 0]
+    assert problem["msg"] == (
+        "2026-10-26 breakfast: item 1 (egg): unknown unit 'cup' for egg; valid units: g"
+    )
 
 
 async def test_skipped_meal_counts_zero_items_not_missing() -> None:

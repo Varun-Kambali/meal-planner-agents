@@ -1,5 +1,6 @@
 import csv
 import json
+import sys
 from collections.abc import Mapping
 from importlib.resources import files
 from pathlib import Path
@@ -10,6 +11,7 @@ import yaml
 from fakes import FakeNutrition
 from nutrition_mcp.models import Diet as NutritionDiet
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
+from nutrition_mcp.schemas import MealItemIn
 
 from meal_planner.catalogue import Catalogue, CatalogueError, check_rules_against, load_catalogue
 from meal_planner.config import Settings
@@ -362,41 +364,74 @@ async def two_eggs_catalogue(tmp_path: Path) -> Catalogue:
     return await load(tmp_path, entries)
 
 
-async def test_grams_two_eggs(tmp_path: Path) -> None:
+def sent(food_id: str, amount: float, unit: str) -> MealItemIn:
+    return MealItemIn(food_id=food_id, amount=amount, unit=unit)
+
+
+async def test_a_catalogue_measure_is_sent_in_grams(tmp_path: Path) -> None:
     catalogue = await two_eggs_catalogue(tmp_path)
 
-    assert catalogue.grams("egg", 2, "piece") == 100.0
+    assert catalogue.meal_item("egg", 2, "piece") == sent("egg", 100, "g")
 
 
 @pytest.mark.parametrize("unit", ["Piece", " piece ", "pieces"])
-async def test_grams_reads_units_the_way_nutrition_mcp_does(tmp_path: Path, unit: str) -> None:
+async def test_a_measure_is_read_the_way_nutrition_mcp_reads_units(
+    tmp_path: Path, unit: str
+) -> None:
     catalogue = await two_eggs_catalogue(tmp_path)
 
-    assert catalogue.grams("egg", 3, unit) == 150.0
+    assert catalogue.meal_item("egg", 3, unit) == sent("egg", 150, "g")
 
 
-async def test_grams_is_none_for_a_unit_the_catalogue_lacks(tmp_path: Path) -> None:
+@pytest.mark.parametrize("unit", ["roti", "Rotis", " ROTI "])
+async def test_a_unit_nutrition_mcp_has_goes_to_it_by_its_own_name(
+    tmp_path: Path, unit: str
+) -> None:
+    nutrition = fake_nutrition("chapati", units={"chapati": {"roti": 40.0}})
+    catalogue = await load(tmp_path, [entry("chapati", measures={"slice": 20})], nutrition)
+
+    assert catalogue.meal_item("chapati", 2, unit) == sent("chapati", 2, "roti")
+
+
+async def test_a_unit_neither_has_is_none(tmp_path: Path) -> None:
     catalogue = await two_eggs_catalogue(tmp_path)
 
-    assert catalogue.grams("egg", 1, "katori") is None
-    assert catalogue.grams("moong_dal", 1, "piece") is None
+    assert catalogue.meal_item("egg", 1, "katori") is None
+    assert catalogue.meal_item("moong_dal", 1, "piece") is None
 
 
 @pytest.mark.parametrize("unit", ["gm", "gram", "Grams"])
-async def test_grams_leaves_the_gram_spellings_to_nutrition_mcp(tmp_path: Path, unit: str) -> None:
-    """nutrition-mcp reads these as grams, so a measure that borrows one of the names is not what
-    a caller who typed it gets: the catalogue answers None and nutrition-mcp takes the grams."""
+async def test_the_gram_spellings_are_nutrition_mcps_grams(tmp_path: Path, unit: str) -> None:
+    """nutrition-mcp reads these as grams, and its units come first, so a measure that borrows
+    one of the names is never used."""
     entries = [entry("egg", category="egg", measures={"gm": 5, "gram": 6, "grams": 7})]
     catalogue = await load(tmp_path, entries)
 
-    assert catalogue.grams("egg", 100, unit) is None
+    assert catalogue.meal_item("egg", 100, unit) == sent("egg", 100, "g")
 
 
-async def test_grams_for_an_unknown_id_names_it(tmp_path: Path) -> None:
+async def test_the_units_nutrition_mcp_listed_for_a_food_can_be_passed_in(tmp_path: Path) -> None:
+    """The reader has them from the search, for foods the catalogue does not hold."""
+    catalogue = await two_eggs_catalogue(tmp_path)
+    chapati = {"g": 1.0, "roti": 40.0}
+
+    assert catalogue.meal_item("chapati", 2, "rotis", chapati) == sent("chapati", 2, "roti")
+    assert catalogue.meal_item("chapati", 2, "cup", chapati) is None
+    # Passed in, they are nutrition-mcp's units for a catalogue food too; its measures still apply.
+    assert catalogue.meal_item("egg", 2, "piece", {"g": 1.0}) == sent("egg", 100, "g")
+
+
+async def test_a_food_the_catalogue_lacks_goes_to_nutrition_mcp_as_it_is(tmp_path: Path) -> None:
     catalogue = await two_eggs_catalogue(tmp_path)
 
-    with pytest.raises(CatalogueError, match="duck_egg"):
-        catalogue.grams("duck_egg", 1, "piece")
+    assert catalogue.meal_item("duck_egg", 1, "piece") == sent("duck_egg", 1, "piece")
+
+
+async def test_grams_too_many_for_a_float_stay_a_number(tmp_path: Path) -> None:
+    """So that nutrition-mcp refuses them as over its limit, as it does any large amount."""
+    catalogue = await two_eggs_catalogue(tmp_path)
+
+    assert catalogue.meal_item("egg", 1e308, "piece") == sent("egg", sys.float_info.max, "g")
 
 
 # Rules against the catalogue
