@@ -15,3 +15,5 @@ build/
 .cache/
 node_modules/
 frontend/dist/
+# Values from a private plan that test_datasets checks the eval datasets against. Never commit.
+evals/datasets/.forbidden-local.txt
