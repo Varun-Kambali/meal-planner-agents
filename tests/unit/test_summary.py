@@ -7,8 +7,7 @@ rest rest days.
 
 import datetime
 import json
-import os
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -42,13 +41,6 @@ pytestmark = pytest.mark.anyio
 
 MON = datetime.date(2026, 10, 26)
 WEEK = [MON + datetime.timedelta(days=n) for n in range(7)]
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
-        monkeypatch.delenv(name)
-    yield
 
 
 # Foods per 100 g. A rest day wants 2250 kcal (2137.5 to 2362.5), 130 g protein, at most 25 g
