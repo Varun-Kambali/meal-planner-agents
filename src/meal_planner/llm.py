@@ -12,9 +12,13 @@ import json
 import logging
 import math
 import os
+import random as _random
+import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -49,6 +53,12 @@ logger = get_logger(__name__)
 
 # Seconds to wait after the first failed try. Each wait after that is twice the last.
 BACKOFF_BASE_S = 1.0
+# Each wait is made longer by up to this share of itself, drawn at random, so that calls which
+# failed together (the slots of a week are written in parallel) do not all try again at once.
+BACKOFF_JITTER_SHARE = 0.5
+# The longest wait a provider's Retry-After is followed for; a longer one is cut to this, so a
+# call never sits idle for minutes. The tries still run out after `max_retries`.
+RETRY_AFTER_CAP_S = 60.0
 
 # The codes a ModelReply.error can hold.
 INVALID_JSON = "invalid_json"
@@ -122,6 +132,70 @@ def _classify(exc: Exception) -> tuple[str, bool]:
     return MODEL_ERROR, False
 
 
+# How long a provider asks the caller to wait. Gemini puts it in the error body, as a RetryInfo
+# detail such as "retryDelay": "17s", rather than in a Retry-After header.
+_RETRY_DELAY = re.compile(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"')
+
+
+def retry_after_s(exc: Exception) -> float | None:
+    """The seconds the provider asked for before the next try, or None when it asked for none.
+
+    Read from the response's retry-after-ms or Retry-After header (seconds or an HTTP date), then
+    from Gemini's retryDelay in the error body. A value that is not a wait (a word, a negative or
+    endless number) counts as none. A date in the past is no wait at all.
+    """
+    headers = _headers(exc)
+    if (ms := _seconds(headers.get("retry-after-ms"))) is not None:
+        return ms / 1000
+    header = headers.get("retry-after")
+    if (seconds := _seconds(header)) is not None:
+        return seconds
+    if header:
+        try:
+            when = parsedate_to_datetime(header)
+        except (TypeError, ValueError):
+            when = None
+        if when is not None and when.tzinfo is not None:
+            return max(0.0, (when - datetime.now(UTC)).total_seconds())
+    response = getattr(exc, "response", None)
+    for text in (str(exc), getattr(response, "text", "") if response is not None else ""):
+        if isinstance(text, str) and (found := _RETRY_DELAY.search(text)):
+            return float(found.group(1))
+    return None
+
+
+def _headers(exc: Exception) -> dict[str, str]:
+    """The response's headers, with lower-case names, and any LiteLLM attached to the error."""
+    found: dict[str, str] = {}
+    response = getattr(exc, "response", None)
+    for source in (getattr(response, "headers", None), getattr(exc, "headers", None)):
+        if isinstance(source, Mapping):
+            found.update({str(name).lower(): str(value) for name, value in source.items()})
+    return found
+
+
+def _seconds(value: str | None) -> float | None:
+    try:
+        number = float(value) if value is not None else math.nan
+    except ValueError:
+        return None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
+def backoff_s(tries: int, exc: Exception, draw: float) -> float:
+    """The wait before the next try, after `tries` tries that failed with `exc` the last time.
+
+    `draw` is a random number in [0, 1). Without a Retry-After the wait doubles from
+    BACKOFF_BASE_S and is made longer by up to BACKOFF_JITTER_SHARE of itself. With one, it is
+    what the provider asked for, at most RETRY_AFTER_CAP_S, plus up to one BACKOFF_BASE_S, so
+    calls told the same time do not come back together.
+    """
+    asked = retry_after_s(exc)
+    if asked is not None:
+        return min(asked, RETRY_AFTER_CAP_S) + BACKOFF_BASE_S * draw
+    return BACKOFF_BASE_S * 2.0 ** (tries - 1) * (1 + BACKOFF_JITTER_SHARE * draw)
+
+
 # A provider's reply is read field by field with getattr, because not every provider fills every
 # field: one with no message is an empty reply, and one with no usage counts zero tokens.
 
@@ -150,13 +224,16 @@ class LiteLLMModel:
     """Calls a model through LiteLLM, asking for JSON that fits the schema.
 
     `max_retries` is how many times a call is tried in all. A rate limit (429), a server error
-    (5xx), a dropped connection or a timeout is tried again after a wait that doubles each time;
-    once the tries are used up the reply's error is "rate_limited", "timeout" or "server_error".
+    (5xx), a dropped connection or a timeout is tried again after a wait (`backoff_s`): the time
+    the provider asked for in a Retry-After, up to a cap, or else a wait that doubles each time,
+    each with a random part so parallel calls spread out. Once the tries are used up the reply's
+    error is "rate_limited", "timeout" or "server_error".
     Any other refusal (a bad key, a rejected request) is not retried and gives "model_error".
     A reply that is not valid JSON for the schema is returned as such and not retried: asking
     again is the repair loop's decision.
 
-    `acompletion` and `sleep` are there for tests to replace.
+    `acompletion`, `sleep` and `random` (a number in [0, 1) for each wait) are there for tests
+    to replace.
     """
 
     def __init__(
@@ -166,6 +243,7 @@ class LiteLLMModel:
         *,
         acompletion: Callable[..., Awaitable[Any]] | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        random: Callable[[], float] = _random.random,
     ) -> None:
         if max_retries < 1:
             raise ValueError("max_retries is the number of tries and must be at least 1")
@@ -173,6 +251,7 @@ class LiteLLMModel:
         self._max_tries = max_retries
         self._acompletion = acompletion or litellm.acompletion
         self._sleep = sleep
+        self._random = random
         self._takes_schema = litellm.supports_response_schema(model=model)
 
     def _request[T: BaseModel](
@@ -207,8 +286,6 @@ class LiteLLMModel:
         error: str | None = None
         error_type: str | None = None
         for attempt in range(self._max_tries):
-            if attempt:
-                await self._sleep(BACKOFF_BASE_S * 2 ** (attempt - 1))
             try:
                 response = await self._acompletion(**request)
                 error = error_type = None
@@ -216,8 +293,9 @@ class LiteLLMModel:
             except Exception as exc:  # LiteLLM raises many types; _classify sorts them
                 error, retryable = _classify(exc)
                 error_type = type(exc).__name__
-                if not retryable:
+                if not retryable or attempt + 1 == self._max_tries:
                     break
+                await self._sleep(backoff_s(attempt + 1, exc, self._random()))
 
         latency_ms = round((time.perf_counter() - started) * 1000, 1)
         if response is None:
