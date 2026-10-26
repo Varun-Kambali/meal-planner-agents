@@ -19,7 +19,7 @@ Every feature, with what it must do, is in [docs/requirements.md](docs/requireme
 
 ## Status
 
-Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. The browser app, tracing, the evals and a deployed demo come with milestones 4 and 5, so there are no results yet.
+Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. Milestone 4 is next: the evals and tracing. The browser app and a deployed demo come with milestone 5, so there are no results yet.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
@@ -32,11 +32,11 @@ Each command and the API start nutrition-mcp themselves. `week`, `read` and the 
 ```bash
 uv run --env-file .env meal-planner week tests/fixtures/plans/office_weekday.json --out week.json
 uv run --env-file .env meal-planner read "2 rotis and a katori of dal"
-uv run --env-file .env meal-planner summary rules.json log.json
+uv run meal-planner summary tests/fixtures/plans/office_weekday.json tests/fixtures/logs/office_weekday_log.json
 make run   # the API on 127.0.0.1:8000
 ```
 
-`week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Details are in [docs/architecture.md](docs/architecture.md).
+`week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The log in the example is made up, for the same plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Details are in [docs/architecture.md](docs/architecture.md).
 
 ## Design decisions
 
@@ -45,6 +45,8 @@ make run   # the API on 127.0.0.1:8000
 - [0003](docs/decisions/0003-foods-through-nutrition-mcp-datasets.md) New foods reach nutrition-mcp through its custom-dataset folder.
 - [0004](docs/decisions/0004-user-data-in-the-browser.md) The user's data stays in the browser, and the API keeps no state.
 - [0005](docs/decisions/0005-code-fits-portions.md) Code fits portions, and the writer is shown nutrition per 100 g.
+- [0006](docs/decisions/0006-reading-a-typed-meal.md) The model reads a typed meal and picks among nutrition-mcp's options; code checks amounts and units, and nutrition-mcp gives the numbers.
+- [0007](docs/decisions/0007-the-log-holds-foods-and-amounts.md) The meal log holds foods and amounts, and the server works out the numbers.
 
 ## License
 

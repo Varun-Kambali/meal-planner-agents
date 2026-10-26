@@ -1,9 +1,9 @@
 """The meal log, and the day and week totals it comes to against the plan.
 
 The log is what the browser keeps of the week: for each planned meal, how it went and the foods
-eaten, as ids, amounts and units. It holds no number. A summary works every meal out again with
-nutrition-mcp, adds up each day with the same function the day checks use and holds it to the
-targets of its day type, so a day eaten and a day written are judged alike.
+eaten, as ids, amounts and units. It holds no number. A summary works out every meal that was
+eaten again with nutrition-mcp, adds up each day with the same function the day checks use and
+holds it to the targets of its day type, so a day eaten and a day written are judged alike.
 
 A log that does not fit is refused with the entry named by its date and slot, never read around:
 an entry whose slot the plan lacks, a food nutrition-mcp does not know or refuses an amount or
@@ -205,8 +205,10 @@ async def summarise(
 
     A unit is read as the meal reader reads it (`Catalogue.meal_item`): kilograms and litres as
     grams and millilitres, and a catalogue measure for a food nutrition-mcp has no such unit for
-    in grams. Raises LogRejected for an entry the plan or nutrition-mcp does not accept, with
-    every such entry named, and SummaryError when nutrition-mcp cannot be used.
+    in grams. Raises LogRejected for an entry the plan or nutrition-mcp does not accept. A slot
+    the plan lacks is reported first, without asking nutrition-mcp. Once there is none, every
+    entry nutrition-mcp refuses is reported at once. Raises SummaryError when nutrition-mcp
+    cannot be used.
     """
     problems = log_problems(rules, log)
     if problems:

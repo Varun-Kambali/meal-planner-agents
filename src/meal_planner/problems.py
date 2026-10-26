@@ -46,7 +46,8 @@ def meal_text_problems(
 ) -> list[Problem]:
     """A problem when a typed meal is blank or longer than `max_meal_text_chars`.
 
-    Only the length is in the message: the text is what the user typed.
+    A blank text is said to be blank, and a long one gives its length and the limit. Neither
+    message holds any of the text, which is what the user typed.
     """
     if not text.strip():
         return [{"loc": [*under, "text"], "msg": "type what you ate: the text is blank"}]
