@@ -238,9 +238,8 @@ def test_no_meal_names_flax_or_til() -> None:
 
 # No real person's data
 
-# The private plan the fat-loss plan is shaped after is not in this repository. Its values are
-# listed one per line in this local file, which .gitignore keeps out of git: a test that listed
-# them would publish them.
+# Values from a private reference are kept out of the repository. They are listed one per line in
+# this local file, which .gitignore keeps out of git: a test that listed them would publish them.
 FORBIDDEN_LOCAL = DATASETS / ".forbidden-local.txt"
 NAME_SPELLINGS = ("varun", "kambali")
 

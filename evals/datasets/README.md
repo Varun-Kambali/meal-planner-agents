@@ -6,7 +6,7 @@
 | `meals.jsonl` | 53 typed meals for the reading eval, each labelled with the foods, amounts and grams the person meant. |
 | `VERSION` | A short hash of the plans and meals, which every results file records. |
 
-Everything here is made up. No plan or meal is a real person's, and `tests/unit/test_datasets.py` checks the files for names and for values from a private plan kept out of the repository.
+Everything here is made up. No plan or meal is a real person's, and `tests/unit/test_datasets.py` checks the files for names and for values from a private reference kept out of the repository.
 
 ## meals.jsonl
 

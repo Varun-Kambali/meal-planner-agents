@@ -37,8 +37,6 @@ Together they cover all four diets, one to four day types, three to five slots, 
 
 Each day type's carbs follow from its calories, protein and fat at 4, 4 and 9 kcal a gram, rounded to 5 g, so the targets add up. Saturated fat caps come to 11% of calories or less, and fibre floors run from 25 g to 45 g. Slot shares were chosen per plan, so the slots of a day do not all get the same share.
 
-`fat_loss_four_meals` is shaped like a common fat-loss plan for someone who trains: four meals, training days and rest days at the same calories, and rest days that move some carbs to fat. Its targets, shares and times are set for this file.
-
 ## The two hard plans
 
 Both are meant to fail. They test that a week the catalogue, gear or time cannot meet ends with its recipes marked failing and the shortfall stated, rather than a hang or a silent pass.
