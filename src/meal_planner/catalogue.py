@@ -166,6 +166,17 @@ class Catalogue:
         grams = _within_float(amount * row.measures[measure])
         return MealItemIn(food_id=food_id, amount=grams, unit="g")
 
+    def valid_units(self, food_id: str, own_units: Iterable[str] | None = None) -> list[str]:
+        """The units a person may give for a food: nutrition-mcp's, then the catalogue's measures.
+
+        These are the units `meal_item` reads. `own_units` are nutrition-mcp's units for the food;
+        when they are not given, the catalogue's copy of them is used, and a food the catalogue
+        lacks has none.
+        """
+        row = self.items.get(food_id)
+        units = list(own_units if own_units is not None else (row.units if row else []))
+        return [*units, *(unit for unit in (row.measures if row else {}) if unit not in units)]
+
 
 def _within_float(amount: float) -> float:
     """The amount, kept a number when it is too large for a float, so that nutrition-mcp refuses

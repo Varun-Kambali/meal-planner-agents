@@ -447,6 +447,24 @@ async def test_litres_are_sent_in_millilitres(tmp_path: Path, unit: str) -> None
     assert catalogue.meal_item("moong_dal", 1, unit) is None
 
 
+async def test_the_valid_units_are_nutrition_mcps_then_the_catalogues_measures(
+    tmp_path: Path,
+) -> None:
+    nutrition = fake_nutrition("egg", "moong_dal", units={"egg": {"tbsp": 15.0}})
+    entries = [
+        entry("egg", category="egg", measures={"dozen": 600, "piece": 50}),
+        entry("moong_dal", category="pulse"),
+    ]
+    catalogue = await load(tmp_path, entries, nutrition)
+
+    assert catalogue.valid_units("egg") == ["g", "tbsp", "dozen", "piece"]
+    assert catalogue.valid_units("moong_dal") == ["g"]
+    # The units a search listed can be passed in, for a food the catalogue lacks too.
+    assert catalogue.valid_units("egg", {"g": 1.0}) == ["g", "dozen", "piece"]
+    assert catalogue.valid_units("chapati", {"g": 1.0, "roti": 40.0}) == ["g", "roti"]
+    assert catalogue.valid_units("chapati") == []
+
+
 async def test_grams_too_many_for_a_float_stay_a_number(tmp_path: Path) -> None:
     """So that nutrition-mcp refuses them as over its limit, as it does any large amount."""
     catalogue = await two_eggs_catalogue(tmp_path)

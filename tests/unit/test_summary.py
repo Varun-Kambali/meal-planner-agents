@@ -15,13 +15,14 @@ from fakes import FakeNutrition
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import ValidationError
-from reader_helpers import ReaderNutrition, reader_catalogue
+from reader_helpers import ReaderNutrition, reader_catalogue, reading, said
 from week_helpers import SLOTS, SpyNutrition, catalogue, item, model_for, plan_rules
 
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
+from meal_planner.llm import FakeModel
 from meal_planner.nutrition import NutritionError
-from meal_planner.reader import MAX_ITEMS
+from meal_planner.reader import MAX_ITEMS, read_meal
 from meal_planner.rules import PlanRules
 from meal_planner.summary import (
     MAX_FOODS,
@@ -89,6 +90,10 @@ class Spy(FakeNutrition):
     async def meal(self, items: list[MealItemIn]) -> MealResult:
         self.meals.append([(i.food_id, i.amount, i.unit) for i in items])
         return await super().meal(items)
+
+
+def model_of_reading(*items: dict[str, Any]) -> FakeModel:
+    return FakeModel({"read_meal": [reading(*items)], "choose_food": []})
 
 
 def rice(grams: float = 100) -> dict[str, Any]:
@@ -258,7 +263,8 @@ async def test_kilograms_and_litres_are_sent_in_grams_and_millilitres() -> None:
     assert day.totals["kcal"] == pytest.approx(825 + 154.5)
 
 
-async def test_a_unit_nobody_has_is_refused_in_nutrition_mcps_words() -> None:
+async def test_a_unit_nobody_has_is_refused_with_the_catalogues_measures_as_valid_units() -> None:
+    # nutrition-mcp lists only g for the egg; the catalogue's piece works too, so it is listed.
     log = log_of(
         entry(MON, "breakfast", "as_planned", {"food_id": "egg", "amount": 1, "unit": "cup"})
     )
@@ -269,8 +275,42 @@ async def test_a_unit_nobody_has_is_refused_in_nutrition_mcps_words() -> None:
     (problem,) = err.value.problems
     assert problem["loc"] == ["entries", 0, "items", 0]
     assert problem["msg"] == (
-        "2026-10-26 breakfast: item 1 (egg): unknown unit 'cup' for egg; valid units: g"
+        "2026-10-26 breakfast: item 1 (egg): unknown unit 'cup' for egg; valid units: g, piece"
     )
+
+
+@pytest.mark.parametrize(
+    ("food", "food_id"),
+    [
+        # In the catalogue, with a measure nutrition-mcp does not have.
+        ("egg", "egg"),
+        # In the catalogue, with no measure.
+        ("pav", "pav"),
+        # Not in the catalogue: nutrition-mcp's own units only.
+        ("roti", "chapati"),
+    ],
+)
+async def test_a_refused_unit_lists_the_units_the_reader_lists(food: str, food_id: str) -> None:
+    """The person is never told a unit the reader takes is invalid, or not told one that works."""
+    reader = model_of_reading(said(food, 1, "bucket", "1"))
+    read = await read_meal(
+        f"1 bucket {food}",
+        model=reader,
+        nutrition=ReaderNutrition(),
+        catalogue=reader_catalogue(),
+        settings=Settings(),
+    )
+    (item_read,) = read.items
+    assert item_read.status == "unknown_unit"
+    log = log_of(
+        entry(MON, "lunch", "swapped", {"food_id": food_id, "amount": 1, "unit": "bucket"})
+    )
+
+    with pytest.raises(LogRejected) as err:
+        await summary_of(log, nutrition=ReaderNutrition(), catalogue=reader_catalogue())
+
+    (problem,) = err.value.problems
+    assert problem["msg"].endswith(f"valid units: {', '.join(item_read.valid_units)}")
 
 
 async def test_skipped_meal_counts_zero_items_not_missing() -> None:

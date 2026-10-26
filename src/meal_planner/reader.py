@@ -206,7 +206,7 @@ async def _read_item(
     amount = _stated_amount(item, text)
     if food is None:
         return _unread(name, None, amount, typed_unit, "missing"), None
-    valid = _valid_units(food, deps.catalogue, food.units)
+    valid = deps.catalogue.valid_units(food.id, food.units)
     if amount is None:
         return _unread(name, food, None, typed_unit, "needs_amount", valid), None
     unit = typed_unit or COUNTED
@@ -283,13 +283,6 @@ def _typed(words: str, text: str) -> bool:
     before = _LETTER_BEFORE if words[0].isalpha() else _DIGIT_BEFORE if words[0].isdigit() else ""
     after = _LETTER_AFTER if words[-1].isalpha() else _DIGIT_AFTER if words[-1].isdigit() else ""
     return re.search(before + re.escape(words) + after, text) is not None
-
-
-def _valid_units(food: FoodSummary, catalogue: Catalogue, own: Iterable[str]) -> list[str]:
-    """`own`, the units nutrition-mcp has for the food, then the catalogue's measures for it."""
-    units = list(own)
-    row = catalogue.items.get(food.id)
-    return [*units, *(unit for unit in (row.measures if row else {}) if unit not in units)]
 
 
 # Finding the food

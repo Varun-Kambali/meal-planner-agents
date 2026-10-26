@@ -226,7 +226,7 @@ async def summarise(
         try:
             meals[index] = await nutrition.meal(items)
         except NutritionError as exc:
-            refused.append(_refusal(index, entry, exc))
+            refused.append(_refusal(index, entry, exc, catalogue))
     if refused:
         raise LogRejected(refused)
 
@@ -297,18 +297,26 @@ def _targets(day_type: DayType) -> dict[str, float]:
     return targets | {target.nutrient: target.value for target in day_type.extra}
 
 
-def _refusal(index: int, entry: LogEntry, exc: NutritionError) -> Problem:
+def _refusal(index: int, entry: LogEntry, exc: NutritionError, catalogue: Catalogue) -> Problem:
     """The problem for a meal nutrition-mcp refused over one of its foods, which is the log's to
-    fix. Any other failure is nutrition-mcp's, and ends the summary."""
+    fix. Any other failure is nutrition-mcp's, and ends the summary.
+
+    A unit it refused for a catalogue food lists the catalogue's measures too, as the reader
+    does, since they work as well. nutrition-mcp ends its message with its own list.
+    """
     if exc.unreachable:
         message = "nutrition-mcp could not be reached (step: nutrition)"
         raise SummaryError(message, unavailable=True) from exc
     if exc.food_id is None:
         message = "nutrition-mcp sent an answer that could not be used (step: nutrition)"
         raise SummaryError(message, unavailable=False) from exc
+    reason = str(exc)
+    if exc.valid_units and exc.food_id in catalogue.items:
+        before, listed, _ = reason.rpartition("valid units: ")
+        reason = before + listed + ", ".join(catalogue.valid_units(exc.food_id))
     at = next((n for n, item in enumerate(entry.items) if item.food_id == exc.food_id), None)
     loc: list[str | int] = ["entries", index, "items"]
     return {
         "loc": loc if at is None else [*loc, at],
-        "msg": f"{entry.date.isoformat()} {entry.slot_id}: {exc}",
+        "msg": f"{entry.date.isoformat()} {entry.slot_id}: {reason}",
     }

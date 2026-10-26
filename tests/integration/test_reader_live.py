@@ -15,7 +15,7 @@ from meal_planner.config import Settings
 from meal_planner.llm import FakeModel
 from meal_planner.nutrition import NutritionClient, NutritionPort
 from meal_planner.reader import ReadResult, read_meal
-from meal_planner.summary import LogEntry, LogItem, MealLog, summarise
+from meal_planner.summary import LogEntry, LogItem, LogRejected, MealLog, summarise
 
 pytestmark = pytest.mark.anyio
 
@@ -114,3 +114,37 @@ async def test_what_the_reader_matched_is_a_log_the_summary_accepts() -> None:
     (day,) = summary.days
     assert day.totals["kcal"] == pytest.approx(result.total.total.kcal, abs=0.1)
     assert day.totals["protein_g"] == pytest.approx(result.total.total.protein_g, abs=0.1)
+
+
+async def test_a_unit_the_summary_refuses_lists_the_units_the_reader_lists() -> None:
+    """Against the real server's message: egg has only g in nutrition-mcp and a piece in the
+    catalogue, and both are what the person may use."""
+    settings = Settings()
+    model = FakeModel({"read_meal": [reading(said("egg", 1, "cup", "a"))], "choose_food": []})
+    async with NutritionClient.start(settings.nutrition_data_dirs) as nutrition:
+        catalogue = await load_catalogue(settings.catalogue_path, nutrition)
+        read = await read_meal(
+            "a cup of egg", model=model, nutrition=nutrition, catalogue=catalogue, settings=settings
+        )
+        log = MealLog(
+            version=1,
+            entries=[
+                LogEntry(
+                    date=datetime.date(2026, 10, 26),
+                    slot_id="lunch",
+                    status="swapped",
+                    items=[LogItem(food_id="egg", amount=1, unit="cup")],
+                )
+            ],
+        )
+        with pytest.raises(LogRejected) as err:
+            await summarise(
+                plan_rules(), log, nutrition=nutrition, catalogue=catalogue, settings=settings
+            )
+
+    (egg,) = read.items
+    assert (egg.status, egg.valid_units) == ("unknown_unit", ["g", "piece"])
+    (problem,) = err.value.problems
+    assert problem["msg"] == (
+        "2026-10-26 lunch: item 1 (egg): unknown unit 'cup' for egg; valid units: g, piece"
+    )
