@@ -205,8 +205,10 @@ async def summarise(
 
     A unit is read as the meal reader reads it (`Catalogue.meal_item`): kilograms and litres as
     grams and millilitres, and a catalogue measure for a food nutrition-mcp has no such unit for
-    in grams. Raises LogRejected for an entry the plan or nutrition-mcp does not accept, with
-    every such entry named, and SummaryError when nutrition-mcp cannot be used.
+    in grams. Raises LogRejected for an entry the plan or nutrition-mcp does not accept. A slot
+    the plan lacks is reported first, without asking nutrition-mcp. Once there is none, every
+    entry nutrition-mcp refuses is reported at once. Raises SummaryError when nutrition-mcp
+    cannot be used.
     """
     problems = log_problems(rules, log)
     if problems:

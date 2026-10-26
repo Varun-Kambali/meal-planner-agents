@@ -16,7 +16,7 @@ The first is quicker, but the log is a file the person can save, edit and load a
 3. Each date is held to the targets of its own day type, the one the plan gives its weekday, by `check_day_totals` with the day tolerance from the settings. The failures read the way a written day's do.
 4. The week carries the share of planned meals eaten as planned and the number of days on target. The planned meals are the plan's slots on every date from the log's first to its last, so a slot with no entry counts as not as planned.
 
-**A log that does not fit is refused, never partly summarised.** An entry whose slot the plan lacks, a food nutrition-mcp does not know, and an amount or unit it refuses each refuse the log, and every such entry is named by its date and slot at once. The API answers 422 and the command line exits 2. Nothing is dropped quietly, and no summary is built from the entries that did fit.
+**A log that does not fit is refused, never partly summarised.** An entry whose slot the plan lacks, a food nutrition-mcp does not know, and an amount or unit it refuses each refuse the log, and each entry is named by its date and slot. A slot the plan lacks is found first, before nutrition-mcp is asked, and is reported alone. Once those are fixed, every entry nutrition-mcp refuses is reported at once. The API answers 422 and the command line exits 2. Nothing is dropped quietly, and no summary is built from the entries that did fit.
 
 ## Alternatives considered
 - **Store the numbers in the log.** A summary would need no nutrition-mcp calls. But it would trust numbers in a file that can be edited or old, and the day would be judged on figures nobody recomputed. The saving is the nutrition-mcp calls, which cost no model quota.
