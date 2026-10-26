@@ -101,13 +101,46 @@ _AMOUNT_START = re.compile(
     + "|".join(re.escape(word) for word in sorted(_NUMBER_WORDS, key=len, reverse=True))
     + r")\b"
 )
-# The words after the number that make it a different one: they join, divide or count in parts
-# ("two and a half", "half a dozen", "three quarters", "one fourth", "one point five") or make
-# a range in Hindi ("2 se 3", "1 ya 2"). Digits and signs after the number do the same ("1,000 g",
-# "2~3", "1 & 1/2"), and are found by `_plain`.
-_NUMBER_GOES_ON = re.compile(
-    r"\b(?:and|or|to|se|ya|point|couple|pair|dozen|half|halves|quarters?|thirds?"
-    r"|(?:fourth|fifth|sixth|seventh|eighth|ninth|tenth)s?)\b"
+_ORDINALS = ("fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth")
+# The words after the number that make it a different one. They join or divide ("two and a half",
+# "twelve to fifteen"), count in parts ("three quarters", "one fourth", "one point five"), scale
+# it ("two hundred", "1 lakh") or make a range in Hindi ("2 se 3", "1 ya 2", and the same in
+# Devanagari). So does any number word of the table after it ("one two"). Digits, signs and
+# letters of other scripts after the number do the same ("1,000 g", "2~3", "1 & 1/2"), and are
+# found by `_plain`. Whole words, not a pattern: a Devanagari vowel sign is not a word
+# character, so a word boundary would not be found after "या".
+_NUMBER_GOES_ON = frozenset(
+    {
+        "and",
+        "or",
+        "to",
+        "aur",
+        "se",
+        "ya",
+        "और",
+        "या",
+        "से",
+        "point",
+        "couple",
+        "pair",
+        "halves",
+        "quarters",
+        "third",
+        "thirds",
+        "hundred",
+        "hundreds",
+        "thousand",
+        "thousands",
+        "lakh",
+        "lakhs",
+        "crore",
+        "crores",
+        "million",
+        "millions",
+    }
+    | {f"{ordinal}{plural}" for ordinal in _ORDINALS for plural in ("", "s")}
+    # "a" and "an" are left out: "half a katori" is half.
+    | {word for word in _NUMBER_WORDS if " " not in word and word not in ("a", "an")}
 )
 # The words for an amount may not run on into a longer word or number in the text: no letter
 # touches a letter they start or end with, and no digit or decimal point touches a digit ("2" is
@@ -331,14 +364,18 @@ def _amount_in(words: str) -> float | None:
     `words` are folded. A number may be followed by a unit or other letters ("200gm", "1.5l",
     "a katori"). The table of number words is short on purpose: any other number word reads as
     no number, and so does a number that goes on into one the table has no value for ("two and
-    a half", "1,000 g", "1 litre 500 ml"). The item then asks for an amount, which never
-    invents a quantity.
+    a half", "1,000 g", "1 litre 500 ml", "two hundred"). An item with no number to compare
+    asks for an amount, and an item that asks never has a quantity invented for it. The words
+    can still go on in a way listed nowhere here, so this narrows what the model can get wrong
+    and does not rule it out.
     """
     start = _AMOUNT_START.match(words)
     if start is None:
         return None
     after = words[start.end() :]
-    if _NUMBER_GOES_ON.search(after) or not all(map(_plain, after)):
+    if not all(map(_plain, after)) or not _NUMBER_GOES_ON.isdisjoint(
+        after.replace(".", " ").split()
+    ):
         return None
     if start["word"]:
         return _NUMBER_WORDS[start["word"]]
@@ -351,10 +388,15 @@ def _amount_in(words: str) -> float | None:
 
 
 def _plain(char: str) -> bool:
-    """Whether a character after the number is one a unit or a word is made of: a letter (with
-    the vowel signs of scripts such as Devanagari), a space or a full stop. Anything else, a
-    digit, a comma or a sign, may carry on the number."""
-    return char.isspace() or char == "." or unicodedata.category(char)[0] in "LM"
+    """Whether a character after the number is one a unit or a word is made of: a space, a full
+    stop, or a Latin or Devanagari letter (with the vowel signs of Devanagari). Anything else, a
+    digit, a comma, a sign or a letter of another script, may carry on the number: the code has
+    no number words for those scripts to look for."""
+    if char.isspace() or char == ".":
+        return True
+    return unicodedata.category(char)[0] in "LM" and unicodedata.name(char, "").startswith(
+        ("LATIN", "DEVANAGARI")
+    )
 
 
 def _typed(words: str, text: str) -> bool:

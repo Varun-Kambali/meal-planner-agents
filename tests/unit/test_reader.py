@@ -278,6 +278,25 @@ RUNS_ON: list[tuple[str, float]] = [
     ("five eighths", 5),
     ("one ninth", 1),
     ("three tenths", 3),
+    # Scales, and a second number straight after the first.
+    ("five hundred g", 5),
+    ("one hundred", 1),
+    ("two thousand", 2),
+    ("2 hundred", 2),
+    ("1 lakh", 1),
+    ("3 lakhs", 3),
+    ("one crore", 1),
+    ("2 crores", 2),
+    ("1 million", 1),
+    ("one two", 1),
+    ("two three", 2),
+    # Hindi joiners, in Latin letters and in Devanagari.
+    ("2 aur teen", 2),
+    ("2 \u0914\u0930 \u0924\u0940\u0928", 2),
+    ("2 \u092f\u093e \u0924\u0940\u0928", 2),
+    ("2 \u0938\u0947 \u0924\u0940\u0928", 2),
+    # A number word in a script the code has no words for.
+    ("2\u4e09", 2),
 ]
 
 
@@ -353,7 +372,7 @@ async def test_an_amount_that_disagrees_with_its_words_needs_an_amount(
 @pytest.mark.parametrize(
     ("amount_text", "amount", "used"),
     [
-        # A third of a gram is not 0.67, but is the float the words divide to.
+        # Two thirds is not 0.67, but is the float the words divide to.
         ("2/3", 0.67, False),
         ("2/3", 2 / 3, True),
         # Equal within 1e-9 is the same number; further off is not.
@@ -450,6 +469,9 @@ async def test_digits_too_long_for_a_number_ask_for_an_amount(amount_text: str) 
         ("half kg", 0.5),
         ("1 litre", 1),
         ("2 \u0930\u094b\u091f\u0940", 2),
+        ("half a kg", 0.5),
+        ("2 tbsp.", 2),
+        ("2 rotis", 2),
     ],
 )
 def test_amount_in_reads_the_number_in_amount_words(words: str, number: float) -> None:
