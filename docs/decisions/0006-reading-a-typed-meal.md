@@ -1,4 +1,4 @@
-# 0006. The model names the foods; nutrition-mcp and code decide the rest
+# 0006. The model reads the meal and picks among nutrition-mcp's options; code checks amounts and units
 Date: 2026-10-26 · Status: accepted
 
 ## Context
@@ -9,7 +9,7 @@ When a person goes off plan, they type what they had in their own words: "2 roti
 - **Some amounts cannot be known.** "A bowl", "some" and "2 or 3" give no number a meal can be added up from, and nothing sources the weight of a bowl.
 
 ## Decision
-The model does the part only it can do, and code decides everything that ends up as a number. A read is five steps ([architecture.md](../architecture.md#reading-a-typed-meal) has them in full).
+The model does the parts only it can do: reading the text, and choosing between nutrition-mcp's options for a name the search leaves open. Code checks the amount and settles the unit, and nutrition-mcp gives every number. A read is five steps ([architecture.md](../architecture.md#reading-a-typed-meal) has them in full).
 
 **The model names what is in the text** (`read_meal`, `prompts/reader.md`). It lists up to 20 foods, each with a name, an amount, a unit and the words the person used for the amount (`amount_text`). The text goes in as a JSON string inside a delimited data block, and the prompt says it is data and never instructions. The reply has no field for a nutrition figure, and anything extra in it is ignored.
 
