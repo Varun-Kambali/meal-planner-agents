@@ -1,12 +1,13 @@
-"""The `meal-planner` command, without the web server: `week` writes a week from a rules file
-and `read` reads a meal typed in plain words.
+"""The `meal-planner` command, without the web server: `week` writes a week from a rules file,
+`read` reads a meal typed in plain words and `summary` adds up a meal log against the rules.
 
 Progress goes to stderr one line per event. It holds the kind of event, slot ids (the plan's own
 slugs, such as "breakfast"), days, an attempt number and the names of checks, never the plan's
-free text or what the model wrote. The week goes to `--out`, or to stdout; what `read` finds goes
-to stdout. Exit codes: 0 a week was written (recipes that still fail are in it) or a meal was
-read, 1 the app could not start or the run failed, 2 the rules or the text could not be used,
-130 the run was stopped with Ctrl-C.
+free text or what the model wrote. The week goes to `--out`, or to stdout; what `read` finds and
+the summary go to stdout. A log that does not fit is named entry by entry, as the API's 422 names
+it. Exit codes: 0 a week was written (recipes that still fail are in it), a meal was read or a
+log was added up, 1 the app could not start or the run failed, 2 the rules, the text or the log
+could not be used, 130 the run was stopped with Ctrl-C.
 
 Settings come from the environment only; the command does not read a .env file, so run it with
 `uv run --env-file .env meal-planner ...` to use one.
@@ -18,7 +19,7 @@ import sys
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from meal_planner.config import Settings
 from meal_planner.llm import ModelPort
@@ -27,6 +28,7 @@ from meal_planner.problems import Problem, meal_text_problems, problems_from, un
 from meal_planner.reader import ReadError, ReadResult, read_meal
 from meal_planner.rules import PlanRules
 from meal_planner.startup import Services, StartupError, start_services
+from meal_planner.summary import LogRejected, MealLog, SummaryError, WeekSummary, summarise
 from meal_planner.week import run_week
 from meal_planner.week_events import (
     RecipeChecked,
@@ -77,14 +79,15 @@ def progress_line(event: WeekEvent) -> str:
             )
 
 
-def _read_rules(path: Path) -> PlanRules | int:
+def _read_file[T: BaseModel](path: Path, schema: type[T]) -> T | int:
+    """The file read as `schema`, or exit code 2 with each problem named by its field."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         _say(f"{PROG}: cannot read {path}: {exc.strerror or type(exc).__name__}")
         return 2
     try:
-        return PlanRules.model_validate_json(text)
+        return schema.model_validate_json(text)
     except ValidationError as exc:
         return _refuse(problems_from(exc.errors()), str(path))
 
@@ -94,10 +97,17 @@ async def _with_services[T](
     model: ModelPort | None,
     nutrition: NutritionPort | None,
     work: Callable[[Services], Awaitable[T | int]],
+    *,
+    needs_model: bool = True,
 ) -> T | int:
-    """Start the services, run `work` with them, and turn a failure into an exit code."""
+    """Start the services, run `work` with them, and turn a failure into an exit code.
+
+    `needs_model` is False for work that makes no model call, which then needs no model key.
+    """
     try:
-        async with start_services(settings, model=model, nutrition=nutrition) as services:
+        async with start_services(
+            settings, model=model, nutrition=nutrition, needs_model=needs_model
+        ) as services:
             return await work(services)
     except StartupError as exc:
         _say(f"{PROG}: {exc}")
@@ -125,6 +135,26 @@ async def _write_week(rules: PlanRules, settings: Settings, services: Services) 
             week = event.week
     assert week is not None  # run_week always ends with week_done
     return week
+
+
+async def _summarise_log(
+    rules: PlanRules, log: MealLog, log_path: Path, settings: Settings, services: Services
+) -> WeekSummary | int:
+    try:
+        return await summarise(
+            rules,
+            log,
+            nutrition=services.nutrition,
+            catalogue=services.catalogue,
+            settings=settings,
+        )
+    except LogRejected as exc:
+        # Each problem names the entry by its date and slot, and its place in the log file.
+        return _refuse(exc.problems, str(log_path))
+    except SummaryError as exc:
+        # The message names the step and holds nothing from the log.
+        _say(f"{PROG}: {exc}")
+        return 1
 
 
 async def _read_text(text: str, settings: Settings, services: Services) -> ReadResult | int:
@@ -159,10 +189,15 @@ def main(
     week.add_argument("--out", type=Path, help="write the week here instead of to stdout")
     read = commands.add_parser("read", help="read a meal typed in plain words")
     read.add_argument("text", help="what you ate, in your own words (quote it)")
+    summary = commands.add_parser("summary", help="add up a meal log against a rules file")
+    summary.add_argument("rules", type=Path, help="the plan rules, as JSON")
+    summary.add_argument("log", type=Path, help="the meal log, as JSON")
     args = parser.parse_args(argv)
 
     if args.command == "read":
         return _read(args.text, settings or Settings(), model, nutrition)
+    if args.command == "summary":
+        return _summary(args.rules, args.log, settings or Settings(), model, nutrition)
     return _week(args.rules, args.out, settings, model, nutrition)
 
 
@@ -173,7 +208,7 @@ def _week(
     model: ModelPort | None,
     nutrition: NutritionPort | None,
 ) -> int:
-    rules = _read_rules(rules_path)
+    rules = _read_file(rules_path, PlanRules)
     if isinstance(rules, int):
         return rules
     settings = settings or Settings()
@@ -211,6 +246,38 @@ def _read(
         result = asyncio.run(
             _with_services(
                 settings, model, nutrition, lambda services: _read_text(text, settings, services)
+            )
+        )
+    except KeyboardInterrupt:
+        return 130
+    if isinstance(result, int):
+        return result
+    sys.stdout.write(result.model_dump_json(indent=2) + "\n")
+    return 0
+
+
+def _summary(
+    rules_path: Path,
+    log_path: Path,
+    settings: Settings,
+    model: ModelPort | None,
+    nutrition: NutritionPort | None,
+) -> int:
+    rules = _read_file(rules_path, PlanRules)
+    if isinstance(rules, int):
+        return rules
+    log = _read_file(log_path, MealLog)
+    if isinstance(log, int):
+        return log
+    try:
+        result = asyncio.run(
+            _with_services(
+                settings,
+                model,
+                nutrition,
+                lambda services: _summarise_log(rules, log, log_path, settings, services),
+                # Adding up a log calls no model, so it runs without the model's key.
+                needs_model=False,
             )
         )
     except KeyboardInterrupt:

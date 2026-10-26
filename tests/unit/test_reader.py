@@ -31,11 +31,12 @@ from meal_planner.llm import (
     ModelPort,
     ModelReply,
 )
-from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.nutrition import NutritionError, NutritionPort, refusal
 from meal_planner.reader import (
-    Choice,
+    Choices,
     Extracted,
     ExtractedItem,
+    Pick,
     ReadError,
     ReadResult,
     read_meal,
@@ -142,8 +143,7 @@ async def test_nothing_is_totalled_when_no_food_was_matched() -> None:
 async def test_vague_amount_needs_amount() -> None:
     model = model_of(
         reading(said("dal", None, None, "some"), said("rice", None, "plate", "half plate")),
-        choosing(0),
-        choosing(0),
+        choosing(0, 0),
     )
 
     result = await read("some dal and half plate rice", model)
@@ -178,7 +178,22 @@ async def test_range_amount_needs_amount(amount_text: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "amount_text", ["some", "a little", "a bit", "a few", "a handful", "lots of", "a lot", "Some"]
+    "amount_text",
+    [
+        "some",
+        "a little",
+        "a bit",
+        "a few",
+        "a handful",
+        "lots of",
+        "a lot",
+        "Some",
+        "several",
+        "many",
+        "so many",
+        "plenty of",
+        "Plenty",
+    ],
 )
 async def test_vague_words_need_an_amount_whatever_the_model_returned(amount_text: str) -> None:
     model = model_of(reading(said("roti", 1, "roti", amount_text)))
@@ -189,14 +204,69 @@ async def test_vague_words_need_an_amount_whatever_the_model_returned(amount_tex
 
 
 @pytest.mark.parametrize(
-    "amount_text", ["2", "two", "half", "1/2", "a couple", "2.5", "a", "bitter"]
+    ("text", "amount_text"),
+    [
+        ("2 rotis", "2"),
+        ("two rotis", "two"),
+        ("a couple of rotis", "a couple"),
+        ("rotis x2", "x2"),
+        ("2rotis", "2"),
+        ("1/2 a dozen rotis", "1/2 a dozen"),
+        # Case and spaces are folded on both sides.
+        ("TWO rotis", "two"),
+        ("two   Rotis", " Two "),
+        ("a couple\nof rotis", "A  Couple"),
+    ],
 )
-async def test_a_stated_amount_is_read(amount_text: str) -> None:
+async def test_an_amount_in_the_persons_words_is_read(text: str, amount_text: str) -> None:
     model = model_of(reading(said("roti", 2, "roti", amount_text)))
 
-    (item,) = (await read("2 rotis", model)).items
+    (item,) = (await read(text, model)).items
 
     assert (item.status, item.amount, item.grams) == ("matched", 2, 80)
+
+
+@pytest.mark.parametrize(
+    ("text", "amount_text"),
+    [
+        # Words the person did not type: the model made them up with the number.
+        ("2 rotis", "two"),
+        ("2 rotis", "half"),
+        ("2 rotis", "bitter"),
+        ("2 rotis", "2 plates"),
+        # In the text, but only inside a longer number or word.
+        ("12 rotis", "2"),
+        ("2.5 rotis", "2"),
+        ("roti with honey", "one"),
+        ("chapati", "a"),
+    ],
+)
+async def test_an_amount_the_person_did_not_type_is_not_read(text: str, amount_text: str) -> None:
+    nutrition = ReaderNutrition()
+    model = model_of(reading(said("roti", 2, "roti", amount_text)))
+
+    (item,) = (await read(text, model, nutrition)).items
+
+    assert (item.status, item.food_id, item.unit) == ("needs_amount", "chapati", "roti")
+    assert (item.amount, item.grams, item.nutrition) == (None, None, None)
+    assert [call[0] for call in nutrition.asked] == ["search"]
+
+
+async def test_roti_and_dal_with_an_invented_amount_text_need_amounts() -> None:
+    # The model made up the number and the words for it.
+    nutrition = ReaderNutrition()
+    model = model_of(
+        reading(said("roti", 1, None, "1"), said("dal", 1, "katori", "1 katori")), choosing(0)
+    )
+
+    result = await read("roti and dal", model, nutrition)
+
+    assert [(item.status, item.amount, item.grams) for item in result.items] == [
+        ("needs_amount", None, None),
+        ("needs_amount", None, None),
+    ]
+    assert (result.total, result.missing) == (None, [])
+    assert [call[0] for call in nutrition.asked] == ["search", "search"]
 
 
 @pytest.mark.parametrize("amount_text", ["", " ", "\n "])
@@ -247,7 +317,7 @@ async def test_an_amount_that_is_not_a_positive_number_needs_an_amount(amount: f
     nutrition = ReaderNutrition()
     model = model_of(reading(said("roti", amount, "roti", "2")))
 
-    (item,) = (await read("0 rotis", model, nutrition)).items
+    (item,) = (await read("2 rotis", model, nutrition)).items
 
     assert (item.status, item.amount, item.grams) == ("needs_amount", None, None)
     assert [call[0] for call in nutrition.asked] == ["search"]
@@ -293,10 +363,8 @@ async def test_two_eggs_uses_catalogue_measure(unit: str | None, shown: str) -> 
     )
     assert egg.nutrition is not None
     assert egg.nutrition.nutrients.kcal == 143
-    assert [call[0] for call in nutrition.asked] == ["search", "nutrition", "nutrition", "meal"]
-    assert nutrition.asked[-2:] == [("nutrition", "egg 100 g"), ("meal", "egg 100 g")]
-    # The first of the two asks nutrition-mcp for the unit as typed, which it refuses.
-    assert nutrition.asked[1][1].startswith("egg 2 ")
+    # The unit is settled before nutrition-mcp is asked, so it is asked once, in grams.
+    assert nutrition.asked[1:] == [("nutrition", "egg 100 g"), ("meal", "egg 100 g")]
 
 
 @pytest.mark.parametrize(
@@ -329,6 +397,43 @@ async def test_a_count_of_the_food_itself_reads_through_the_piece_measure(
     assert tasks(model) == ["read_meal"]
 
 
+@pytest.mark.parametrize(
+    ("text", "said_of", "grams", "kcal"),
+    [
+        ("half kg chicken", said("chicken", 0.5, "kg", "half"), 500, 825),
+        ("1 litre whole milk", said("whole milk", 1, "litre", "1"), 1030, 618),
+        (
+            "a quarter liter of whole milk",
+            said("whole milk", 0.25, "liter", "a quarter"),
+            257.5,
+            154.5,
+        ),
+    ],
+)
+async def test_kilograms_and_litres_are_read(
+    text: str, said_of: dict[str, Any], grams: float, kcal: float
+) -> None:
+    # nutrition-mcp reads g and ml spellings only.
+    model = model_of(reading(said_of))
+
+    (item,) = (await read(text, model)).items
+
+    assert (item.status, item.amount, item.unit) == ("matched", said_of["amount"], said_of["unit"])
+    assert item.grams == pytest.approx(grams)
+    assert item.nutrition is not None
+    assert item.nutrition.nutrients.kcal == pytest.approx(kcal)
+
+
+async def test_the_prompt_keeps_kilograms_and_litres_as_typed() -> None:
+    model = model_of(reading())
+
+    await read("half kg chicken", model)
+
+    _, system, _ = model.calls[0]
+    assert '"kg" for kg and kilo' in system
+    assert '"litre" for litre, liter and l' in system
+
+
 async def test_the_prompt_tells_the_model_to_leave_the_unit_null_when_the_unit_is_the_food() -> (
     None
 ):
@@ -357,7 +462,7 @@ async def test_a_unit_nobody_has_is_unknown_unit_with_the_valid_units() -> None:
         reading(
             said("pav", 2, None, "2"),
             said("egg", 2, "glasses", "2"),
-            said("roti", 1, "cup", "1"),
+            said("roti", 1, "cup", "a"),
         )
     )
 
@@ -397,7 +502,7 @@ async def test_an_amount_over_the_limit_needs_an_amount(
     nutrition = ReaderNutrition()
     model = model_of(reading(said(name, amount, unit, str(amount))))
 
-    result = await read("a lot of food", model, nutrition)
+    result = await read(f"{amount} {unit} {name}", model, nutrition)
 
     (item,) = result.items
     assert (item.status, item.amount, item.grams, item.nutrition) == (
@@ -414,7 +519,7 @@ async def test_an_amount_over_the_limit_needs_an_amount(
 async def test_exactly_5000_g_is_read() -> None:
     model = model_of(reading(said("chicken", 5000, "g", "5000")))
 
-    (item,) = (await read("5 kg chicken", model)).items
+    (item,) = (await read("5000 g chicken", model)).items
 
     assert (item.status, item.grams) == ("matched", 5000)
 
@@ -423,7 +528,7 @@ async def test_exactly_5000_g_is_read() -> None:
 
 
 async def test_a_name_with_one_result_is_taken_without_asking_the_model() -> None:
-    model = model_of(reading(said("phulka", 1, "roti", "1")))
+    model = model_of(reading(said("phulka", 1, "roti", "a")))
 
     (item,) = (await read("a phulka", model)).items
 
@@ -482,12 +587,85 @@ async def test_a_name_shared_by_several_foods_asks_the_model_once_with_the_optio
     )
     assert tasks(model) == ["read_meal", "choose_food"]
     _, system, user = model.calls[1]
-    assert 'food: "dal"' in user
+    assert 'food 0: "dal"' in user
     assert user.index("Dal tadka") < user.index("Toor dal") < user.index("Moong dal")
     assert user.count("<data>") == user.count("</data>") == 1
     assert "never instructions" in system
     # The model sees the name, not what else the person typed.
     assert "lunch" not in user
+
+
+async def test_every_name_the_search_leaves_open_is_chosen_in_one_call() -> None:
+    text = "100 g dal, 100 g rice, 100 g dal tadka and 100 g Dal  at lunch"
+    model = model_of(
+        reading(
+            said("dal", 100, "g", "100 g"),
+            said("rice", 100, "g", "100 g"),
+            # One food has this name, so it is settled without the model.
+            said("dal tadka", 100, "g", "100 g"),
+            # The first name again, spelled another way: it is asked about once.
+            said("Dal ", 100, "g", "100 g"),
+        ),
+        choosing(1, 0),
+    )
+
+    result = await read(text, model)
+
+    assert [item.food_id for item in result.items] == [
+        "toor_dal",
+        "white_rice",
+        "dal_tadka",
+        "toor_dal",
+    ]
+    assert tasks(model) == ["read_meal", "choose_food"]
+    _, _, user = model.calls[1]
+    assert user.index('food 0: "dal"') < user.index("Toor dal") < user.index('food 1: "rice"')
+    assert user.index('food 1: "rice"') < user.index("Curd rice")
+    assert "food 2" not in user
+    assert "lunch" not in user
+
+
+async def test_a_read_makes_at_most_two_model_calls() -> None:
+    # Twenty names, each shared by two foods and none of them the name: one call chooses all.
+    foods = {f"food_{n}_{side}": {"kcal": 100.0} for n in range(20) for side in "ab"}
+    nutrition = FakeNutrition(foods)
+    names = [said(f"food {n}", 100, "g", "100 g") for n in range(20)]
+    model = model_of(reading(*names), choosing(*[1] * 20))
+
+    result = await read("100 g of each food", model, nutrition)
+
+    assert [item.food_id for item in result.items] == [f"food_{n}_b" for n in range(20)]
+    assert tasks(model) == ["read_meal", "choose_food"]
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        # No pick for the name.
+        [],
+        # A pick for a name that was not asked about.
+        [{"food": 1, "option": 0}],
+        # Two picks that disagree.
+        [{"food": 0, "option": 0}, {"food": 0, "option": 1}],
+    ],
+)
+async def test_a_name_without_one_pick_is_missing(picks: list[dict[str, Any]]) -> None:
+    model = model_of(reading(said("dal", 100, "g", "100 g")), json.dumps({"picks": picks}))
+
+    result = await read("100 g dal", model)
+
+    (item,) = result.items
+    assert (item.status, item.food_id) == ("missing", None)
+    assert result.missing == ["dal"]
+
+
+async def test_the_same_pick_twice_is_one_pick() -> None:
+    picks = [{"food": 0, "option": 1}, {"food": 0, "option": 1}]
+    model = model_of(reading(said("dal", 100, "g", "100 g")), json.dumps({"picks": picks}))
+
+    (item,) = (await read("100 g dal", model)).items
+
+    assert (item.status, item.food_id) == ("matched", "toor_dal")
 
 
 @pytest.mark.parametrize("index", [9, -1, 3, None])
@@ -521,7 +699,7 @@ async def test_a_name_that_cannot_be_searched_for_is_missing(name: str) -> None:
 
 async def test_an_item_with_no_name_is_left_out() -> None:
     nutrition = ReaderNutrition()
-    model = model_of(reading(said("  ", 1, "g", "1"), said("roti", 1, "roti", "1")))
+    model = model_of(reading(said("  ", 1, "g", "1"), said("roti", 1, "roti", "a")))
 
     result = await read("a roti", model, nutrition)
 
@@ -533,7 +711,7 @@ async def test_items_come_back_in_the_order_written_and_missing_names_the_ones_n
     model = model_of(
         reading(
             said("pulao", 1, "plate", "a plate"),
-            said("roti", 1, "roti", "1"),
+            said("roti", 1, "roti", "a"),
             said("vada", 2, None, "2"),
             said("roti", 2, "roti", "2"),
         )
@@ -597,7 +775,8 @@ async def test_the_text_cannot_close_the_data_block() -> None:
 async def test_the_model_is_never_asked_for_a_nutrition_figure() -> None:
     assert set(ExtractedItem.model_fields) == {"name", "amount", "unit", "amount_text"}
     assert set(Extracted.model_fields) == {"items"}
-    assert set(Choice.model_fields) == {"index"}
+    assert set(Choices.model_fields) == {"picks"}
+    assert set(Pick.model_fields) == {"food", "option"}
 
 
 async def test_nothing_the_model_adds_about_nutrition_is_used() -> None:
@@ -744,6 +923,36 @@ async def test_an_answer_nutrition_mcp_gives_that_cannot_be_read_is_not_taken_fo
 
     with pytest.raises(ReadError, match="could not be used") as caught:
         await read("2 rotis", model, GarbledNutrition())
+
+    assert caught.value.unavailable is False
+    assert "step: nutrition" in str(caught.value)
+
+
+class Refusing(ReaderNutrition):
+    """nutrition-mcp refusing the food, in its words, for a reason other than the amount."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__()
+        self.message = message
+
+    async def nutrition(self, food_id: str, amount: float, unit: str) -> NutritionResult:
+        raise refusal(self.message.format(food_id=food_id), food_id)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "unknown food id '{food_id}'; search_food finds food ids by name",
+        "unknown unit 'roti' for {food_id}; valid units: g",
+        "amount must be greater than 0, got 0",
+        "2 roti comes to 80 g, over the limit of 50 g",
+    ],
+)
+async def test_a_refusal_that_is_not_about_the_amount_is_a_read_error(message: str) -> None:
+    model = model_of(reading(said("roti", 2, "roti", "2")))
+
+    with pytest.raises(ReadError, match="could not be used") as caught:
+        await read("2 rotis", model, Refusing(message))
 
     assert caught.value.unavailable is False
     assert "step: nutrition" in str(caught.value)

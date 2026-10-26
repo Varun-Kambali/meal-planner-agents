@@ -1,19 +1,22 @@
 """Reads a meal a person typed into nutrition-mcp foods, amounts and numbers.
 
 The model's part is small. It lists the foods the text names with the amount and unit as typed
-(task `read_meal`), and when nutrition-mcp's search finds several foods for a name and the top
-one is not that name, it picks one by number (task `choose_food`). It is never asked for a
-nutrition figure, and nothing it adds to a reply is used. Code decides the rest:
+(task `read_meal`), and for the names where nutrition-mcp's search finds several foods and the
+top one is not that name, it picks one by number for each, all in one call (task `choose_food`).
+So a read makes at most two model calls. The model is never asked for a nutrition figure, and
+nothing it adds to a reply is used. Code decides the rest:
 
 - A food is nutrition-mcp's top search result when it is the only one or its name, an alias or
   its id is the name typed; with several, the model picks one; a name with no result, or a pick
   that is none of the results, is `missing` and left out of the total.
-- An amount that is missing (no words for it in the text), vague ("some", "a handful") or a range
-  ("2-3") is `needs_amount` whatever number the model returned. The person is asked, never given
-  a guess.
-- A unit nutrition-mcp has for the food passes through to it. Otherwise the catalogue's measure
-  for the food is used, if it has one. Otherwise the item is `unknown_unit`, with the units that
-  would work. No measure is made up: "2 pav" has no sourced weight, so it stays unknown.
+- An amount that is missing (the model's words for it are not in the text the person typed),
+  vague ("some", "a handful") or a range ("2-3") is `needs_amount` whatever number the model
+  returned. The person is asked, never given a guess.
+- Kilograms and litres are read as grams and millilitres. A unit nutrition-mcp has for the food
+  goes to it. Otherwise the catalogue's measure for the food turns the amount into grams, if it
+  has one; the summary reads a logged unit the same way (`Catalogue.meal_item`). Otherwise the
+  item is `unknown_unit`, with the units that would work. No measure is made up: "2 pav" has no
+  sourced weight, so it stays unknown.
 - Every number comes from nutrition-mcp. The meal's total adds the matched items only.
 
 The text goes to the model as data, quoted so that it cannot close the data block. Nothing here
@@ -26,14 +29,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
-from nutrition_mcp.schemas import (
-    MAX_NAME_LENGTH,
-    FoodSummary,
-    MealItemIn,
-    MealResult,
-    NutritionResult,
-)
+from nutrition_mcp.schemas import FoodSummary, MealItemIn, MealResult, NutritionResult
 from nutrition_mcp.search import MAX_QUERY_LENGTH, normalise
+from nutrition_mcp.units import MAX_GRAMS
 from pydantic import BaseModel, Field
 
 from meal_planner.catalogue import Catalogue
@@ -54,14 +52,27 @@ COUNTED = "piece"
 # More than this of any unit is over nutrition-mcp's 5000 g limit. The bound also keeps the
 # arithmetic finite.
 MAX_AMOUNT = 100_000
+# How nutrition-mcp refuses an amount over its limit: "126 roti comes to 5040 g, over the limit
+# of 5000 g".
+_OVER_LIMIT = re.compile(rf"comes to \S+ g, over the limit of {MAX_GRAMS:g} g$")
 
 # A range of amounts: "2-3", "2 to 3", "2 or 3", "two or three". The dashes are a hyphen, an en
 # dash and an em dash, as people type them between two numbers.
 _NUMBER = r"(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)"
 _DASHES = "-" + chr(0x2013) + chr(0x2014)
 _RANGE = re.compile(rf"\b{_NUMBER}(?:\s*[{_DASHES}]\s*|\s+(?:to|or)\s+){_NUMBER}\b", re.IGNORECASE)
-# Words for an amount that is not a number: "some", "a little", "a bit", "a few", "a handful".
-_VAGUE = re.compile(r"\b(?:some|little|bit|few|handfuls?|lots?)\b", re.IGNORECASE)
+# Words for an amount that is not a number: "some", "a little", "a bit", "a few", "a handful",
+# "several", "many", "plenty".
+_VAGUE = re.compile(
+    r"\b(?:some|little|bit|few|handfuls?|lots?|several|many|plenty)\b", re.IGNORECASE
+)
+# The words for an amount may not run on into a longer word or number in the text: no letter
+# touches a letter they start or end with, and no digit or decimal point touches a digit ("2" is
+# not in "12" or "2.5"). A full stop that ends a sentence may follow a number.
+_LETTER_BEFORE = r"(?<![^\W\d_])"
+_LETTER_AFTER = r"(?![^\W\d_])"
+_DIGIT_BEFORE = r"(?<![\d.])"
+_DIGIT_AFTER = r"(?!\.?\d)"
 
 Status = Literal["matched", "needs_amount", "unknown_unit", "missing"]
 
@@ -72,7 +83,8 @@ class ExtractedItem(BaseModel):
     name: str
     amount: float | None
     unit: str | None
-    # The words the person used for the amount, which the code reads for a range or a vague word.
+    # The words the person used for the amount, which the code looks for in the typed text and
+    # reads for a range or a vague word.
     amount_text: str
 
 
@@ -80,10 +92,18 @@ class Extracted(BaseModel):
     items: list[ExtractedItem] = Field(max_length=MAX_ITEMS)
 
 
-class Choice(BaseModel):
-    """The number of the search result that is the food, or None when none of them is."""
+class Pick(BaseModel):
+    """For the name numbered `food`, the number of the search result that is the food, or None
+    when none of them is."""
 
-    index: int | None
+    food: int
+    option: int | None
+
+
+class Choices(BaseModel):
+    """One pick for each name the search left open."""
+
+    picks: list[Pick]
 
 
 class ReadItem(BaseModel):
@@ -156,15 +176,16 @@ async def read_meal(
     extracted = await _ask(
         deps, task="read_meal", system=template("reader.md"), user=prompt, schema=Extracted
     )
+    # A food with no name is nothing the person typed.
+    named = [item for item in extracted.items if item.name.strip()]
+    foods = await _find_foods([item.name.strip() for item in named], deps)
     items: list[ReadItem] = []
     to_total: list[MealItemIn] = []
-    for item in extracted.items:
-        # A food with no name is nothing the person typed.
-        if item.name.strip():
-            read, meal_item = await _read_item(item, deps)
-            items.append(read)
-            if meal_item is not None:
-                to_total.append(meal_item)
+    for item, food in zip(named, foods, strict=True):
+        read, meal_item = await _read_item(item, food, text, deps)
+        items.append(read)
+        if meal_item is not None:
+            to_total.append(meal_item)
     return ReadResult(
         text_length=len(text),
         items=items,
@@ -173,34 +194,29 @@ async def read_meal(
     )
 
 
-async def _read_item(item: ExtractedItem, deps: _Deps) -> tuple[ReadItem, MealItemIn | None]:
-    """The item, and what the meal's total is to ask nutrition-mcp about it if it matched."""
+async def _read_item(
+    item: ExtractedItem, food: FoodSummary | None, text: str, deps: _Deps
+) -> tuple[ReadItem, MealItemIn | None]:
+    """The item, and what the meal's total is to ask nutrition-mcp about it if it matched.
+
+    `food` is the food found for its name, or None when there is none.
+    """
     name = item.name.strip()
     typed_unit = (item.unit or "").strip() or None
-    amount = _stated_amount(item)
-    food = await _find_food(name, deps)
+    amount = _stated_amount(item, text)
     if food is None:
         return _unread(name, None, amount, typed_unit, "missing"), None
-    valid = _valid_units(food, deps.catalogue, food.units)
+    valid = deps.catalogue.valid_units(food.id, food.units)
     if amount is None:
         return _unread(name, food, None, typed_unit, "needs_amount", valid), None
     unit = typed_unit or COUNTED
-    if len(unit) > MAX_NAME_LENGTH:
-        # nutrition-mcp refuses a longer unit before it looks at the food.
+    # The search listed the food's units, so the unit is settled before nutrition-mcp is asked.
+    meal_item = deps.catalogue.meal_item(food.id, amount, unit, food.units)
+    if meal_item is None:
         return _unread(name, food, amount, unit, "unknown_unit", valid), None
-
-    meal_item = MealItemIn(food_id=food.id, amount=amount, unit=unit)
     answer = await _nutrition_for(deps, meal_item)
-    if isinstance(answer, NutritionError) and answer.valid_units:
-        # nutrition-mcp has no such unit for the food; the catalogue may have a measure.
-        grams = _catalogue_grams(deps.catalogue, food.id, amount, unit)
-        if grams is None:
-            valid = _valid_units(food, deps.catalogue, answer.valid_units)
-            return _unread(name, food, amount, unit, "unknown_unit", valid), None
-        meal_item = MealItemIn(food_id=food.id, amount=grams, unit="g")
-        answer = await _nutrition_for(deps, meal_item)
-    if isinstance(answer, NutritionError):
-        # The amount itself was refused: more than 5000 g.
+    if answer is None:
+        # nutrition-mcp refused the amount as over its limit.
         return _unread(name, food, None, unit, "needs_amount", valid), None
     read = ReadItem(
         name=name,
@@ -237,50 +253,79 @@ def _unread(
     )
 
 
-def _stated_amount(item: ExtractedItem) -> float | None:
+def _stated_amount(item: ExtractedItem, text: str) -> float | None:
     """The amount the person gave, or None when they gave none a meal can be worked out from.
 
-    Decided here and not by the model: no words for an amount ("roti and dal"), a range or a
-    vague word in them cancels whatever number the model chose.
+    Decided here and not by the model. The model's words for the amount have to be in the text
+    the person typed, so a number it made up with words to match ("roti and dal" read as amount
+    1, "1") is not used. No such words, a range or a vague word in them cancels whatever number
+    the model chose.
     """
     amount = item.amount
     if amount is None or not math.isfinite(amount) or not 0 < amount <= MAX_AMOUNT:
         return None
-    words = item.amount_text.strip()
-    if not words or _VAGUE.search(words) or _RANGE.search(words):
+    words = _folded(item.amount_text)
+    if not words or not _typed(words, _folded(text)):
+        return None
+    if _VAGUE.search(words) or _RANGE.search(words):
         return None
     return amount
 
 
-def _valid_units(food: FoodSummary, catalogue: Catalogue, own: Iterable[str]) -> list[str]:
-    """`own`, the units nutrition-mcp has for the food, then the catalogue's measures for it."""
-    units = list(own)
-    row = catalogue.items.get(food.id)
-    return [*units, *(unit for unit in (row.measures if row else {}) if unit not in units)]
+def _folded(text: str) -> str:
+    """Lower case, with every run of spaces read as one space."""
+    return " ".join(text.casefold().split())
 
 
-def _catalogue_grams(catalogue: Catalogue, food_id: str, amount: float, unit: str) -> float | None:
-    return catalogue.grams(food_id, amount, unit) if food_id in catalogue.items else None
+def _typed(words: str, text: str) -> bool:
+    """Whether `words` are in `text` on their own, and not only inside a longer number or word,
+    the way "2" is in "12" and "2.5" and "one" is in "honey"."""
+    before = _LETTER_BEFORE if words[0].isalpha() else _DIGIT_BEFORE if words[0].isdigit() else ""
+    after = _LETTER_AFTER if words[-1].isalpha() else _DIGIT_AFTER if words[-1].isdigit() else ""
+    return re.search(before + re.escape(words) + after, text) is not None
 
 
 # Finding the food
 
 
-async def _find_food(name: str, deps: _Deps) -> FoodSummary | None:
+async def _find_foods(names: list[str], deps: _Deps) -> list[FoodSummary | None]:
+    """The food for each name, or None when nutrition-mcp has none by that name.
+
+    The search settles a name when it finds one food or the top one is that name. The names it
+    leaves open go to the model together, in one call, and a name typed twice is asked about once.
+    """
+    found = [await _search(name, deps) for name in names]
+    asked: dict[str, tuple[str, list[FoodSummary]]] = {}
+    for name, options in zip(names, found, strict=True):
+        if options and not _settled(name, options):
+            asked.setdefault(normalise(name), (name, options))
+    chosen = dict(zip(asked, await _choose(list(asked.values()), deps), strict=True))
+    foods: list[FoodSummary | None] = []
+    for name, options in zip(names, found, strict=True):
+        if not options:
+            foods.append(None)
+        elif _settled(name, options):
+            foods.append(options[0])
+        else:
+            foods.append(chosen[normalise(name)])
+    return foods
+
+
+async def _search(name: str, deps: _Deps) -> list[FoodSummary]:
     if not normalise(name) or len(name) > MAX_QUERY_LENGTH:
         # nutrition-mcp refuses a query with no letter or digit in it, or a long one. No food
         # has such a name.
-        return None
+        return []
     try:
         found = await deps.nutrition.search(name, limit=OPTIONS)
     except NutritionError as exc:
         raise _nutrition_failed(exc) from exc
-    options = found.results
-    if not options:
-        return None
-    if len(options) == 1 or _is_named(options[0], name):
-        return options[0]
-    return await _choose(name, options, deps)
+    return found.results
+
+
+def _settled(name: str, options: list[FoodSummary]) -> bool:
+    """Whether the search found one food, or a top one that is the name. `options` is not empty."""
+    return len(options) == 1 or _is_named(options[0], name)
 
 
 def _is_named(food: FoodSummary, name: str) -> bool:
@@ -288,17 +333,33 @@ def _is_named(food: FoodSummary, name: str) -> bool:
     return normalise(name) in {normalise(n) for n in (food.name, food.id, *food.aliases)}
 
 
-async def _choose(name: str, options: list[FoodSummary], deps: _Deps) -> FoodSummary | None:
-    """The option the model says is the food named, or None."""
-    lines = [f"{number}: {_describe(food)}" for number, food in enumerate(options)]
-    user = "\n".join(
-        ["<data>", f"food: {quote(name)}", "options:", *lines, "</data>", "Choose the food."]
+async def _choose(
+    asked: list[tuple[str, list[FoodSummary]]], deps: _Deps
+) -> list[FoodSummary | None]:
+    """The option the model says is the food for each name, or None. One call for all of them.
+
+    The model sees each name and its options, and nothing else the person typed.
+    """
+    if not asked:
+        return []
+    lines: list[str] = []
+    for number, (name, options) in enumerate(asked):
+        lines += [f"food {number}: {quote(name)}", "options:"]
+        lines += [f"{option}: {_describe(food)}" for option, food in enumerate(options)]
+    user = "\n".join(["<data>", *lines, "</data>", "Choose the food for each name."])
+    reply = await _ask(
+        deps, task="choose_food", system=template("choose_food.md"), user=user, schema=Choices
     )
-    choice = await _ask(
-        deps, task="choose_food", system=template("choose_food.md"), user=user, schema=Choice
-    )
-    index = choice.index
-    # A number outside the list is no choice. Python would read -1 as the last one.
+    said: dict[int, set[int | None]] = {}
+    for pick in reply.picks:
+        said.setdefault(pick.food, set()).add(pick.option)
+    return [_option(options, said.get(number, set())) for number, (_, options) in enumerate(asked)]
+
+
+def _option(options: list[FoodSummary], picked: set[int | None]) -> FoodSummary | None:
+    """The option picked for a name. No pick, picks that disagree, None and a number outside the
+    list are all no choice; Python would read -1 as the last one."""
+    index = next(iter(picked)) if len(picked) == 1 else None
     return options[index] if index is not None and 0 <= index < len(options) else None
 
 
@@ -335,18 +396,18 @@ async def _ask[T: BaseModel](
     return reply.value
 
 
-async def _nutrition_for(deps: _Deps, item: MealItemIn) -> NutritionResult | NutritionError:
-    """nutrition-mcp's numbers for the item, or its refusal of the amount or the unit.
+async def _nutrition_for(deps: _Deps, item: MealItemIn) -> NutritionResult | None:
+    """nutrition-mcp's numbers for the item, or None when it refuses the amount as over its limit.
 
-    A refusal names the food it is about. One that names none is an answer that could not be
-    read, and that, like a nutrition-mcp that cannot be reached, is a ReadError.
+    The food and the unit were settled before it was asked, so any other refusal, an answer that
+    could not be read and a nutrition-mcp that cannot be reached are each a ReadError.
     """
     try:
         return await deps.nutrition.nutrition(item.food_id, item.amount, item.unit)
     except NutritionError as exc:
-        if exc.unreachable or exc.food_id is None:
-            raise _nutrition_failed(exc) from exc
-        return exc
+        if not exc.unreachable and exc.food_id is not None and _OVER_LIMIT.search(str(exc)):
+            return None
+        raise _nutrition_failed(exc) from exc
 
 
 async def _total(items: list[MealItemIn], deps: _Deps) -> MealResult:

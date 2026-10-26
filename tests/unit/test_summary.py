@@ -7,8 +7,7 @@ rest rest days.
 
 import datetime
 import json
-import os
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -16,12 +15,14 @@ from fakes import FakeNutrition
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import ValidationError
+from reader_helpers import ReaderNutrition, reader_catalogue, reading, said
 from week_helpers import SLOTS, SpyNutrition, catalogue, item, model_for, plan_rules
 
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
+from meal_planner.llm import FakeModel
 from meal_planner.nutrition import NutritionError
-from meal_planner.reader import MAX_ITEMS
+from meal_planner.reader import MAX_ITEMS, read_meal
 from meal_planner.rules import PlanRules
 from meal_planner.summary import (
     MAX_FOODS,
@@ -41,13 +42,6 @@ pytestmark = pytest.mark.anyio
 
 MON = datetime.date(2026, 10, 26)
 WEEK = [MON + datetime.timedelta(days=n) for n in range(7)]
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
-        monkeypatch.delenv(name)
-    yield
 
 
 # Foods per 100 g. A rest day wants 2250 kcal (2137.5 to 2362.5), 130 g protein, at most 25 g
@@ -98,6 +92,10 @@ class Spy(FakeNutrition):
         return await super().meal(items)
 
 
+def model_of_reading(*items: dict[str, Any]) -> FakeModel:
+    return FakeModel({"read_meal": [reading(*items)], "choose_food": []})
+
+
 def rice(grams: float = 100) -> dict[str, Any]:
     return {"food_id": "rice", "amount": grams, "unit": "g"}
 
@@ -123,12 +121,14 @@ async def summary_of(
     *,
     rules: PlanRules | None = None,
     nutrition: FakeNutrition | None = None,
+    catalogue: Catalogue | None = None,
     **settings: Any,
 ) -> WeekSummary:
     return await summarise(
         rules or plan_rules(),
         log,
         nutrition=nutrition or Spy(),
+        catalogue=catalogue or Catalogue({}),
         settings=Settings(**settings),
     )
 
@@ -168,9 +168,22 @@ async def test_a_slot_with_no_entry_is_not_as_planned() -> None:
 
     summary = await summary_of(log)
 
-    # Two dates of four slots each, and three of the eight were eaten as planned.
+    # Monday to Tuesday is two days of four slots each, and three of the eight were eaten as
+    # planned.
     assert summary.planned_meals == 8
     assert summary.as_planned_share == 3 / 8
+
+
+async def test_a_day_with_no_entries_between_two_logged_days_was_not_eaten_as_planned() -> None:
+    # Monday and Wednesday are logged in full, and Tuesday was forgotten.
+    log = log_of(*(entry(MON, slot) for slot in SLOTS), *(entry(WEEK[2], slot) for slot in SLOTS))
+
+    summary = await summary_of(log)
+
+    assert summary.planned_meals == 12
+    assert summary.as_planned_share == 8 / 12
+    # Only a date with entries has a day of its own.
+    assert [day.date for day in summary.days] == [MON, WEEK[2]]
 
 
 async def test_a_log_with_no_entries_plans_nothing() -> None:
@@ -220,6 +233,84 @@ async def test_every_meal_is_worked_out_again_by_nutrition_mcp() -> None:
         [("rice", 100, "g"), ("dal", 1, "g")],
         [("rice", 2, "katori")],
     ]
+
+
+async def test_a_unit_the_reader_reads_through_a_catalogue_measure_is_summarised_in_grams() -> None:
+    # The reader returns "2 eggs" as egg, 2, piece: nutrition-mcp has the egg in grams only, and
+    # the catalogue says a piece is 50 g. The summary has to take what the reader returns.
+    nutrition = ReaderNutrition()
+    eggs = {"food_id": "egg", "amount": 2, "unit": "piece"}
+    rotis = {"food_id": "chapati", "amount": 2, "unit": "Rotis"}
+    log = log_of(entry(MON, "breakfast", "as_planned", eggs, rotis))
+
+    (day,) = (await summary_of(log, nutrition=nutrition, catalogue=reader_catalogue())).days
+
+    # The pieces go to nutrition-mcp as 100 g. Chapati is not in the catalogue, so its unit goes
+    # as it was logged and nutrition-mcp reads it.
+    assert nutrition.asked == [("meal", "egg 100 g, chapati 2 Rotis")]
+    assert day.totals["kcal"] == 143 + 240
+
+
+async def test_kilograms_and_litres_are_sent_in_grams_and_millilitres() -> None:
+    nutrition = ReaderNutrition()
+    chicken = {"food_id": "chicken_breast", "amount": 0.5, "unit": "kg"}
+    milk = {"food_id": "whole_milk", "amount": 0.25, "unit": "litre"}
+    log = log_of(entry(MON, "lunch", "as_planned", chicken, milk))
+
+    (day,) = (await summary_of(log, nutrition=nutrition, catalogue=reader_catalogue())).days
+
+    assert nutrition.asked == [("meal", "chicken_breast 500 g, whole_milk 250 ml")]
+    assert day.totals["kcal"] == pytest.approx(825 + 154.5)
+
+
+async def test_a_unit_nobody_has_is_refused_with_the_catalogues_measures_as_valid_units() -> None:
+    # nutrition-mcp lists only g for the egg; the catalogue's piece works too, so it is listed.
+    log = log_of(
+        entry(MON, "breakfast", "as_planned", {"food_id": "egg", "amount": 1, "unit": "cup"})
+    )
+
+    with pytest.raises(LogRejected) as err:
+        await summary_of(log, nutrition=ReaderNutrition(), catalogue=reader_catalogue())
+
+    (problem,) = err.value.problems
+    assert problem["loc"] == ["entries", 0, "items", 0]
+    assert problem["msg"] == (
+        "2026-10-26 breakfast: item 1 (egg): unknown unit 'cup' for egg; valid units: g, piece"
+    )
+
+
+@pytest.mark.parametrize(
+    ("food", "food_id"),
+    [
+        # In the catalogue, with a measure nutrition-mcp does not have.
+        ("egg", "egg"),
+        # In the catalogue, with no measure.
+        ("pav", "pav"),
+        # Not in the catalogue: nutrition-mcp's own units only.
+        ("roti", "chapati"),
+    ],
+)
+async def test_a_refused_unit_lists_the_units_the_reader_lists(food: str, food_id: str) -> None:
+    """The person is never told a unit the reader takes is invalid, or not told one that works."""
+    reader = model_of_reading(said(food, 1, "bucket", "1"))
+    read = await read_meal(
+        f"1 bucket {food}",
+        model=reader,
+        nutrition=ReaderNutrition(),
+        catalogue=reader_catalogue(),
+        settings=Settings(),
+    )
+    (item_read,) = read.items
+    assert item_read.status == "unknown_unit"
+    log = log_of(
+        entry(MON, "lunch", "swapped", {"food_id": food_id, "amount": 1, "unit": "bucket"})
+    )
+
+    with pytest.raises(LogRejected) as err:
+        await summary_of(log, nutrition=ReaderNutrition(), catalogue=reader_catalogue())
+
+    (problem,) = err.value.problems
+    assert problem["msg"].endswith(f"valid units: {', '.join(item_read.valid_units)}")
 
 
 async def test_skipped_meal_counts_zero_items_not_missing() -> None:

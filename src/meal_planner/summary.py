@@ -19,6 +19,7 @@ from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.schemas import MAX_NAME_LENGTH, MealItemIn, MealResult
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from meal_planner.catalogue import Catalogue
 from meal_planner.checks import add_up_meals, check_day_totals
 from meal_planner.config import Settings
 from meal_planner.nutrition import NutritionError, NutritionPort
@@ -144,8 +145,8 @@ class WeekSummary(_Model):
     """The days of a log, and how much of the plan was followed."""
 
     days: list[DaySummary]
-    # Meals eaten as planned over the meals the plan has on the dates of the log. A slot with no
-    # entry was not eaten as planned.
+    # Meals eaten as planned over the meals the plan has on every date from the log's first to its
+    # last. A slot with no entry, also on a date with none, was not eaten as planned.
     as_planned_share: float
     days_on_target: int
     planned_meals: int
@@ -193,12 +194,19 @@ def log_problems(rules: PlanRules, log: MealLog) -> list[Problem]:
 
 
 async def summarise(
-    rules: PlanRules, log: MealLog, *, nutrition: NutritionPort, settings: Settings
+    rules: PlanRules,
+    log: MealLog,
+    *,
+    nutrition: NutritionPort,
+    catalogue: Catalogue,
+    settings: Settings,
 ) -> WeekSummary:
     """Each date of the log against its day type, and the share eaten as planned.
 
-    Raises LogRejected for an entry the plan or nutrition-mcp does not accept, with every such
-    entry named, and SummaryError when nutrition-mcp cannot be used.
+    A unit is read as the meal reader reads it (`Catalogue.meal_item`): kilograms and litres as
+    grams and millilitres, and a catalogue measure for a food nutrition-mcp has no such unit for
+    in grams. Raises LogRejected for an entry the plan or nutrition-mcp does not accept, with
+    every such entry named, and SummaryError when nutrition-mcp cannot be used.
     """
     problems = log_problems(rules, log)
     if problems:
@@ -214,11 +222,11 @@ async def summarise(
         # A skipped meal has no foods to add up; it is not a meal with numbers missing.
         if entry.status == "skipped":
             continue
-        items = [MealItemIn(food_id=i.food_id, amount=i.amount, unit=i.unit) for i in entry.items]
+        items = [_to_send(item, catalogue) for item in entry.items]
         try:
             meals[index] = await nutrition.meal(items)
         except NutritionError as exc:
-            refused.append(_refusal(index, entry, exc))
+            refused.append(_refusal(index, entry, exc, catalogue))
     if refused:
         raise LogRejected(refused)
 
@@ -232,8 +240,10 @@ async def summarise(
     ]
 
     # Every day type of a plan has the plan's slots, so each date plans as many meals as the plan
-    # has slots, whether or not the log has an entry for each.
-    planned_meals = len(days) * len(rules.slots)
+    # has slots, whether or not the log has an entry for each. The dates run from the log's first
+    # to its last, so a day with no entries between two logged ones was not eaten as planned.
+    span = (days[-1].date - days[0].date).days + 1 if days else 0
+    planned_meals = span * len(rules.slots)
     as_planned = sum(1 for entry in log.entries if entry.status == "as_planned")
     return WeekSummary(
         days=days,
@@ -274,24 +284,39 @@ def _summarise_day(
     )
 
 
+def _to_send(item: LogItem, catalogue: Catalogue) -> MealItemIn:
+    """The food as nutrition-mcp is asked about it. A unit neither nutrition-mcp nor the
+    catalogue has goes as it was logged, for nutrition-mcp to refuse in its own words."""
+    sent = catalogue.meal_item(item.food_id, item.amount, item.unit)
+    return sent or MealItemIn(food_id=item.food_id, amount=item.amount, unit=item.unit)
+
+
 def _targets(day_type: DayType) -> dict[str, float]:
     """The day type's targets by nutrient: its own fields, then the extra ones."""
     targets = {nutrient: getattr(day_type, field) for nutrient, field in CORE_TARGET_FIELDS.items()}
     return targets | {target.nutrient: target.value for target in day_type.extra}
 
 
-def _refusal(index: int, entry: LogEntry, exc: NutritionError) -> Problem:
+def _refusal(index: int, entry: LogEntry, exc: NutritionError, catalogue: Catalogue) -> Problem:
     """The problem for a meal nutrition-mcp refused over one of its foods, which is the log's to
-    fix. Any other failure is nutrition-mcp's, and ends the summary."""
+    fix. Any other failure is nutrition-mcp's, and ends the summary.
+
+    A unit it refused for a catalogue food lists the catalogue's measures too, as the reader
+    does, since they work as well. nutrition-mcp ends its message with its own list.
+    """
     if exc.unreachable:
         message = "nutrition-mcp could not be reached (step: nutrition)"
         raise SummaryError(message, unavailable=True) from exc
     if exc.food_id is None:
         message = "nutrition-mcp sent an answer that could not be used (step: nutrition)"
         raise SummaryError(message, unavailable=False) from exc
+    reason = str(exc)
+    if exc.valid_units and exc.food_id in catalogue.items:
+        before, listed, _ = reason.rpartition("valid units: ")
+        reason = before + listed + ", ".join(catalogue.valid_units(exc.food_id))
     at = next((n for n, item in enumerate(entry.items) if item.food_id == exc.food_id), None)
     loc: list[str | int] = ["entries", index, "items"]
     return {
         "loc": loc if at is None else [*loc, at],
-        "msg": f"{entry.date.isoformat()} {entry.slot_id}: {exc}",
+        "msg": f"{entry.date.isoformat()} {entry.slot_id}: {reason}",
     }

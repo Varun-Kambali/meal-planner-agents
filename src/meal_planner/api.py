@@ -392,7 +392,11 @@ async def summarise_log(
     """What was eaten, day by day, added up by nutrition-mcp and held to the plan's targets."""
     try:
         return await summarise(
-            body.rules, body.log, nutrition=services.nutrition, settings=settings
+            body.rules,
+            body.log,
+            nutrition=services.nutrition,
+            catalogue=services.catalogue,
+            settings=settings,
         )
     except LogRejected as exc:
         # The problems are located from the log, which sits at body.log. They name the entry by

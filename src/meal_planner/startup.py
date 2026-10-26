@@ -65,15 +65,18 @@ async def start_services(
     *,
     model: ModelPort | None = None,
     nutrition: NutritionPort | None = None,
+    needs_model: bool = True,
 ) -> AsyncIterator[Services]:
     """Check the environment, start nutrition-mcp and load the catalogue, until the block ends.
 
     A `model` or `nutrition` passed in is used as it is: the model's key is not looked for, and
-    nutrition-mcp is not started. Tests pass fakes this way.
+    nutrition-mcp is not started. Tests pass fakes this way. `needs_model` is False for work that
+    makes no model call, such as adding up a meal log, and then the key is not looked for either.
     """
     check_tracing_off()
     if model is None:
-        check_model_key(settings.model)
+        if needs_model:
+            check_model_key(settings.model)
         model = LiteLLMModel(settings.model)
     async with AsyncExitStack() as stack:
         if nutrition is None:

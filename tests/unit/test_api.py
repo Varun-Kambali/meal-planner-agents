@@ -1141,15 +1141,35 @@ def test_nutrition_mcp_being_down_is_a_503_naming_the_step(tmp_path: Path) -> No
     assert response.json() == {"detail": "nutrition-mcp could not be reached (step: nutrition)"}
 
 
-def test_a_failing_read_does_not_stop_the_next_one(tmp_path: Path) -> None:
-    model = reader_model(reading(said("roti", 1, "roti", "1")))
+class FailingOnce:
+    """A model whose first call is rate limited and which answers every call after that."""
 
-    with reading_meals(tmp_path, AnsweringWith(RATE_LIMITED)) as client:
-        client.post("/v1/log/read", json={"text": "a roti"})
+    def __init__(self, *replies: str) -> None:
+        self.answering = reader_model(*replies)
+        self.failed = False
+
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        if not self.failed:
+            self.failed = True
+            return ModelReply(value=None, raw="", error=RATE_LIMITED)
+        return await self.answering.structured(
+            task=task, system=system, user=user, schema=schema, timeout_s=timeout_s
+        )
+
+
+def test_a_failing_read_does_not_stop_the_next_one(tmp_path: Path) -> None:
+    model = FailingOnce(reading(said("roti", 1, "roti", "a")))
+
     with reading_meals(tmp_path, model) as client:
+        failed = client.post("/v1/log/read", json={"text": "a roti"})
         again = client.post("/v1/log/read", json={"text": "a roti"})
 
+    assert failed.status_code == 503
     assert again.status_code == 200
+    (item,) = ReadResult.model_validate(again.json()).items
+    assert (item.status, item.food_id, item.grams) == ("matched", "chapati", 40)
 
 
 # Typed meals stay out of the logs

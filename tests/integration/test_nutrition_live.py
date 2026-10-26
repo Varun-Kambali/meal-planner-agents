@@ -10,8 +10,9 @@ import anyio
 import pytest
 from fakes import UNIT_SPELLINGS, FakeNutrition
 from nutrition_mcp.schemas import MealItemIn, NutritionResult
-from reader_helpers import ALIASES, KINDS, NAMES, UNITS
+from reader_helpers import ALIASES, KINDS, NAMES, PER_100G, UNITS
 
+from meal_planner.config import Settings
 from meal_planner.nutrition import NutritionClient, NutritionError, NutritionPort
 
 pytestmark = pytest.mark.anyio
@@ -208,18 +209,15 @@ async def test_fake_reads_an_es_plural_as_the_server_does(live: NutritionClient)
     assert stand_in.measure_assumption == "2 glass = 515.7 g"
 
 
-async def test_the_readers_foods_are_the_ones_the_server_lists(live: NutritionClient) -> None:
-    # The reader's tests build their foods from these tables, so this keeps them honest.
-    found = await live.search("rotis")
-
-    assert [food.id for food in found.results] == ["chapati"]
-    chapati = found.results[0]
-    assert chapati.name == NAMES["chapati"]
-    assert chapati.aliases == ALIASES["chapati"]
-    for food_id, units in UNITS.items():
-        listed = (await live.nutrition(food_id, 1, "g")).food
-        assert listed.units == {"g": 1.0, **units}, food_id
-        assert listed.name == NAMES[food_id], food_id
-        assert listed.kind == KINDS.get(food_id, "ingredient"), food_id
-    for food_id, aliases in ALIASES.items():
-        assert (await live.nutrition(food_id, 1, "g")).food.aliases == aliases, food_id
+async def test_the_readers_foods_are_the_ones_the_server_lists() -> None:
+    # The reader's tests build their foods from these tables, so this keeps them honest. Chicken
+    # breast is in this project's food file, which the server loads from the data folder.
+    async with NutritionClient.start(Settings().nutrition_data_dirs) as live:
+        found = await live.search("rotis")
+        assert [food.id for food in found.results] == ["chapati"]
+        for food_id in PER_100G:
+            listed = (await live.nutrition(food_id, 1, "g")).food
+            assert listed.name == NAMES[food_id], food_id
+            assert listed.aliases == ALIASES.get(food_id, []), food_id
+            assert listed.kind == KINDS.get(food_id, "ingredient"), food_id
+            assert listed.units == {"g": 1.0, **UNITS.get(food_id, {})}, food_id

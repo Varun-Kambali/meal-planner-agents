@@ -1,9 +1,9 @@
 """What the meal reader's tests share: a nutrition-mcp with the foods typed meals name, a
 catalogue, and the replies a model gives when it reads a meal.
 
-The foods are the ones nutrition-mcp holds under these ids, with the names, aliases and units
-its search lists (a live test checks chapati, the one the reader's first test depends on). The
-nutrients are made up and round, so a test can add them up by hand.
+The foods are the ones nutrition-mcp holds under these ids, with the names, aliases, kinds and
+units its search lists (a live test checks every one against the server). The nutrients are made
+up and round, so a test can add them up by hand.
 """
 
 import json
@@ -50,6 +50,32 @@ NAMES = {
 }
 ALIASES = {
     "chapati": ["roti", "phulka", "fulka", "poli", "rotli", "ruti"],
+    "dal_tadka": ["tadka dal", "dal fry", "arhar dal tadka"],
+    "toor_dal": [
+        "arhar dal",
+        "tur dal",
+        "tuvar dal",
+        "togari bele",
+        "thuvaram paruppu",
+        "split pigeon peas",
+        "pigeon pea dal",
+    ],
+    "moong_dal": [
+        "mung dal",
+        "yellow moong dal",
+        "split moong",
+        "pasi paruppu",
+        "hesaru bele",
+        "split mung beans",
+    ],
+    "white_rice": ["white rice", "raw rice", "arisi", "akki"],
+    "chicken_breast": ["chicken breast", "boneless chicken breast", "chicken breast fillet"],
+    "egg": ["egg", "eggs", "ande", "dim", "motte", "muttai"],
+    "dimer_dalna": ["dimer dalna", "egg curry", "anda curry", "dim er dalna"],
+    "pav": ["pao", "ladi pav", "soft white bread roll"],
+    "whole_milk": ["whole milk", "paal", "haalu", "dudh"],
+    "curd": ["curd", "whole milk yogurt", "plain whole-milk yogurt", "thayir", "mosaru", "doi"],
+    "curd_rice": ["mosaranna", "thayir sadam", "dahi chawal"],
     "idli": ["idly", "idlis"],
 }
 UNITS = {
@@ -155,6 +181,8 @@ def reading(*items: dict[str, Any]) -> str:
     return json.dumps({"items": list(items)})
 
 
-def choosing(index: int | None) -> str:
-    """The raw reply to the choice between foods that share a name."""
-    return json.dumps({"index": index})
+def choosing(*options: int | None) -> str:
+    """The raw reply to the choice of a food for each name the search left open: the option
+    picked for each name in the order asked, or None for none of them."""
+    picks = [{"food": food, "option": option} for food, option in enumerate(options)]
+    return json.dumps({"picks": picks})
