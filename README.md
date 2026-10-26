@@ -19,7 +19,7 @@ Every feature, with what it must do, is in [docs/requirements.md](docs/requireme
 
 ## Status
 
-Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. The browser app, tracing, the evals and a deployed demo come with milestones 4 and 5, so there are no results yet.
+Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. Milestone 4 is next: the evals and tracing. The browser app and a deployed demo come with milestone 5, so there are no results yet.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
