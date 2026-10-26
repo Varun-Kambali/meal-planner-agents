@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "date": "2026-10-26",
+      "slot_id": "breakfast",
+      "status": "as_planned",
+      "items": [
+        { "food_id": "rolled_oats", "amount": 80, "unit": "g" },
+        { "food_id": "whole_milk", "amount": 250, "unit": "ml" },
+        { "food_id": "chia_seeds", "amount": 1, "unit": "tbsp" },
+        { "food_id": "banana", "amount": 1, "unit": "piece" }
+      ]
+    },
+    {
+      "date": "2026-10-26",
+      "slot_id": "lunch",
+      "status": "as_planned",
+      "items": [
+        { "food_id": "paneer", "amount": 120, "unit": "g" },
+        { "food_id": "white_rice", "amount": 90, "unit": "g" },
+        { "food_id": "moong_dal", "amount": 60, "unit": "g" }
+      ]
+    },
+    {
+      "date": "2026-10-26",
+      "slot_id": "snack",
+      "status": "different_amount",
+      "items": [
+        { "food_id": "curd", "amount": 250, "unit": "g" },
+        { "food_id": "almonds", "amount": 40, "unit": "g" }
+      ]
+    },
+    {
+      "date": "2026-10-26",
+      "slot_id": "dinner",
+      "status": "as_planned",
+      "items": [
+        { "food_id": "paneer", "amount": 150, "unit": "g" },
+        { "food_id": "capsicum", "amount": 1, "unit": "piece" },
+        { "food_id": "onion", "amount": 1, "unit": "piece" },
+        { "food_id": "white_rice", "amount": 100, "unit": "g" },
+        { "food_id": "olive_oil", "amount": 1, "unit": "tbsp" }
+      ]
+    },
+    {
+      "date": "2026-10-27",
+      "slot_id": "breakfast",
+      "status": "as_planned",
+      "items": [
+        { "food_id": "rolled_oats", "amount": 70, "unit": "g" },
+        { "food_id": "whole_milk", "amount": 250, "unit": "ml" },
+        { "food_id": "walnuts", "amount": 20, "unit": "g" }
+      ]
+    },
+    {
+      "date": "2026-10-27",
+      "slot_id": "lunch",
+      "status": "skipped",
+      "items": []
+    },
+    {
+      "date": "2026-10-27",
+      "slot_id": "snack",
+      "status": "swapped",
+      "items": [
+        { "food_id": "apple", "amount": 1, "unit": "piece" },
+        { "food_id": "pumpkin_seeds", "amount": 1, "unit": "tbsp" }
+      ]
+    },
+    {
+      "date": "2026-10-27",
+      "slot_id": "dinner",
+      "status": "as_planned",
+      "items": [
+        { "food_id": "tofu", "amount": 200, "unit": "g" },
+        { "food_id": "broccoli", "amount": 1, "unit": "cup" },
+        { "food_id": "brown_rice", "amount": 0.5, "unit": "cup" }
+      ]
+    },
+    {
+      "date": "2026-10-28",
+      "slot_id": "breakfast",
+      "status": "different_amount",
+      "items": [
+        { "food_id": "rolled_oats", "amount": 100, "unit": "g" },
+        { "food_id": "whole_milk", "amount": 300, "unit": "ml" },
+        { "food_id": "banana", "amount": 2, "unit": "piece" }
+      ]
+    },
+    {
+      "date": "2026-10-28",
+      "slot_id": "lunch",
+      "status": "as_planned",
+      "items": [
+        { "food_id": "chana_dal", "amount": 70, "unit": "g" },
+        { "food_id": "quinoa", "amount": 0.5, "unit": "cup" },
+        { "food_id": "cucumber", "amount": 100, "unit": "g" }
+      ]
+    }
+  ]
+}
