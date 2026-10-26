@@ -12,7 +12,7 @@ from meal_planner.catalogue import CatalogueItem
 from meal_planner.checks import LABELS, spreads_cuisines
 from meal_planner.config import Settings
 from meal_planner.recipes import CheckedRecipe
-from meal_planner.rules import DayType, PlanRules, Slot, SlotSpec
+from meal_planner.rules import DayType, PlanRules, Slot, SlotSpec, expand
 
 # Slack for the whole-number ranges shown to the writer, as in checks.py.
 _EPS = 1e-9
@@ -75,6 +75,7 @@ def _catalogue_line(item: CatalogueItem, hints: bool) -> str:
 _CUISINE_RULE = {
     "writer.md": " Do not use the same cuisine on two days in a row.",
     "repair.md": " Do not give it the same cuisine as the day before or the day after.",
+    "baseline.md": " Within a slot, do not use the same cuisine on two days in a row.",
 }
 
 
@@ -244,3 +245,29 @@ def repair_prompt(
     closing = f'Fix the {n} recipe{"" if n == 1 else "s"} under "recipes to fix", same days.'
     system = _system("repair.md", rules, allowed, settings.writer_nutrient_hints)
     return system, _user(rules, settings, allowed, job, closing)
+
+
+def baseline_prompt(
+    rules: PlanRules, settings: Settings, allowed: list[CatalogueItem]
+) -> tuple[str, str]:
+    """The eval's single-call baseline: every recipe of the week asked for in one call.
+
+    For each slot, the data block holds the lines the writer gets when it writes that slot's
+    week, and the system prompt lists the ingredients as the writer's does, so the baseline is
+    told what the pipeline is told. Only the instructions differ, to ask for the whole week.
+    """
+    specs = expand(rules)
+    lines: list[str] = []
+    for number, slot in enumerate(rules.slots, start=1):
+        mine = [spec for spec in specs if spec.slot.id == slot.id]
+        lines += [
+            f"slot {number} of {len(rules.slots)}",
+            *_slot_lines(rules, settings, allowed, slot, mine),
+        ]
+    n = len(specs)
+    closing = (
+        f"Write {n} recipe{'' if n == 1 else 's'}: for each slot, one for each day under its "
+        '"days", in one reply.'
+    )
+    system = _system("baseline.md", rules, allowed, settings.writer_nutrient_hints)
+    return system, "\n".join(["<data>", *lines, "</data>", closing])
