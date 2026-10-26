@@ -19,7 +19,7 @@ Every feature, with what it must do, is in [docs/requirements.md](docs/requireme
 
 ## Status
 
-Milestone 1 of 5 (foundations). Results, a demo and a quickstart arrive with later milestones; until then there is nothing to run beyond the tests.
+Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. The browser app, tracing, the evals and a deployed demo come with milestones 4 and 5, so there are no results yet.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
@@ -27,12 +27,24 @@ make setup
 make test
 ```
 
+Each command and the API start nutrition-mcp themselves and need the model's key: copy `.env.example` to `.env` and set `GEMINI_API_KEY`.
+
+```bash
+uv run --env-file .env meal-planner week tests/fixtures/plans/office_weekday.json --out week.json
+uv run --env-file .env meal-planner read "2 rotis and a katori of dal"
+uv run --env-file .env meal-planner summary rules.json log.json
+make run   # the API on 127.0.0.1:8000
+```
+
+`week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Details are in [docs/architecture.md](docs/architecture.md).
+
 ## Design decisions
 
 - [0001](docs/decisions/0001-follow-an-existing-plan.md) Follow the plan the user already has instead of writing one.
 - [0002](docs/decisions/0002-model-writes-code-checks.md) The model writes recipes; code checks every number and rule.
 - [0003](docs/decisions/0003-foods-through-nutrition-mcp-datasets.md) New foods reach nutrition-mcp through its custom-dataset folder.
 - [0004](docs/decisions/0004-user-data-in-the-browser.md) The user's data stays in the browser, and the API keeps no state.
+- [0005](docs/decisions/0005-code-fits-portions.md) Code fits portions, and the writer is shown nutrition per 100 g.
 
 ## License
 
