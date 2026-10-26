@@ -1,9 +1,10 @@
 """Reads a meal a person typed into nutrition-mcp foods, amounts and numbers.
 
 The model's part is small. It lists the foods the text names with the amount and unit as typed
-(task `read_meal`), and when nutrition-mcp's search finds several foods for a name and the top
-one is not that name, it picks one by number (task `choose_food`). It is never asked for a
-nutrition figure, and nothing it adds to a reply is used. Code decides the rest:
+(task `read_meal`), and for the names where nutrition-mcp's search finds several foods and the
+top one is not that name, it picks one by number for each, all in one call (task `choose_food`).
+So a read makes at most two model calls. The model is never asked for a nutrition figure, and
+nothing it adds to a reply is used. Code decides the rest:
 
 - A food is nutrition-mcp's top search result when it is the only one or its name, an alias or
   its id is the name typed; with several, the model picks one; a name with no result, or a pick
@@ -81,10 +82,18 @@ class Extracted(BaseModel):
     items: list[ExtractedItem] = Field(max_length=MAX_ITEMS)
 
 
-class Choice(BaseModel):
-    """The number of the search result that is the food, or None when none of them is."""
+class Pick(BaseModel):
+    """For the name numbered `food`, the number of the search result that is the food, or None
+    when none of them is."""
 
-    index: int | None
+    food: int
+    option: int | None
+
+
+class Choices(BaseModel):
+    """One pick for each name the search left open."""
+
+    picks: list[Pick]
 
 
 class ReadItem(BaseModel):
@@ -157,15 +166,16 @@ async def read_meal(
     extracted = await _ask(
         deps, task="read_meal", system=template("reader.md"), user=prompt, schema=Extracted
     )
+    # A food with no name is nothing the person typed.
+    named = [item for item in extracted.items if item.name.strip()]
+    foods = await _find_foods([item.name.strip() for item in named], deps)
     items: list[ReadItem] = []
     to_total: list[MealItemIn] = []
-    for item in extracted.items:
-        # A food with no name is nothing the person typed.
-        if item.name.strip():
-            read, meal_item = await _read_item(item, text, deps)
-            items.append(read)
-            if meal_item is not None:
-                to_total.append(meal_item)
+    for item, food in zip(named, foods, strict=True):
+        read, meal_item = await _read_item(item, food, text, deps)
+        items.append(read)
+        if meal_item is not None:
+            to_total.append(meal_item)
     return ReadResult(
         text_length=len(text),
         items=items,
@@ -175,13 +185,15 @@ async def read_meal(
 
 
 async def _read_item(
-    item: ExtractedItem, text: str, deps: _Deps
+    item: ExtractedItem, food: FoodSummary | None, text: str, deps: _Deps
 ) -> tuple[ReadItem, MealItemIn | None]:
-    """The item, and what the meal's total is to ask nutrition-mcp about it if it matched."""
+    """The item, and what the meal's total is to ask nutrition-mcp about it if it matched.
+
+    `food` is the food found for its name, or None when there is none.
+    """
     name = item.name.strip()
     typed_unit = (item.unit or "").strip() or None
     amount = _stated_amount(item, text)
-    food = await _find_food(name, deps)
     if food is None:
         return _unread(name, None, amount, typed_unit, "missing"), None
     valid = _valid_units(food, deps.catalogue, food.units)
@@ -273,21 +285,44 @@ def _valid_units(food: FoodSummary, catalogue: Catalogue, own: Iterable[str]) ->
 # Finding the food
 
 
-async def _find_food(name: str, deps: _Deps) -> FoodSummary | None:
+async def _find_foods(names: list[str], deps: _Deps) -> list[FoodSummary | None]:
+    """The food for each name, or None when nutrition-mcp has none by that name.
+
+    The search settles a name when it finds one food or the top one is that name. The names it
+    leaves open go to the model together, in one call, and a name typed twice is asked about once.
+    """
+    found = [await _search(name, deps) for name in names]
+    asked: dict[str, tuple[str, list[FoodSummary]]] = {}
+    for name, options in zip(names, found, strict=True):
+        if options and not _settled(name, options):
+            asked.setdefault(normalise(name), (name, options))
+    chosen = dict(zip(asked, await _choose(list(asked.values()), deps), strict=True))
+    foods: list[FoodSummary | None] = []
+    for name, options in zip(names, found, strict=True):
+        if not options:
+            foods.append(None)
+        elif _settled(name, options):
+            foods.append(options[0])
+        else:
+            foods.append(chosen[normalise(name)])
+    return foods
+
+
+async def _search(name: str, deps: _Deps) -> list[FoodSummary]:
     if not normalise(name) or len(name) > MAX_QUERY_LENGTH:
         # nutrition-mcp refuses a query with no letter or digit in it, or a long one. No food
         # has such a name.
-        return None
+        return []
     try:
         found = await deps.nutrition.search(name, limit=OPTIONS)
     except NutritionError as exc:
         raise _nutrition_failed(exc) from exc
-    options = found.results
-    if not options:
-        return None
-    if len(options) == 1 or _is_named(options[0], name):
-        return options[0]
-    return await _choose(name, options, deps)
+    return found.results
+
+
+def _settled(name: str, options: list[FoodSummary]) -> bool:
+    """Whether the search found one food, or a top one that is the name. `options` is not empty."""
+    return len(options) == 1 or _is_named(options[0], name)
 
 
 def _is_named(food: FoodSummary, name: str) -> bool:
@@ -295,17 +330,33 @@ def _is_named(food: FoodSummary, name: str) -> bool:
     return normalise(name) in {normalise(n) for n in (food.name, food.id, *food.aliases)}
 
 
-async def _choose(name: str, options: list[FoodSummary], deps: _Deps) -> FoodSummary | None:
-    """The option the model says is the food named, or None."""
-    lines = [f"{number}: {_describe(food)}" for number, food in enumerate(options)]
-    user = "\n".join(
-        ["<data>", f"food: {quote(name)}", "options:", *lines, "</data>", "Choose the food."]
+async def _choose(
+    asked: list[tuple[str, list[FoodSummary]]], deps: _Deps
+) -> list[FoodSummary | None]:
+    """The option the model says is the food for each name, or None. One call for all of them.
+
+    The model sees each name and its options, and nothing else the person typed.
+    """
+    if not asked:
+        return []
+    lines: list[str] = []
+    for number, (name, options) in enumerate(asked):
+        lines += [f"food {number}: {quote(name)}", "options:"]
+        lines += [f"{option}: {_describe(food)}" for option, food in enumerate(options)]
+    user = "\n".join(["<data>", *lines, "</data>", "Choose the food for each name."])
+    reply = await _ask(
+        deps, task="choose_food", system=template("choose_food.md"), user=user, schema=Choices
     )
-    choice = await _ask(
-        deps, task="choose_food", system=template("choose_food.md"), user=user, schema=Choice
-    )
-    index = choice.index
-    # A number outside the list is no choice. Python would read -1 as the last one.
+    said: dict[int, set[int | None]] = {}
+    for pick in reply.picks:
+        said.setdefault(pick.food, set()).add(pick.option)
+    return [_option(options, said.get(number, set())) for number, (_, options) in enumerate(asked)]
+
+
+def _option(options: list[FoodSummary], picked: set[int | None]) -> FoodSummary | None:
+    """The option picked for a name. No pick, picks that disagree, None and a number outside the
+    list are all no choice; Python would read -1 as the last one."""
+    index = next(iter(picked)) if len(picked) == 1 else None
     return options[index] if index is not None and 0 <= index < len(options) else None
 
 

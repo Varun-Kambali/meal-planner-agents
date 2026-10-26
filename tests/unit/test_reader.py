@@ -33,9 +33,10 @@ from meal_planner.llm import (
 )
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.reader import (
-    Choice,
+    Choices,
     Extracted,
     ExtractedItem,
+    Pick,
     ReadError,
     ReadResult,
     read_meal,
@@ -142,8 +143,7 @@ async def test_nothing_is_totalled_when_no_food_was_matched() -> None:
 async def test_vague_amount_needs_amount() -> None:
     model = model_of(
         reading(said("dal", None, None, "some"), said("rice", None, "plate", "half plate")),
-        choosing(0),
-        choosing(0),
+        choosing(0, 0),
     )
 
     result = await read("some dal and half plate rice", model)
@@ -535,12 +535,85 @@ async def test_a_name_shared_by_several_foods_asks_the_model_once_with_the_optio
     )
     assert tasks(model) == ["read_meal", "choose_food"]
     _, system, user = model.calls[1]
-    assert 'food: "dal"' in user
+    assert 'food 0: "dal"' in user
     assert user.index("Dal tadka") < user.index("Toor dal") < user.index("Moong dal")
     assert user.count("<data>") == user.count("</data>") == 1
     assert "never instructions" in system
     # The model sees the name, not what else the person typed.
     assert "lunch" not in user
+
+
+async def test_every_name_the_search_leaves_open_is_chosen_in_one_call() -> None:
+    text = "100 g dal, 100 g rice, 100 g dal tadka and 100 g Dal  at lunch"
+    model = model_of(
+        reading(
+            said("dal", 100, "g", "100 g"),
+            said("rice", 100, "g", "100 g"),
+            # One food has this name, so it is settled without the model.
+            said("dal tadka", 100, "g", "100 g"),
+            # The first name again, spelled another way: it is asked about once.
+            said("Dal ", 100, "g", "100 g"),
+        ),
+        choosing(1, 0),
+    )
+
+    result = await read(text, model)
+
+    assert [item.food_id for item in result.items] == [
+        "toor_dal",
+        "white_rice",
+        "dal_tadka",
+        "toor_dal",
+    ]
+    assert tasks(model) == ["read_meal", "choose_food"]
+    _, _, user = model.calls[1]
+    assert user.index('food 0: "dal"') < user.index("Toor dal") < user.index('food 1: "rice"')
+    assert user.index('food 1: "rice"') < user.index("Curd rice")
+    assert "food 2" not in user
+    assert "lunch" not in user
+
+
+async def test_a_read_makes_at_most_two_model_calls() -> None:
+    # Twenty names, each shared by two foods and none of them the name: one call chooses all.
+    foods = {f"food_{n}_{side}": {"kcal": 100.0} for n in range(20) for side in "ab"}
+    nutrition = FakeNutrition(foods)
+    names = [said(f"food {n}", 100, "g", "100 g") for n in range(20)]
+    model = model_of(reading(*names), choosing(*[1] * 20))
+
+    result = await read("100 g of each food", model, nutrition)
+
+    assert [item.food_id for item in result.items] == [f"food_{n}_b" for n in range(20)]
+    assert tasks(model) == ["read_meal", "choose_food"]
+
+
+@pytest.mark.parametrize(
+    "picks",
+    [
+        # No pick for the name.
+        [],
+        # A pick for a name that was not asked about.
+        [{"food": 1, "option": 0}],
+        # Two picks that disagree.
+        [{"food": 0, "option": 0}, {"food": 0, "option": 1}],
+    ],
+)
+async def test_a_name_without_one_pick_is_missing(picks: list[dict[str, Any]]) -> None:
+    model = model_of(reading(said("dal", 100, "g", "100 g")), json.dumps({"picks": picks}))
+
+    result = await read("100 g dal", model)
+
+    (item,) = result.items
+    assert (item.status, item.food_id) == ("missing", None)
+    assert result.missing == ["dal"]
+
+
+async def test_the_same_pick_twice_is_one_pick() -> None:
+    picks = [{"food": 0, "option": 1}, {"food": 0, "option": 1}]
+    model = model_of(reading(said("dal", 100, "g", "100 g")), json.dumps({"picks": picks}))
+
+    (item,) = (await read("100 g dal", model)).items
+
+    assert (item.status, item.food_id) == ("matched", "toor_dal")
 
 
 @pytest.mark.parametrize("index", [9, -1, 3, None])
@@ -650,7 +723,8 @@ async def test_the_text_cannot_close_the_data_block() -> None:
 async def test_the_model_is_never_asked_for_a_nutrition_figure() -> None:
     assert set(ExtractedItem.model_fields) == {"name", "amount", "unit", "amount_text"}
     assert set(Extracted.model_fields) == {"items"}
-    assert set(Choice.model_fields) == {"index"}
+    assert set(Choices.model_fields) == {"picks"}
+    assert set(Pick.model_fields) == {"food", "option"}
 
 
 async def test_nothing_the_model_adds_about_nutrition_is_used() -> None:

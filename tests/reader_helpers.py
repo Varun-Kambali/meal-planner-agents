@@ -155,6 +155,8 @@ def reading(*items: dict[str, Any]) -> str:
     return json.dumps({"items": list(items)})
 
 
-def choosing(index: int | None) -> str:
-    """The raw reply to the choice between foods that share a name."""
-    return json.dumps({"index": index})
+def choosing(*options: int | None) -> str:
+    """The raw reply to the choice of a food for each name the search left open: the option
+    picked for each name in the order asked, or None for none of them."""
+    picks = [{"food": food, "option": option} for food, option in enumerate(options)]
+    return json.dumps({"picks": picks})
