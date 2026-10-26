@@ -1,6 +1,7 @@
 """The meal-planner command: arguments, progress on stderr, the week as JSON, and its exit codes."""
 
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 
 import pytest
 from app_helpers import MARK, ExplodingNutrition, marked_plan, renamed_replies
+from nutrition_mcp.schemas import MealItemIn, MealResult
 from reader_helpers import ReaderNutrition, reading, said, write_reader_catalogue
 from week_helpers import (
     PLAN,
@@ -22,7 +24,9 @@ from week_helpers import (
 from meal_planner.cli import main
 from meal_planner.config import Settings
 from meal_planner.llm import RATE_LIMITED, FakeModel, ModelReply
+from meal_planner.nutrition import NutritionError
 from meal_planner.reader import ReadResult
+from meal_planner.summary import WeekSummary
 from meal_planner.week_events import WeekResult
 
 EXTRA_FOODS = ("brinjal",)
@@ -281,6 +285,252 @@ def test_the_typed_text_never_reaches_the_terminal_except_in_the_result(
     assert MARK not in captured.err
 
 
+# Adding up a log
+
+
+MON, TUE = "2026-10-26", "2026-10-27"
+
+
+def eaten(food_id: str = "oats", amount: float = 100, unit: str = "g") -> dict[str, Any]:
+    return {"food_id": food_id, "amount": amount, "unit": unit}
+
+
+def log_entry(
+    date: str, slot_id: str, status: str = "as_planned", *items: dict[str, Any]
+) -> dict[str, Any]:
+    foods = [] if status == "skipped" else list(items) or [eaten()]
+    return {"date": date, "slot_id": slot_id, "status": status, "items": foods}
+
+
+def log_file(folder: Path, *entries: dict[str, Any]) -> Path:
+    path = folder / "log.json"
+    path.write_text(json.dumps({"version": 1, "entries": list(entries)}), encoding="utf-8")
+    return path
+
+
+def summary_cli(folder: Path, log: Path, rules: Path | None = None, **kwargs: Any) -> int:
+    return run_cli(folder, "summary", str(rules or rules_file(folder)), str(log), **kwargs)
+
+
+def test_summary_prints_the_week_summary_as_json_and_nothing_else(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = log_file(
+        tmp_path,
+        log_entry(MON, "breakfast", "as_planned", eaten("oats", 100), eaten("paneer", 100)),
+        log_entry(MON, "lunch", "skipped"),
+        log_entry(TUE, "dinner", "swapped", eaten("white_rice", 200)),
+    )
+    model = model_for()
+
+    code = summary_cli(tmp_path, log, model=model)
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.err == ""
+    summary = WeekSummary.model_validate_json(captured.out)
+    assert (summary.planned_meals, summary.as_planned_share) == (8, 1 / 8)
+    assert [(day.day_type, day.totals["kcal"]) for day in summary.days] == [
+        ("training", 400),
+        ("rest", 400),
+    ]
+    assert model.calls == []
+
+
+def test_summary_reads_a_unit_the_reader_reads_through_a_catalogue_measure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = log_file(tmp_path, log_entry(MON, "breakfast", "as_planned", eaten("egg", 2, "piece")))
+
+    code = summary_cli(
+        tmp_path,
+        log,
+        nutrition=ReaderNutrition(),
+        catalogue_path=write_reader_catalogue(tmp_path),
+    )
+
+    assert code == 0
+    (day,) = WeekSummary.model_validate_json(capsys.readouterr().out).days
+    assert day.totals["kcal"] == 143
+
+
+def test_a_log_nutrition_mcp_refuses_exits_2_naming_each_entry_as_the_api_does(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = log_file(
+        tmp_path,
+        log_entry(MON, "breakfast"),
+        log_entry(TUE, "lunch", "as_planned", eaten(), eaten("ghost", 50)),
+        log_entry(TUE, "dinner", "as_planned", eaten(unit="bowl")),
+    )
+
+    code = summary_cli(tmp_path, log)
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    ghost, bowl = lines(captured.err)
+    assert ghost.startswith(
+        f"meal-planner: {log}: entries.1.items.1: "
+        "2026-10-27 lunch: item 2 (ghost): unknown food id 'ghost'"
+    )
+    assert bowl.startswith(
+        f"meal-planner: {log}: entries.2.items.0: "
+        "2026-10-27 dinner: item 1 (oats): unknown unit 'bowl'"
+    )
+
+
+def test_a_slot_the_plan_does_not_have_exits_2_naming_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = log_file(tmp_path, log_entry(MON, "breakfast"), log_entry(TUE, "brunch"))
+
+    code = summary_cli(tmp_path, log)
+
+    assert code == 2
+    assert lines(capsys.readouterr().err) == [
+        f"meal-planner: {log}: entries.1.slot_id: 2026-10-27 brunch: the plan has no slot "
+        "'brunch'; its slots are breakfast, lunch, snack, dinner"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("entries", "said_of"),
+    [
+        pytest.param(
+            [log_entry(MON, "lunch"), log_entry("2026-11-02", "lunch")],
+            "entries: Value error, entries: the dates run from 2026-10-26 to 2026-11-02",
+            id="eight-days",
+        ),
+        pytest.param(
+            [log_entry(MON, "lunch") | {"status": "ate_it"}], "entries.0.status: ", id="status"
+        ),
+        pytest.param(
+            [log_entry(MON, "lunch", "skipped") | {"status": "swapped"}],
+            "entries.0: Value error, 2026-10-26 lunch: a meal with status 'swapped'",
+            id="no-foods",
+        ),
+    ],
+)
+def test_a_log_that_does_not_validate_exits_2_naming_the_field_and_starts_nothing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    entries: list[dict[str, Any]],
+    said_of: str,
+) -> None:
+    nutrition = SpyNutrition(*EXTRA_FOODS)
+
+    code = summary_cli(tmp_path, log_file(tmp_path, *entries), nutrition=nutrition)
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert f"{tmp_path / 'log.json'}: {said_of}" in captured.err
+    assert nutrition.meals == []
+
+
+@pytest.mark.parametrize(("content", "said_of"), [("{not json", "JSON"), (None, "log.json")])
+def test_a_log_file_that_is_not_json_or_not_there_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: str | None, said_of: str
+) -> None:
+    path = tmp_path / "log.json"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+
+    code = summary_cli(tmp_path, path)
+
+    assert code == 2
+    assert said_of in capsys.readouterr().err
+
+
+def test_invalid_rules_for_a_summary_exit_2_naming_the_field(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    plan["slots"][1]["kcal_share"] = 7
+    rules = tmp_path / "bad.json"
+    rules.write_text(json.dumps(plan), encoding="utf-8")
+
+    code = summary_cli(tmp_path, log_file(tmp_path, log_entry(MON, "lunch")), rules)
+
+    assert code == 2
+    assert "slots.1.kcal_share" in capsys.readouterr().err
+
+
+class MealDown(SpyNutrition):
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        raise NutritionError(f"nutrition-mcp could not answer {MARK}", unreachable=True)
+
+
+def test_nutrition_mcp_going_away_exits_1_naming_the_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = log_file(tmp_path, log_entry(MON, "lunch"))
+
+    code = summary_cli(tmp_path, log, nutrition=MealDown(*EXTRA_FOODS))
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.out == ""
+    assert lines(captured.err) == [
+        "meal-planner: nutrition-mcp could not be reached (step: nutrition)"
+    ]
+
+
+def test_a_summary_that_breaks_says_only_what_kind_of_failure_it_was(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = log_file(tmp_path, log_entry(MON, "lunch"))
+
+    code = summary_cli(tmp_path, log, nutrition=ExplodingNutrition(*EXTRA_FOODS))
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert MARK not in captured.err + captured.out
+    assert "RuntimeError" in captured.err
+
+
+def test_ctrl_c_while_adding_up_exits_with_130(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def interrupted(coroutine: Any) -> None:
+        coroutine.close()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("meal_planner.cli.asyncio.run", interrupted)
+
+    assert summary_cli(tmp_path, log_file(tmp_path, log_entry(MON, "lunch"))) == 130
+
+
+def test_the_rules_and_the_log_never_reach_a_log_line(
+    tmp_path: Path,
+    records: list[logging.LogRecord],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rules = tmp_path / "marked.json"
+    rules.write_text(json.dumps(marked_plan()), encoding="utf-8")
+    good = log_file(tmp_path, log_entry(MON, "breakfast"), log_entry(MON, "lunch", "skipped"))
+
+    assert summary_cli(tmp_path, good, rules) == 0
+    worked_out = capsys.readouterr()
+    # The summary holds no word of the plan.
+    assert MARK not in worked_out.out + worked_out.err
+
+    # A value that does not validate is not echoed. An id nutrition-mcp refuses is named to the
+    # person who ran the command, as the API's 422 names it, and is in no log line.
+    bad_date = log_file(tmp_path, log_entry(MON, "lunch") | {"date": MARK})
+    assert summary_cli(tmp_path, bad_date, rules) == 2
+    assert MARK not in capsys.readouterr().err
+    ghost = log_file(tmp_path, log_entry(MON, "lunch", "as_planned", eaten(f"ghost_{MARK}")))
+    assert summary_cli(tmp_path, ghost, rules) == 2
+    assert MARK in capsys.readouterr().err
+
+    assert records
+    for record in records:
+        assert MARK not in record.getMessage()
+        assert MARK not in json.dumps(vars(record), default=str), record.name
+
+
 # Input that cannot be used
 
 
@@ -436,6 +686,14 @@ def test_the_installed_command_has_help() -> None:
 
     assert done.returncode == 0
     assert "--out" in done.stdout
+
+
+def test_the_installed_command_has_help_for_a_summary() -> None:
+    done = subprocess.run([command(), "summary", "--help"], capture_output=True, text=True)
+
+    assert done.returncode == 0
+    assert "log" in done.stdout
+    assert "rules" in done.stdout
 
 
 def test_the_installed_command_has_help_for_reading() -> None:
