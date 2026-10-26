@@ -11,7 +11,9 @@ nothing it adds to a reply is used. Code decides the rest:
   that is none of the results, is `missing` and left out of the total.
 - An amount that is missing (the model's words for it are not in the text the person typed),
   vague ("some", "a handful") or a range ("2-3") is `needs_amount` whatever number the model
-  returned. The person is asked, never given a guess.
+  returned. So is one whose number the words do not give: the code reads a number from the words
+  ("a" is 1, "half" is 0.5, "1 1/2" is 1.5), and the model's number is used only when it is
+  that number. The person is asked, never given a guess.
 - Kilograms and litres are read as grams and millilitres. A unit nutrition-mcp has for the food
   goes to it. Otherwise the catalogue's measure for the food turns the amount into grams, if it
   has one; the summary reads a logged unit the same way (`Catalogue.meal_item`). Otherwise the
@@ -25,6 +27,7 @@ logs it, and a ReadError names the step that failed and nothing the person wrote
 
 import math
 import re
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
@@ -66,6 +69,79 @@ _RANGE = re.compile(rf"\b{_NUMBER}(?:\s*[{_DASHES}]\s*|\s+(?:to|or)\s+){_NUMBER}
 _VAGUE = re.compile(
     r"\b(?:some|little|bit|few|handfuls?|lots?|several|many|plenty)\b", re.IGNORECASE
 )
+# The amounts the code reads from an amount's words, to check the model's number against them.
+# "a" and "an" are one. Any other number word (a Hindi one, "couple", "thirteen") is not read.
+_NUMBER_WORDS = {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "half": 0.5,
+    "a half": 0.5,
+    "quarter": 0.25,
+    "a quarter": 0.25,
+    "dozen": 12,
+    "a dozen": 12,
+    "one and a half": 1.5,
+}
+# What the words start with: a mixed number or fraction ("1 1/2", "3/4"), a number ("200", "1.5"),
+# or a number word, the longest first so that "a half" is not read as "a".
+_AMOUNT_START = re.compile(
+    r"(?:(?P<whole>\d+) )?(?P<top>\d+)/(?P<bottom>\d+)|(?P<digits>\d+(?:\.\d+)?)|(?P<word>"
+    + "|".join(re.escape(word) for word in sorted(_NUMBER_WORDS, key=len, reverse=True))
+    + r")\b"
+)
+_ORDINALS = ("fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth")
+# The words after the number that make it a different one. They join or divide ("two and a half",
+# "twelve to fifteen"), count in parts ("three quarters", "one fourth", "one point five"), scale
+# it ("two hundred", "1 lakh") or make a range in Hindi ("2 se 3", "1 ya 2", and the same in
+# Devanagari). So does any number word of the table after it ("one two"). Digits, signs and
+# letters of other scripts after the number do the same ("1,000 g", "2~3", "1 & 1/2"), and are
+# found by `_plain`. Whole words, not a pattern: a Devanagari vowel sign is not a word
+# character, so a word boundary would not be found after "या".
+_NUMBER_GOES_ON = frozenset(
+    {
+        "and",
+        "or",
+        "to",
+        "aur",
+        "se",
+        "ya",
+        "और",
+        "या",
+        "से",
+        "point",
+        "couple",
+        "pair",
+        "halves",
+        "quarters",
+        "third",
+        "thirds",
+        "hundred",
+        "hundreds",
+        "thousand",
+        "thousands",
+        "lakh",
+        "lakhs",
+        "crore",
+        "crores",
+        "million",
+        "millions",
+    }
+    | {f"{ordinal}{plural}" for ordinal in _ORDINALS for plural in ("", "s")}
+    # "a" and "an" are left out: "half a katori" is half.
+    | {word for word in _NUMBER_WORDS if " " not in word and word not in ("a", "an")}
+)
 # The words for an amount may not run on into a longer word or number in the text: no letter
 # touches a letter they start or end with, and no digit or decimal point touches a digit ("2" is
 # not in "12" or "2.5"). A full stop that ends a sentence may follow a number.
@@ -84,7 +160,7 @@ class ExtractedItem(BaseModel):
     amount: float | None
     unit: str | None
     # The words the person used for the amount, which the code looks for in the typed text and
-    # reads for a range or a vague word.
+    # reads for a range, a vague word and the number they give.
     amount_text: str
 
 
@@ -110,10 +186,11 @@ class ReadItem(BaseModel):
     """One food of the meal and what became of it.
 
     `matched`: the food and a usable amount were found, and `grams` and `nutrition` are set.
-    `needs_amount`: the food was found but the amount is missing, vague, a range or beyond the
-    limit; `valid_units` lists what could be used to give one. `unknown_unit`: the food was
-    found but the unit is not one nutrition-mcp or the catalogue has for it; `valid_units` lists
-    those that are. `missing`: the food is not in nutrition-mcp's data.
+    `needs_amount`: the food was found but the amount is missing, vague, a range, not the number
+    its words give, or beyond the limit; `valid_units` lists what could be used to give one.
+    `unknown_unit`: the food was found but the unit is not one nutrition-mcp or the catalogue has
+    for it; `valid_units` lists those that are. `missing`: the food is not in nutrition-mcp's
+    data.
     """
 
     # As the model read it, in the person's words.
@@ -259,7 +336,8 @@ def _stated_amount(item: ExtractedItem, text: str) -> float | None:
     Decided here and not by the model. The model's words for the amount have to be in the text
     the person typed, so a number it made up with words to match ("roti and dal" read as amount
     1, "1") is not used. No such words, a range or a vague word in them cancels whatever number
-    the model chose.
+    the model chose. So does a number the words do not give: the code reads one from the words,
+    and the model's amount is used only when it is that number ("a" is 1, not 5).
     """
     amount = item.amount
     if amount is None or not math.isfinite(amount) or not 0 < amount <= MAX_AMOUNT:
@@ -269,12 +347,56 @@ def _stated_amount(item: ExtractedItem, text: str) -> float | None:
         return None
     if _VAGUE.search(words) or _RANGE.search(words):
         return None
+    read = _amount_in(words)
+    if read is None or not math.isclose(read, amount, rel_tol=0, abs_tol=1e-9):
+        return None
     return amount
 
 
 def _folded(text: str) -> str:
     """Lower case, with every run of spaces read as one space."""
     return " ".join(text.casefold().split())
+
+
+def _amount_in(words: str) -> float | None:
+    """The number an amount's words start with, or None when they hold none the code reads.
+
+    `words` are folded. A number may be followed by a unit or other letters ("200gm", "1.5l",
+    "a katori"). The table of number words is short on purpose: any other number word reads as
+    no number, and so does a number that goes on into one the table has no value for ("two and
+    a half", "1,000 g", "1 litre 500 ml", "two hundred"). An item with no number to compare
+    asks for an amount, and an item that asks never has a quantity invented for it. The words
+    can still go on in a way listed nowhere here, so this narrows what the model can get wrong
+    and does not rule it out.
+    """
+    start = _AMOUNT_START.match(words)
+    if start is None:
+        return None
+    after = words[start.end() :]
+    if not all(map(_plain, after)) or not _NUMBER_GOES_ON.isdisjoint(
+        after.replace(".", " ").split()
+    ):
+        return None
+    if start["word"]:
+        return _NUMBER_WORDS[start["word"]]
+    if start["digits"]:
+        return float(start["digits"])
+    bottom = float(start["bottom"])
+    if bottom == 0:
+        return None
+    return float(start["whole"] or 0) + float(start["top"]) / bottom
+
+
+def _plain(char: str) -> bool:
+    """Whether a character after the number is one a unit or a word is made of: a space, a full
+    stop, or a Latin or Devanagari letter (with the vowel signs of Devanagari). Anything else, a
+    digit, a comma, a sign or a letter of another script, may carry on the number: the code has
+    no number words for those scripts to look for."""
+    if char.isspace() or char == ".":
+        return True
+    return unicodedata.category(char)[0] in "LM" and unicodedata.name(char, "").startswith(
+        ("LATIN", "DEVANAGARI")
+    )
 
 
 def _typed(words: str, text: str) -> bool:
