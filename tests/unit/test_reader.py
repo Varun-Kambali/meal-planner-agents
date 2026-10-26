@@ -401,8 +401,13 @@ async def test_a_count_of_the_food_itself_reads_through_the_piece_measure(
     ("text", "said_of", "grams", "kcal"),
     [
         ("half kg chicken", said("chicken", 0.5, "kg", "half"), 500, 825),
-        ("1 litre milk", said("milk", 1, "litre", "1"), 1030, 618),
-        ("a quarter liter of milk", said("milk", 0.25, "liter", "a quarter"), 257.5, 154.5),
+        ("1 litre whole milk", said("whole milk", 1, "litre", "1"), 1030, 618),
+        (
+            "a quarter liter of whole milk",
+            said("whole milk", 0.25, "liter", "a quarter"),
+            257.5,
+            154.5,
+        ),
     ],
 )
 async def test_kilograms_and_litres_are_read(
