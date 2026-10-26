@@ -22,7 +22,7 @@ A plan's id is its file name. Active minutes are the range of `max_active_min` a
 | `kerala_egg_no_dairy` | egg | 2 | 4 | pressure cooker, kadhai, steamer | 10-40 | Kerala, South Indian | milk | no |
 | `korean_japanese_vegan` | vegan | 3 | 4 | rice cooker, steamer, stovetop pan, kettle | 5-25 | Korean, Japanese | sesame | no |
 | `korean_quick_non_veg` | non_veg | 2 | 4 | rice cooker, stovetop pan, microwave | 5-25 | Korean | sesame | no |
-| `maharashtrian_egg_shifts` | egg | 2 | 4 | pressure cooker, stovetop pan, microwave, kadhai | 10-40 | Maharashtrian | sesame | no |
+| `maharashtrian_egg_home` | egg | 2 | 4 | pressure cooker, stovetop pan, microwave, kadhai | 10-40 | Maharashtrian | sesame | no |
 | `mediterranean_student_veg` | veg | 1 | 3 | microwave, kettle, jar with lid | 5-15 | Mediterranean | tree nuts | no |
 | `odia_bengali_gluten_free` | veg | 1 | 4 | pressure cooker, kadhai | 10-40 | Odia, Bengali | gluten | no |
 | `punjabi_rajasthani_gluten_free` | veg | 2 | 4 | pressure cooker, kadhai, air fryer | 15-35 | Punjabi, Rajasthani | gluten | no |

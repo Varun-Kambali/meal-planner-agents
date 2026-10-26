@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "name": "Maharashtrian home food on day and night shifts",
+  "name": "Maharashtrian home food for busy and lighter days",
   "day_types": [
     {
-      "id": "day_shift",
-      "name": "Day shift",
+      "id": "busy",
+      "name": "Busy day",
       "kcal": 2300,
       "protein_g": 108,
       "carbs_g": 310,
@@ -14,8 +14,8 @@
       "extra": []
     },
     {
-      "id": "night_shift",
-      "name": "Night shift",
+      "id": "light",
+      "name": "Lighter day",
       "kcal": 2150,
       "protein_g": 104,
       "carbs_g": 280,
@@ -26,13 +26,13 @@
     }
   ],
   "week": {
-    "mon": "day_shift",
-    "tue": "day_shift",
-    "wed": "day_shift",
-    "thu": "night_shift",
-    "fri": "night_shift",
-    "sat": "night_shift",
-    "sun": "day_shift"
+    "mon": "busy",
+    "tue": "busy",
+    "wed": "busy",
+    "thu": "light",
+    "fri": "light",
+    "sat": "light",
+    "sun": "busy"
   },
   "slots": [
     {
@@ -41,7 +41,7 @@
       "eat_at": "08:30",
       "kcal_share": 0.25,
       "protein_share": 0.25,
-      "style": "poha-style or egg breakfast",
+      "style": "upma or egg breakfast",
       "cook_when": "fresh",
       "max_active_min": 15,
       "max_total_min": 20
@@ -52,7 +52,7 @@
       "eat_at": "13:30",
       "kcal_share": 0.3,
       "protein_share": 0.3,
-      "style": "bhakri or roti with usal",
+      "style": "roti with matki usal",
       "cook_when": "evening_before",
       "max_active_min": 40,
       "max_total_min": 70
