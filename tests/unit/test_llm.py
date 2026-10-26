@@ -722,6 +722,21 @@ async def test_recording_skips_a_call_that_got_no_reply(tmp_path: Path) -> None:
     assert not path.exists()
 
 
+async def test_recording_keeps_a_reply_with_no_text_so_it_replays_the_same(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "smoke.jsonl"
+    stub = StubCompletion(completion(None, prompt_tokens=30, completion_tokens=0))
+    live = await ask(RecordingModel(client(stub), path))
+
+    replayed = await ask(ReplayModel(path))
+
+    assert live.error == "invalid_json"
+    assert (replayed.value, replayed.error, replayed.raw) == (None, "invalid_json", "")
+    assert (replayed.input_tokens, replayed.output_tokens) == (30, 0)
+    assert replayed.cost_usd == live.cost_usd
+
+
 @pytest.mark.parametrize("make_error", [rate_limit, timeout, server_error, bad_key])
 async def test_recording_skips_every_call_that_got_no_reply(
     tmp_path: Path, make_error: Any

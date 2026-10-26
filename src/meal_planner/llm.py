@@ -68,6 +68,8 @@ TIMEOUT = "timeout"
 SERVER_ERROR = "server_error"
 MODEL_ERROR = "model_error"
 NO_RECORDING = "no_recording"
+# The codes of a call that got no reply at all, so there is nothing a recording could hold.
+NO_REPLY = frozenset({RATE_LIMITED, TIMEOUT, SERVER_ERROR, MODEL_ERROR, NO_RECORDING})
 
 
 @dataclass(frozen=True)
@@ -376,8 +378,10 @@ def recording_key(system: str, user: str) -> str:
 class RecordingModel:
     """Wraps a model and appends each reply it gets to a JSON-lines file, for ReplayModel.
 
-    The file is appended to, never cleared: delete it to record afresh. A call that got no reply
-    at all (rate limited, timed out) is not recorded, as there is nothing to replay.
+    The file is appended to, never cleared: delete it to record afresh. Every reply is recorded,
+    one with no text too, so that a replay gives the same outcome as the call did ("invalid_json"
+    for an empty reply, not "no_recording"). A call that got no reply at all (rate limited, timed
+    out, refused) is not recorded, as there is nothing to replay.
     """
 
     def __init__(self, inner: ModelPort, path: Path) -> None:
@@ -390,7 +394,7 @@ class RecordingModel:
         reply = await self._inner.structured(
             task=task, system=system, user=user, schema=schema, timeout_s=timeout_s
         )
-        if reply.raw:
+        if reply.error not in NO_REPLY:
             line = Recording(
                 key=recording_key(system, user),
                 task=task,
