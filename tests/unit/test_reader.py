@@ -31,7 +31,7 @@ from meal_planner.llm import (
     ModelPort,
     ModelReply,
 )
-from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.nutrition import NutritionError, NutritionPort, refusal
 from meal_planner.reader import (
     Choices,
     Extracted,
@@ -918,6 +918,36 @@ async def test_an_answer_nutrition_mcp_gives_that_cannot_be_read_is_not_taken_fo
 
     with pytest.raises(ReadError, match="could not be used") as caught:
         await read("2 rotis", model, GarbledNutrition())
+
+    assert caught.value.unavailable is False
+    assert "step: nutrition" in str(caught.value)
+
+
+class Refusing(ReaderNutrition):
+    """nutrition-mcp refusing the food, in its words, for a reason other than the amount."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__()
+        self.message = message
+
+    async def nutrition(self, food_id: str, amount: float, unit: str) -> NutritionResult:
+        raise refusal(self.message.format(food_id=food_id), food_id)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "unknown food id '{food_id}'; search_food finds food ids by name",
+        "unknown unit 'roti' for {food_id}; valid units: g",
+        "amount must be greater than 0, got 0",
+        "2 roti comes to 80 g, over the limit of 50 g",
+    ],
+)
+async def test_a_refusal_that_is_not_about_the_amount_is_a_read_error(message: str) -> None:
+    model = model_of(reading(said("roti", 2, "roti", "2")))
+
+    with pytest.raises(ReadError, match="could not be used") as caught:
+        await read("2 rotis", model, Refusing(message))
 
     assert caught.value.unavailable is False
     assert "step: nutrition" in str(caught.value)

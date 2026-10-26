@@ -31,6 +31,7 @@ from typing import Literal
 
 from nutrition_mcp.schemas import FoodSummary, MealItemIn, MealResult, NutritionResult
 from nutrition_mcp.search import MAX_QUERY_LENGTH, normalise
+from nutrition_mcp.units import MAX_GRAMS
 from pydantic import BaseModel, Field
 
 from meal_planner.catalogue import Catalogue
@@ -51,6 +52,9 @@ COUNTED = "piece"
 # More than this of any unit is over nutrition-mcp's 5000 g limit. The bound also keeps the
 # arithmetic finite.
 MAX_AMOUNT = 100_000
+# How nutrition-mcp refuses an amount over its limit: "126 roti comes to 5040 g, over the limit
+# of 5000 g".
+_OVER_LIMIT = re.compile(rf"comes to \S+ g, over the limit of {MAX_GRAMS:g} g$")
 
 # A range of amounts: "2-3", "2 to 3", "2 or 3", "two or three". The dashes are a hyphen, an en
 # dash and an em dash, as people type them between two numbers.
@@ -209,8 +213,8 @@ async def _read_item(
     if meal_item is None:
         return _unread(name, food, amount, unit, "unknown_unit", valid), None
     answer = await _nutrition_for(deps, meal_item)
-    if isinstance(answer, NutritionError):
-        # The amount itself was refused: more than 5000 g.
+    if answer is None:
+        # nutrition-mcp refused the amount as over its limit.
         return _unread(name, food, None, unit, "needs_amount", valid), None
     read = ReadItem(
         name=name,
@@ -397,18 +401,18 @@ async def _ask[T: BaseModel](
     return reply.value
 
 
-async def _nutrition_for(deps: _Deps, item: MealItemIn) -> NutritionResult | NutritionError:
-    """nutrition-mcp's numbers for the item, or its refusal of the amount or the unit.
+async def _nutrition_for(deps: _Deps, item: MealItemIn) -> NutritionResult | None:
+    """nutrition-mcp's numbers for the item, or None when it refuses the amount as over its limit.
 
-    A refusal names the food it is about. One that names none is an answer that could not be
-    read, and that, like a nutrition-mcp that cannot be reached, is a ReadError.
+    The food and the unit were settled before it was asked, so any other refusal, an answer that
+    could not be read and a nutrition-mcp that cannot be reached are each a ReadError.
     """
     try:
         return await deps.nutrition.nutrition(item.food_id, item.amount, item.unit)
     except NutritionError as exc:
-        if exc.unreachable or exc.food_id is None:
-            raise _nutrition_failed(exc) from exc
-        return exc
+        if not exc.unreachable and exc.food_id is not None and _OVER_LIMIT.search(str(exc)):
+            return None
+        raise _nutrition_failed(exc) from exc
 
 
 async def _total(items: list[MealItemIn], deps: _Deps) -> MealResult:
