@@ -39,6 +39,7 @@ from meal_planner.reader import (
     Pick,
     ReadError,
     ReadResult,
+    _amount_in,
     read_meal,
 )
 
@@ -208,14 +209,13 @@ async def test_vague_words_need_an_amount_whatever_the_model_returned(amount_tex
     [
         ("2 rotis", "2"),
         ("two rotis", "two"),
-        ("a couple of rotis", "a couple"),
-        ("rotis x2", "x2"),
+        ("rotis 2", "2"),
         ("2rotis", "2"),
-        ("1/2 a dozen rotis", "1/2 a dozen"),
+        ("2 rotis", "2 rotis"),
         # Case and spaces are folded on both sides.
         ("TWO rotis", "two"),
         ("two   Rotis", " Two "),
-        ("a couple\nof rotis", "A  Couple"),
+        ("Two\nrotis", "  TWO  "),
     ],
 )
 async def test_an_amount_in_the_persons_words_is_read(text: str, amount_text: str) -> None:
@@ -250,6 +250,166 @@ async def test_an_amount_the_person_did_not_type_is_not_read(text: str, amount_t
     assert (item.status, item.food_id, item.unit) == ("needs_amount", "chapati", "roti")
     assert (item.amount, item.grams, item.nutrition) == (None, None, None)
     assert [call[0] for call in nutrition.asked] == ["search"]
+
+
+@pytest.mark.parametrize(
+    ("amount_text", "amount"),
+    [
+        ("a", 1),
+        ("an", 1),
+        ("one", 1),
+        ("2", 2),
+        ("two", 2),
+        ("1.5", 1.5),
+        ("1 1/2", 1.5),
+        ("1/2", 0.5),
+        ("half", 0.5),
+        ("a half", 0.5),
+        ("one and a half", 1.5),
+        ("200gm", 200),
+        ("dozen", 12),
+    ],
+)
+async def test_an_amount_that_agrees_with_its_words_is_used(
+    amount_text: str, amount: float
+) -> None:
+    model = model_of(reading(said("chicken", amount, "g", amount_text)))
+
+    (item,) = (await read(f"{amount_text} chicken", model)).items
+
+    assert (item.status, item.food_id, item.amount, item.grams) == (
+        "matched",
+        "chicken_breast",
+        amount,
+        amount,
+    )
+
+
+@pytest.mark.parametrize(
+    ("amount_text", "amount"),
+    [
+        # "a roti" is one: the model's 5 is a number it made up.
+        ("a", 5),
+        ("2", 3),
+        ("half", 1),
+        ("two", 2.5),
+        # Words with no number the code reads: the item asks, whatever the model said.
+        ("ek", 1),
+        ("couple", 2),
+        ("a couple", 2),
+        ("x2", 2),
+        ("two and a half", 2),
+        ("three quarters", 3),
+        ("half a dozen", 0.5),
+    ],
+)
+async def test_an_amount_that_disagrees_with_its_words_needs_an_amount(
+    amount_text: str, amount: float
+) -> None:
+    nutrition = ReaderNutrition()
+    model = model_of(reading(said("roti", amount, "roti", amount_text)))
+
+    result = await read(f"{amount_text} roti", model, nutrition)
+
+    (item,) = result.items
+    # The food is still found, and its units are listed so that the person can give an amount.
+    assert (item.status, item.food_id, item.unit) == ("needs_amount", "chapati", "roti")
+    assert (item.amount, item.grams, item.nutrition) == (None, None, None)
+    assert item.valid_units == ["g", "roti", "piece", "serving"]
+    assert result.total is None
+    assert [call[0] for call in nutrition.asked] == ["search"]
+
+
+@pytest.mark.parametrize(
+    ("words", "number"),
+    [
+        # Digits, with a unit attached or after a space.
+        ("2", 2),
+        ("200", 200),
+        ("1.5", 1.5),
+        ("200gm", 200),
+        ("2kg", 2),
+        ("1 katori", 1),
+        ("100 g", 100),
+        ("2.", 2),
+        # A fraction is a division and a mixed number adds the whole to it.
+        ("1/2", 0.5),
+        ("3/4", 0.75),
+        ("5/2", 2.5),
+        ("1 1/2", 1.5),
+        ("2 3/4", 2.75),
+        ("2/3", 2 / 3),
+        # Words.
+        ("a", 1),
+        ("an", 1),
+        ("one", 1),
+        ("two", 2),
+        ("three", 3),
+        ("four", 4),
+        ("five", 5),
+        ("six", 6),
+        ("seven", 7),
+        ("eight", 8),
+        ("nine", 9),
+        ("ten", 10),
+        ("eleven", 11),
+        ("twelve", 12),
+        ("half", 0.5),
+        ("a half", 0.5),
+        ("quarter", 0.25),
+        ("a quarter", 0.25),
+        ("one and a half", 1.5),
+        ("dozen", 12),
+        ("a dozen", 12),
+        # The number comes first; a unit word may follow it.
+        ("a katori", 1),
+        ("half a katori", 0.5),
+        ("a quarter cup", 0.25),
+    ],
+)
+def test_amount_in_reads_the_number_in_amount_words(words: str, number: float) -> None:
+    assert _amount_in(words) == pytest.approx(number, abs=1e-12)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "",
+        # Number words that are not in the table, and Hindi ones.
+        "ek",
+        "do",
+        "teen",
+        "thirteen",
+        "twenty",
+        "couple",
+        "a couple",
+        "a pair",
+        # A number that carries on into something the table has no value for.
+        "two and a half",
+        "three quarters",
+        "one half",
+        "two dozen",
+        "half a dozen",
+        "twelve to fifteen",
+        "2 3",
+        "1/2/3",
+        "1/2.5",
+        "1.5.2",
+        # A fraction with nothing to divide by.
+        "1/0",
+        # Not at the start, or only the start of a longer word.
+        "x2",
+        "about 2",
+        "apple",
+        "onion",
+        "ant",
+        "-2",
+        ".5",
+        "some",
+    ],
+)
+def test_amount_in_reads_no_number_from_other_words(words: str) -> None:
+    assert _amount_in(words) is None
 
 
 async def test_roti_and_dal_with_an_invented_amount_text_need_amounts() -> None:

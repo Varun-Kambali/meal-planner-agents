@@ -1252,7 +1252,7 @@ def test_no_typed_text_in_logs_when_nutrition_mcp_breaks(
     records: list[logging.LogRecord],
     capfd: pytest.CaptureFixture[str],
 ) -> None:
-    model = reader_model(reading(said("roti", 2, "roti", MARK)))
+    model = reader_model(reading(said("roti", 2, "roti", "2")))
 
     with reading_meals(tmp_path, model, TypedTextEchoed()) as client:
         response = client.post("/v1/log/read", json={"text": f"2 rotis {MARK}"})
