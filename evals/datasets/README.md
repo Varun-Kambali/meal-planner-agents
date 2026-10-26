@@ -32,7 +32,7 @@ One JSON object a line:
     - `unknown_unit`: there is an amount, but neither nutrition-mcp nor the catalogue has the unit for that food (a bowl, a plate of rice, one pav, one cucumber, a katori of curd). The person is asked for a unit.
   - `amount` and `unit`: as the person gave them, written the way the reader writes them: lower case and singular, `g` for every spelling of grams, `kg` and `litre` as typed, and `piece` for a count with no unit word ("2 rotis"). Both are null for `needs_amount`, where the right answer is to ask. For `unknown_unit` they are the amount and the unit that was typed.
   - `grams`: for `matched` only, the grams the reader gets for that food, amount and unit. Null otherwise.
-  - `also_accept` (only on some items): other food ids that are right too, for a general name the data has several foods for ("dal", "milk"). For a `matched` item, each gives the same grams within 1% for the same amount and unit, so `grams` stands for all of them.
+  - `also_accept` (only on some items): other food ids that are right too, for a general name the data has several foods for ("dal", "milk", "doodh"). For a `matched` item, each gives the same grams within 1% for the same amount and unit, so `grams` stands for all of them.
 - `missing`: the names of foods the person ate that are not in nutrition-mcp's data, in the order written, lower case and singular.
 - `note`: why the label is what it is.
 
@@ -45,7 +45,7 @@ One JSON object a line:
 
 ### What is in it
 
-53 meals with 87 labelled items: 71 matched, 11 that need an amount and 5 with an unknown unit, plus 19 foods in 12 meals that are not in the data. 44 meals name more than one food. Some use Hindi names (roti, dal, chawal, dahi, doodh, anda, sabzi), and the units include katori, plate, piece, cup, glass, tbsp, tsp, scoop, ml, g, kg and litre. `m04`, `m26` and `m36` use `also_accept`. The four meals carried over from building the reader are `m01` ("2/3 rotis"), `m02` ("half plate idli"), `m03` ("half plate rice") and `m04` ("a bowl of dal"). `m28` holds an instruction inside the typed text, which the reader has to read as data.
+53 meals with 87 labelled items: 71 matched, 11 that need an amount and 5 with an unknown unit, plus 19 foods in 12 meals that are not in the data. 44 meals name more than one food. Some use Hindi names (roti, dal, chawal, dahi, doodh, anda, sabzi), and the units include katori, plate, piece, cup, glass, tbsp, tsp, scoop, ml, g, kg and litre. `m04` and `m36` (dal) and `m09`, `m17` and `m26` (milk) use `also_accept`. The four meals carried over from building the reader are `m01` ("2/3 rotis"), `m02` ("half plate idli"), `m03` ("half plate rice") and `m04` ("a bowl of dal"). `m28` holds an instruction inside the typed text, which the reader has to read as data.
 
 ## VERSION
 
