@@ -141,9 +141,10 @@ def shape_problems(row: dict[str, Any]) -> list[str]:
             ok = False
         if not ok:
             problems.append(f"{food_id}: status {status!r} with {amount!r} {unit!r} {grams!r}")
-        others = item.get("also_accept", [food_id])
-        if not others or food_id in others:
-            problems.append(f"{food_id}: also_accept must list other foods")
+        if "also_accept" in item:
+            others = item["also_accept"]
+            if not others or food_id in others or not all(isinstance(o, str) for o in others):
+                problems.append(f"{food_id}: also_accept must list other food ids")
     return problems
 
 
