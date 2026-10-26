@@ -252,6 +252,35 @@ async def test_an_amount_the_person_did_not_type_is_not_read(text: str, amount_t
     assert [call[0] for call in nutrition.asked] == ["search"]
 
 
+# Amount words that start with a number but say more than it: the number a model that stopped
+# reading early would return is beside each.
+RUNS_ON: list[tuple[str, float]] = [
+    ("1\u00bd", 1),
+    ("1,000 g", 1),
+    ("2,5 kg", 2),
+    ("ten-twelve", 10),
+    ("10-twelve", 10),
+    ("one fourth", 1),
+    ("three fourths", 3),
+    ("one point five", 1),
+    ("1 litre 500 ml", 1),
+    ("1 & 1/2", 1),
+    ("2~3", 2),
+    ("2+3", 2),
+    ("2 se 3", 2),
+    ("1 ya 2", 1),
+    ("2 x 3", 2),
+    ("two se three", 2),
+    ("one ya two", 1),
+    ("three fifths", 3),
+    ("two sixths", 2),
+    ("one seventh", 1),
+    ("five eighths", 5),
+    ("one ninth", 1),
+    ("three tenths", 3),
+]
+
+
 @pytest.mark.parametrize(
     ("amount_text", "amount"),
     [
@@ -301,6 +330,7 @@ async def test_an_amount_that_agrees_with_its_words_is_used(
         ("two and a half", 2),
         ("three quarters", 3),
         ("half a dozen", 0.5),
+        *RUNS_ON,
     ],
 )
 async def test_an_amount_that_disagrees_with_its_words_needs_an_amount(
@@ -317,6 +347,56 @@ async def test_an_amount_that_disagrees_with_its_words_needs_an_amount(
     assert (item.amount, item.grams, item.nutrition) == (None, None, None)
     assert item.valid_units == ["g", "roti", "piece", "serving"]
     assert result.total is None
+    assert [call[0] for call in nutrition.asked] == ["search"]
+
+
+@pytest.mark.parametrize(
+    ("amount_text", "amount", "used"),
+    [
+        # A third of a gram is not 0.67, but is the float the words divide to.
+        ("2/3", 0.67, False),
+        ("2/3", 2 / 3, True),
+        # Equal within 1e-9 is the same number; further off is not.
+        ("1/2", 0.5 + 1e-10, True),
+        ("1/2", 0.5 + 1e-8, False),
+        ("1.5", 1.5 + 1e-10, True),
+        ("1.5", 1.5 + 1e-8, False),
+    ],
+)
+async def test_an_amount_is_used_only_when_equal_to_its_words_within_a_billionth(
+    amount_text: str, amount: float, used: bool
+) -> None:
+    model = model_of(reading(said("chicken", amount, "g", amount_text)))
+
+    (item,) = (await read(f"{amount_text} chicken", model)).items
+
+    assert item.status == ("matched" if used else "needs_amount")
+    assert item.amount == (amount if used else None)
+
+
+@pytest.mark.parametrize(
+    "amount_text",
+    [
+        # Too big for a float: reads as infinity.
+        "9" * 400,
+        "9" * 400 + ".5",
+        # Infinity divided by infinity is not a number.
+        "9" * 400 + "/" + "9" * 400,
+        "1 " + "9" * 400 + "/" + "9" * 400,
+    ],
+)
+async def test_digits_too_long_for_a_number_ask_for_an_amount(amount_text: str) -> None:
+    nutrition = ReaderNutrition()
+    model = model_of(reading(said("chicken", 5, "g", amount_text)))
+
+    (item,) = (await read(f"{amount_text} chicken", model, nutrition)).items
+
+    assert (item.status, item.food_id, item.amount, item.grams) == (
+        "needs_amount",
+        "chicken_breast",
+        None,
+        None,
+    )
     assert [call[0] for call in nutrition.asked] == ["search"]
 
 
@@ -365,6 +445,11 @@ async def test_an_amount_that_disagrees_with_its_words_needs_an_amount(
         ("a katori", 1),
         ("half a katori", 0.5),
         ("a quarter cup", 0.25),
+        # Units and other letters after the number do not change it.
+        ("1.5l", 1.5),
+        ("half kg", 0.5),
+        ("1 litre", 1),
+        ("2 \u0930\u094b\u091f\u0940", 2),
     ],
 )
 def test_amount_in_reads_the_number_in_amount_words(words: str, number: float) -> None:
@@ -406,6 +491,12 @@ def test_amount_in_reads_the_number_in_amount_words(words: str, number: float) -
         "-2",
         ".5",
         "some",
+        # Words that say more than the number they start with.
+        *[words for words, _ in RUNS_ON],
+        # A comma, a symbol or a digit anywhere after the number.
+        "2,5",
+        "1/2 (about)",
+        "2 rotis 3",
     ],
 )
 def test_amount_in_reads_no_number_from_other_words(words: str) -> None:

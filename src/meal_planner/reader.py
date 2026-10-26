@@ -27,6 +27,7 @@ logs it, and a ReadError names the step that failed and nothing the person wrote
 
 import math
 import re
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
@@ -100,11 +101,13 @@ _AMOUNT_START = re.compile(
     + "|".join(re.escape(word) for word in sorted(_NUMBER_WORDS, key=len, reverse=True))
     + r")\b"
 )
-# What may not follow the number, because it would make it a different one: more digits, a
-# fraction sign or a decimal, or a word that joins or divides it ("two and a half", "three
-# quarters", "half a dozen", "twelve to fifteen").
+# The words after the number that make it a different one: they join, divide or count in parts
+# ("two and a half", "half a dozen", "three quarters", "one fourth", "one point five") or make
+# a range in Hindi ("2 se 3", "1 ya 2"). Digits and signs after the number do the same ("1,000 g",
+# "2~3", "1 & 1/2"), and are found by `_plain`.
 _NUMBER_GOES_ON = re.compile(
-    r"^\s*(?:[\d/]|\.\d)|\b(?:and|or|to|couple|pair|dozen|half|halves|quarters?|thirds?)\b"
+    r"\b(?:and|or|to|se|ya|point|couple|pair|dozen|half|halves|quarters?|thirds?"
+    r"|(?:fourth|fifth|sixth|seventh|eighth|ninth|tenth)s?)\b"
 )
 # The words for an amount may not run on into a longer word or number in the text: no letter
 # touches a letter they start or end with, and no digit or decimal point touches a digit ("2" is
@@ -325,13 +328,17 @@ def _folded(text: str) -> str:
 def _amount_in(words: str) -> float | None:
     """The number an amount's words start with, or None when they hold none the code reads.
 
-    `words` are folded. A number may be followed by a unit ("200gm", "a katori"). The table of
-    number words is short on purpose: any other number word reads as no number, and so does a
-    number that goes on into one the table has no value for ("two and a half"). The item then
-    asks for an amount, which never invents a quantity.
+    `words` are folded. A number may be followed by a unit or other letters ("200gm", "1.5l",
+    "a katori"). The table of number words is short on purpose: any other number word reads as
+    no number, and so does a number that goes on into one the table has no value for ("two and
+    a half", "1,000 g", "1 litre 500 ml"). The item then asks for an amount, which never
+    invents a quantity.
     """
     start = _AMOUNT_START.match(words)
-    if start is None or _NUMBER_GOES_ON.search(words[start.end() :]):
+    if start is None:
+        return None
+    after = words[start.end() :]
+    if _NUMBER_GOES_ON.search(after) or not all(map(_plain, after)):
         return None
     if start["word"]:
         return _NUMBER_WORDS[start["word"]]
@@ -341,6 +348,13 @@ def _amount_in(words: str) -> float | None:
     if bottom == 0:
         return None
     return float(start["whole"] or 0) + float(start["top"]) / bottom
+
+
+def _plain(char: str) -> bool:
+    """Whether a character after the number is one a unit or a word is made of: a letter (with
+    the vowel signs of scripts such as Devanagari), a space or a full stop. Anything else, a
+    digit, a comma or a sign, may carry on the number."""
+    return char.isspace() or char == "." or unicodedata.category(char)[0] in "LM"
 
 
 def _typed(words: str, text: str) -> bool:
