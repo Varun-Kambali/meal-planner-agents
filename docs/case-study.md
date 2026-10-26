@@ -73,6 +73,7 @@ The decisions that mattered:
 - **A household measure with no sourced weight is not converted.** For a bowl, a plate or a pav the reader asks for a unit nutrition-mcp or the catalogue knows, such as a katori or grams.
 - **Which dish a general name means is the model's pick** among nutrition-mcp's options. The reading eval will measure how often it is right.
 - **An amount counts only if its words are in what was typed,** so one the model rewrites asks the person.
+- **The model's number is not yet checked against its words.** A wrong number next to words that were typed is used.
 - **The as-planned share counts a meal with no entry as not as planned.**
 - **Glycemic load is often unknown.** USDA foods carry none; a licensed table loaded through nutrition-mcp would fill it in.
 - **The catalogue limits variety.** A larger licensed table widens it without code changes.
