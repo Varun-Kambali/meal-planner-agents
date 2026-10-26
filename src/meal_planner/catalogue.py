@@ -142,13 +142,12 @@ class Catalogue:
         """What to ask nutrition-mcp about for `amount` of `unit` of a food, or None when neither
         nutrition-mcp nor the catalogue has the unit for it.
 
-        Kilograms and litres become grams and millilitres first. Then nutrition-mcp's own unit for
-        the food comes first and is sent by its own name. Otherwise the catalogue's measure for
-        the food turns the amount into grams. `own_units` are the
-        units nutrition-mcp has for the food; when they are not given, the catalogue's copy of
-        them is used, and a food the catalogue lacks goes to nutrition-mcp as it is, to be read or
-        refused there. The reader and the summary both send units through here, so a meal the
-        reader matched is one the summary accepts.
+        Kilograms and litres become grams and millilitres first. Then a unit nutrition-mcp has for
+        the food is sent by its own name. Otherwise the catalogue's measure for the food turns the
+        amount into grams. `own_units` are the units nutrition-mcp has for the food; when they are
+        not given, the catalogue's copy of them is used, and a food the catalogue lacks goes to
+        nutrition-mcp as it is, to be read or refused there. The reader and the summary both send
+        units through here, so a meal the reader matched is one the summary accepts.
         """
         metric = _METRIC.get(normalise_unit(unit))
         if metric is not None:

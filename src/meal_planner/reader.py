@@ -66,8 +66,9 @@ _RANGE = re.compile(rf"\b{_NUMBER}(?:\s*[{_DASHES}]\s*|\s+(?:to|or)\s+){_NUMBER}
 _VAGUE = re.compile(
     r"\b(?:some|little|bit|few|handfuls?|lots?|several|many|plenty)\b", re.IGNORECASE
 )
-# What may not touch the words for an amount in the text: a letter next to a letter they start or
-# end with, and a digit (or a decimal point and a digit) next to a digit.
+# The words for an amount may not run on into a longer word or number in the text: no letter
+# touches a letter they start or end with, and no digit or decimal point touches a digit ("2" is
+# not in "12" or "2.5"). A full stop that ends a sentence may follow a number.
 _LETTER_BEFORE = r"(?<![^\W\d_])"
 _LETTER_AFTER = r"(?![^\W\d_])"
 _DIGIT_BEFORE = r"(?<![\d.])"
@@ -82,7 +83,8 @@ class ExtractedItem(BaseModel):
     name: str
     amount: float | None
     unit: str | None
-    # The words the person used for the amount, which the code reads for a range or a vague word.
+    # The words the person used for the amount, which the code looks for in the typed text and
+    # reads for a range or a vague word.
     amount_text: str
 
 

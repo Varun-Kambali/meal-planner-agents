@@ -203,10 +203,10 @@ async def summarise(
 ) -> WeekSummary:
     """Each date of the log against its day type, and the share eaten as planned.
 
-    A unit is read as the meal reader reads it: nutrition-mcp's own unit for the food, else the
-    catalogue's measure, which goes to nutrition-mcp in grams. Raises LogRejected for an entry
-    the plan or nutrition-mcp does not accept, with every such entry named, and SummaryError when
-    nutrition-mcp cannot be used.
+    A unit is read as the meal reader reads it (`Catalogue.meal_item`): kilograms and litres as
+    grams and millilitres, and a catalogue measure for a food nutrition-mcp has no such unit for
+    in grams. Raises LogRejected for an entry the plan or nutrition-mcp does not accept, with
+    every such entry named, and SummaryError when nutrition-mcp cannot be used.
     """
     problems = log_problems(rules, log)
     if problems:
