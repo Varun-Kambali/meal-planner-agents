@@ -171,9 +171,22 @@ async def test_a_slot_with_no_entry_is_not_as_planned() -> None:
 
     summary = await summary_of(log)
 
-    # Two dates of four slots each, and three of the eight were eaten as planned.
+    # Monday to Tuesday is two days of four slots each, and three of the eight were eaten as
+    # planned.
     assert summary.planned_meals == 8
     assert summary.as_planned_share == 3 / 8
+
+
+async def test_a_day_with_no_entries_between_two_logged_days_was_not_eaten_as_planned() -> None:
+    # Monday and Wednesday are logged in full, and Tuesday was forgotten.
+    log = log_of(*(entry(MON, slot) for slot in SLOTS), *(entry(WEEK[2], slot) for slot in SLOTS))
+
+    summary = await summary_of(log)
+
+    assert summary.planned_meals == 12
+    assert summary.as_planned_share == 8 / 12
+    # Only a date with entries has a day of its own.
+    assert [day.date for day in summary.days] == [MON, WEEK[2]]
 
 
 async def test_a_log_with_no_entries_plans_nothing() -> None:

@@ -145,8 +145,8 @@ class WeekSummary(_Model):
     """The days of a log, and how much of the plan was followed."""
 
     days: list[DaySummary]
-    # Meals eaten as planned over the meals the plan has on the dates of the log. A slot with no
-    # entry was not eaten as planned.
+    # Meals eaten as planned over the meals the plan has on every date from the log's first to its
+    # last. A slot with no entry, also on a date with none, was not eaten as planned.
     as_planned_share: float
     days_on_target: int
     planned_meals: int
@@ -240,8 +240,10 @@ async def summarise(
     ]
 
     # Every day type of a plan has the plan's slots, so each date plans as many meals as the plan
-    # has slots, whether or not the log has an entry for each.
-    planned_meals = len(days) * len(rules.slots)
+    # has slots, whether or not the log has an entry for each. The dates run from the log's first
+    # to its last, so a day with no entries between two logged ones was not eaten as planned.
+    span = (days[-1].date - days[0].date).days + 1 if days else 0
+    planned_meals = span * len(rules.slots)
     as_planned = sum(1 for entry in log.entries if entry.status == "as_planned")
     return WeekSummary(
         days=days,
