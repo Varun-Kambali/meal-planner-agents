@@ -27,7 +27,7 @@ for grams of catalogue ingredients; every nutrition number comes from nutrition-
 
 import asyncio
 import operator
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -446,7 +446,9 @@ class _Evaluation:
 
 def _evaluate(
     recipes: dict[_RecipeKey, CheckedRecipe],
-    deps: _Deps,
+    rules: PlanRules,
+    catalogue: Catalogue,
+    s: Settings,
     repairable: frozenset[_RecipeKey],
     fresh: frozenset[_RecipeKey],
 ) -> _Evaluation:
@@ -462,7 +464,6 @@ def _evaluate(
     and none of them fails on its own: those are rewritten first, and the day is then worked out
     again.
     """
-    rules, s = deps.rules, deps.settings
     found: dict[_RecipeKey, list[Failure]] = {}
     for key, recipe in recipes.items():
         # Why there are no numbers is only carried while there are none.
@@ -471,7 +472,7 @@ def _evaluate(
             if recipe.nutrition is not None
             else [f for f in recipe.failures if f.check in _CARRIED]
         )
-        failures += check_catalogue(recipe.draft, deps.catalogue, rules)
+        failures += check_catalogue(recipe.draft, catalogue, rules)
         if recipe.nutrition is not None:
             failures += check_slot_targets(recipe.nutrition, recipe.spec, s)
         failures += check_gear_and_time(recipe.draft, rules, recipe.spec.slot)
@@ -502,13 +503,33 @@ def _evaluate(
     return _Evaluation(
         recipes={key: r.model_copy(update={"failures": found[key]}) for key, r in recipes.items()},
         days=reports,
-        no_waste=check_no_waste(list(recipes.values()), deps.catalogue, rules, s),
+        no_waste=check_no_waste(list(recipes.values()), catalogue, rules, s),
     )
 
 
-def _rank(deps: _Deps) -> Callable[[_RecipeKey], int]:
+def evaluate_week(
+    recipes: Sequence[CheckedRecipe], rules: PlanRules, *, catalogue: Catalogue, settings: Settings
+) -> tuple[list[CheckedRecipe], list[DayReport], dict[tuple[str, DayKey], Failure]]:
+    """Every check of the graph's last round on a set of recipes no one will repair.
+
+    The recipes come with their numbers (see `with_numbers`), and with the failure that says why
+    when they have none. Each gets the failures the graph's check would give it when every recipe
+    is new and may be rewritten: a clash between two recipes goes to the later day, and a day
+    that misses a target, with all its slots there and none failing on its own, is blamed on its
+    worst recipe. Returns the recipes in week order, the days and the no-waste warnings. The eval
+    scores its single-call baseline with this, so it is held to exactly the pipeline's checks.
+    """
+    keyed = {(r.spec.day, r.spec.slot.id): r for r in recipes}
+    everything = frozenset(keyed)
+    evaluation = _evaluate(keyed, rules, catalogue, settings, everything, everything)
+    rank = _rank(rules)
+    ordered = [evaluation.recipes[key] for key in sorted(evaluation.recipes, key=rank)]
+    return ordered, evaluation.days, evaluation.no_waste
+
+
+def _rank(rules: PlanRules) -> Callable[[_RecipeKey], int]:
     """A recipe's place in the week: by day, then by the plan's order of slots."""
-    slot_ids = [slot.id for slot in deps.rules.slots]
+    slot_ids = [slot.id for slot in rules.slots]
 
     def rank(key: _RecipeKey) -> int:
         day, slot_id = key
@@ -526,7 +547,7 @@ def _settle_unwritten(
     Giving up on a replacement puts the old recipe back, so a failed replacement never takes a
     recipe out of the week.
     """
-    rank = _rank(deps)
+    rank = _rank(deps.rules)
     jobs: list[Job] = []
     gave_up: dict[_RecipeKey, str] = {}
     restored: dict[_RecipeKey, CheckedRecipe] = {}
@@ -566,7 +587,7 @@ def _repair_jobs(
     A recipe whose numbers could not be had from nutrition-mcp is left out: the writer cannot
     fix that, and rewriting it would only spend a call.
     """
-    rank = _rank(deps)
+    rank = _rank(deps.rules)
     jobs: list[Job] = []
     for slot in deps.rules.slots:
         failing = [
@@ -599,7 +620,7 @@ def _announce(state: _State, deps: _Deps, evaluation: _Evaluation) -> None:
     """Say which recipes were checked for the first time, or whose failures have changed."""
     emit = get_stream_writer()
     fresh = set(state["fresh"])
-    for key in sorted(evaluation.recipes, key=_rank(deps)):
+    for key in sorted(evaluation.recipes, key=_rank(deps.rules)):
         new, old = evaluation.recipes[key], state["recipes"].get(key)
         if key in fresh or (old is not None and old.failures != new.failures):
             emit(
@@ -619,7 +640,14 @@ async def _check(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     unwritten = {**state["unwritten"], **gave_up}
     repairable = state["scope"] - unwritten.keys()
     fresh = frozenset(state["fresh"])
-    evaluation = _evaluate({**state["recipes"], **restored}, deps, repairable, fresh)
+    evaluation = _evaluate(
+        {**state["recipes"], **restored},
+        deps.rules,
+        deps.catalogue,
+        deps.settings,
+        repairable,
+        fresh,
+    )
     _announce(state, deps, evaluation)
     if rounds_left:
         busy = {job.slot_id for job in work}
@@ -637,7 +665,7 @@ async def _check(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
 
 
 async def _report(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
-    rank = _rank(runtime.context)
+    rank = _rank(runtime.context.rules)
     usage = state["usage"]
     week = WeekResult(
         recipes=[state["recipes"][key] for key in sorted(state["recipes"], key=rank)],
