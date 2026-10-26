@@ -32,11 +32,11 @@ Each command and the API start nutrition-mcp themselves. `week`, `read` and the 
 ```bash
 uv run --env-file .env meal-planner week tests/fixtures/plans/office_weekday.json --out week.json
 uv run --env-file .env meal-planner read "2 rotis and a katori of dal"
-uv run --env-file .env meal-planner summary rules.json log.json
+uv run meal-planner summary tests/fixtures/plans/office_weekday.json tests/fixtures/logs/office_weekday_log.json
 make run   # the API on 127.0.0.1:8000
 ```
 
-`week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Details are in [docs/architecture.md](docs/architecture.md).
+`week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The log in the example is made up, for the same plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Details are in [docs/architecture.md](docs/architecture.md).
 
 ## Design decisions
 
