@@ -28,6 +28,6 @@ Every summary costs nutrition-mcp calls, one for each meal eaten, and no model c
 
 A food removed from nutrition-mcp's data later, or a unit it stops reading, makes an old log fail with the entry named, and the person fixes the entry. The same goes for a log whose slot the plan has since dropped.
 
-The export schema (`schemas/export.json`) cannot say the rules that span fields or entries: a skipped meal lists no foods and any other lists some, a slot appears once for a date, the dates run to at most 7 days, and every slot is one the plan has. The browser's import check, which is not built yet, has to run those as well as the schema, so that a bad file fails at import with the entry named instead of at the first summary.
+The export schema (`schemas/export.json`) does not say the rules that span fields or entries: a skipped meal lists no foods and any other lists some, a slot appears once for a date, the dates run to at most 7 days, and every slot is one the plan has. The browser's import check, which is not built yet, has to run those as well as the schema, so that a bad file fails at import with the entry named instead of at the first summary.
 
 A slot with no entry counts as not as planned, also on a date with no entries between two logged dates, so the share does not rise because meals went unlogged. Dates after the last entry are not counted. A date with no entries gets no day summary, since nothing is known about what was eaten on it.
