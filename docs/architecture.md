@@ -251,4 +251,4 @@ Today only the local run and the image build exist. The rest is the plan.
 
 - Code fits a recipe's portions to its slot's calories, and the writer is shown nutrition per 100 g and the day's limits, each behind a switch so the eval can measure it ([0005](decisions/0005-code-fits-portions.md)).
 - The model reads a typed meal and picks among nutrition-mcp's options when the search leaves a name open; code checks the amount and settles the unit, and nutrition-mcp gives every number ([0006](decisions/0006-reading-a-typed-meal.md)).
-- The meal log holds foods and amounts and no numbers, and the server works every meal out again ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)).
+- The meal log holds foods and amounts and no numbers, and the server works out every meal that was eaten again ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)).

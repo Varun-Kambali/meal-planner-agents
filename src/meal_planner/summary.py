@@ -1,9 +1,9 @@
 """The meal log, and the day and week totals it comes to against the plan.
 
 The log is what the browser keeps of the week: for each planned meal, how it went and the foods
-eaten, as ids, amounts and units. It holds no number. A summary works every meal out again with
-nutrition-mcp, adds up each day with the same function the day checks use and holds it to the
-targets of its day type, so a day eaten and a day written are judged alike.
+eaten, as ids, amounts and units. It holds no number. A summary works out every meal that was
+eaten again with nutrition-mcp, adds up each day with the same function the day checks use and
+holds it to the targets of its day type, so a day eaten and a day written are judged alike.
 
 A log that does not fit is refused with the entry named by its date and slot, never read around:
 an entry whose slot the plan lacks, a food nutrition-mcp does not know or refuses an amount or
