@@ -30,12 +30,10 @@ def unknown_foods(
 
     `under` is where the rules sit in the input, so that the location points at the right field.
     """
-    found: list[Problem] = []
-    for message in check_rules_against(rules, catalogue):
-        # "food.liked_foods: 'x' is not in the catalogue": the field path, then what is wrong.
-        field, _, text = message.partition(": ")
-        found.append({"loc": [*under, *field.split(".")], "msg": text})
-    return found
+    return [
+        {"loc": [*under, *unknown.loc], "msg": unknown.message}
+        for unknown in check_rules_against(rules, catalogue)
+    ]
 
 
 def where(problem: Problem) -> str:

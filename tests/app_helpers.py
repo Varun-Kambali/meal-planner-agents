@@ -7,12 +7,63 @@ looks for it in every place it must not appear.
 
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from nutrition_mcp.schemas import MealItemIn, MealResult
-from week_helpers import PLAN, SLOTS, SlotModel, SpyNutrition, good
+from week_helpers import (
+    PLAN,
+    SLOTS,
+    SlotModel,
+    SpyNutrition,
+    good,
+    model_for,
+    write_catalogue_file,
+)
+
+from meal_planner.api import create_app
+from meal_planner.config import Settings
+from meal_planner.llm import ModelPort
+from meal_planner.nutrition import NutritionPort
 
 MARK = "ZXQ-MARKER-7731"
+
+
+# The fixture plan excludes brinjal, and the app refuses a plan that names a food it lacks.
+EXTRA_FOODS = ("brinjal",)
+
+
+def settings_for(folder: Path, **changes: Any) -> Settings:
+    # The limit is high so that a test that is not about it does not trip over it.
+    values: dict[str, Any] = {
+        "catalogue_path": write_catalogue_file(folder, *EXTRA_FOODS),
+        "rate_limit_per_minute": 1000,
+    }
+    return Settings(**(values | changes))
+
+
+def make_app(
+    folder: Path,
+    *,
+    model: ModelPort | None = None,
+    nutrition: NutritionPort | None = None,
+    **changes: Any,
+) -> FastAPI:
+    return create_app(
+        settings_for(folder, **changes),
+        model=model or model_for(),
+        nutrition=nutrition or SpyNutrition(*EXTRA_FOODS),
+    )
+
+
+@contextmanager
+def serving(folder: Path, **kwargs: Any) -> Iterator[TestClient]:
+    with TestClient(make_app(folder, **kwargs)) as client:
+        yield client
 
 
 class ExplodingNutrition(SpyNutrition):

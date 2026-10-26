@@ -408,9 +408,9 @@ async def test_rules_with_unknown_liked_food_reported(tmp_path: Path) -> None:
 
     problems = check_rules_against(rules, catalogue)
 
-    assert len(problems) == 1
-    assert "tofoo" in problems[0]
-    assert "liked_foods" in problems[0]
+    assert [(p.loc, p.message) for p in problems] == [
+        (("food", "liked_foods"), "'tofoo' is not in the catalogue")
+    ]
 
 
 async def test_rules_with_unknown_excluded_food_reported(tmp_path: Path) -> None:
@@ -419,9 +419,9 @@ async def test_rules_with_unknown_excluded_food_reported(tmp_path: Path) -> None
 
     problems = check_rules_against(rules, catalogue)
 
-    assert len(problems) == 1
-    assert "brinjall" in problems[0]
-    assert "exclude_foods" in problems[0]
+    assert [(p.loc, p.message) for p in problems] == [
+        (("food", "exclude_foods"), "'brinjall' is not in the catalogue")
+    ]
 
 
 async def test_each_unknown_id_gets_its_own_message(tmp_path: Path) -> None:
@@ -430,10 +430,11 @@ async def test_each_unknown_id_gets_its_own_message(tmp_path: Path) -> None:
 
     problems = check_rules_against(rules, catalogue)
 
-    assert len(problems) == 3
-    assert "brinjall" in problems[0]
-    assert "tofoo" in problems[1]
-    assert "paner" in problems[2]
+    assert [(p.loc[-1], p.message) for p in problems] == [
+        ("exclude_foods", "'brinjall' is not in the catalogue"),
+        ("liked_foods", "'tofoo' is not in the catalogue"),
+        ("liked_foods", "'paner' is not in the catalogue"),
+    ]
 
 
 async def test_rules_naming_only_known_foods_report_nothing(tmp_path: Path) -> None:

@@ -11,14 +11,17 @@ from typing import Any, Literal
 import pytest
 import yaml
 from app_helpers import (
+    EXTRA_FOODS,
     MARK,
     ExplodingNutrition,
     assert_no_marker,
     log_entries,
+    make_app,
     marked_plan,
     plan_json,
     renamed,
     renamed_replies,
+    serving,
 )
 from fakes import FakeNutrition
 from fastapi import FastAPI
@@ -33,7 +36,6 @@ from week_helpers import (
     model_for,
     raw,
     recipe_of,
-    write_catalogue_file,
 )
 
 from meal_planner.api import MAX_ATTEMPTS, app_factory, create_app
@@ -44,39 +46,6 @@ from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.reader import ReadResult
 from meal_planner.startup import StartupError
 from meal_planner.week_events import WeekResult
-
-# The fixture plan excludes brinjal, and the app refuses a plan that names a food it lacks.
-EXTRA_FOODS = ("brinjal",)
-
-
-def settings_for(folder: Path, **changes: Any) -> Settings:
-    # The limit is high so that a test that is not about it does not trip over it.
-    values: dict[str, Any] = {
-        "catalogue_path": write_catalogue_file(folder, *EXTRA_FOODS),
-        "rate_limit_per_minute": 1000,
-    }
-    return Settings(**(values | changes))
-
-
-def make_app(
-    folder: Path,
-    *,
-    model: ModelPort | None = None,
-    nutrition: NutritionPort | None = None,
-    **changes: Any,
-) -> FastAPI:
-    return create_app(
-        settings_for(folder, **changes),
-        model=model or model_for(),
-        nutrition=nutrition or SpyNutrition(*EXTRA_FOODS),
-    )
-
-
-@contextmanager
-def serving(folder: Path, **kwargs: Any) -> Iterator[TestClient]:
-    with TestClient(make_app(folder, **kwargs)) as client:
-        yield client
-
 
 # The simple routes
 

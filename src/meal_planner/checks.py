@@ -18,7 +18,7 @@ Two conventions run through the nutrition checks:
 import math
 import re
 from collections import defaultdict
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from typing import Literal
 
 from nutrition_mcp.models import DIET_SUITABLE_FOR, Nutrients
@@ -58,20 +58,40 @@ LABELS: dict[str, tuple[str, str]] = {
     "vit_d_ug": ("vitamin D", "ug"),
 }
 
-# Rounding for messages. Messages show whole numbers, rounded so a miss never reads as a pass
-# ("550 kcal, at most 550") and so the number the writer is asked to reach is one it can aim at.
+# Rounding for messages. A number is shown in whole units when that is within `_SHOWN_WITHIN` of
+# it, and with one or two decimals when it is not, so a limit of 2.4 ug is not shown as 3 and
+# 17.9 mg is not shown as 17. Rounding runs the way that keeps a miss a miss ("550 kcal, at most
+# 550" never appears) and gives the writer a number it can aim at: up for a floor, down for a cap
+# and for what a recipe has.
+_SHOWN_WITHIN = 0.02
 
 
-def _up(x: float) -> int:
-    return math.ceil(x - _EPS)
+def _shown(x: float, whole: Callable[[float], float]) -> str:
+    """`x` to the fewest decimals (none, one or two) that keep it within `_SHOWN_WITHIN`, with
+    `whole` turning a scaled value into the whole number to keep."""
+    for places in (0, 1, 2):
+        scale = 10**places
+        kept = whole(x * scale) / scale
+        if abs(kept - x) <= _SHOWN_WITHIN * abs(x) + _EPS or places == 2:
+            break
+    return f"{kept:.{places}f}"
 
 
-def _down(x: float) -> int:
-    return math.floor(x + _EPS)
+def _up(x: float) -> str:
+    return _shown(x, lambda scaled: math.ceil(scaled - _EPS))
+
+
+def _down(x: float) -> str:
+    return _shown(x, lambda scaled: math.floor(scaled + _EPS))
 
 
 def _n(x: float) -> str:
-    return f"{x:.0f}"
+    return _shown(x, round)
+
+
+def _foods(food_ids: Iterable[str]) -> str:
+    """Foods as a person reads them: "mustard_oil" is "mustard oil"."""
+    return ", ".join(food_id.replace("_", " ") for food_id in food_ids)
 
 
 def _need(floor: float | None, cap: float | None, unit: str) -> str:
@@ -95,11 +115,12 @@ def _verdict(
 ) -> Failure | None:
     """Whether `value` meets its floor and cap, as a failure that says how it does not.
 
-    `scope` is "slot" or "day". `missing` names the foods with no value for the nutrient, and
-    is None when the value is complete; when it is not None, `value` is a lower bound.
+    `scope` is "slot" or "day". `missing` holds the ids of the foods with no value for the
+    nutrient, and is None when the value is complete; when it is not None, `value` is a lower
+    bound. The message names those foods, and nothing else, in `_foods` form.
     """
     name, unit = LABELS[key]
-    lack = f" (no value for {', '.join(missing)})" if missing else ""
+    lack = f" (no value for {_foods(missing)})" if missing else ""
     partial = missing is not None
     message: str | None = None
     if value is None:
@@ -381,34 +402,51 @@ def check_day_totals(
     return [f for f in found if f is not None], soft
 
 
+def add_up_meals(
+    meals: Sequence[tuple[MealResult | None, Sequence[str]]],
+) -> tuple[Nutrients, dict[str, list[str]]]:
+    """Add up what nutrition-mcp says each meal has, and name the foods that lack each nutrient.
+
+    A meal comes with the ids of the foods it is made of. The second result names, for each
+    nutrient, the ids of the foods with no value for it, so its total is a lower bound. The
+    names are always foods: nutrition-mcp's own list, or all the foods of a meal it could not
+    work out (None), which then counts as lacking every nutrient so the sum cannot pass as if it
+    were not there. A meal whose total is None for a nutrient without nutrition-mcp saying why
+    names its foods too. With no meals, nothing is known.
+    """
+    parts: list[tuple[str, Nutrients]] = []
+    incomplete: dict[str, list[str]] = {}
+    for position, (meal, foods) in enumerate(meals):
+        if meal is None:
+            for key in NUTRIENT_KEYS:
+                _add_names(incomplete, key, foods)
+            continue
+        parts.append((str(position), meal.total))
+        for key in NUTRIENT_KEYS:
+            if key in meal.total_incomplete:
+                _add_names(incomplete, key, meal.total_incomplete[key])
+            elif meal.total.get(key) is None:
+                _add_names(incomplete, key, foods)
+
+    summed, _ = sum_nutrients(parts)
+    # Two decimals, as nutrition-mcp reports them, so the sum carries no float noise.
+    total = Nutrients.model_validate(
+        {key: None if value is None else round(value, DECIMALS) for key, value in summed}
+    )
+    return total, incomplete
+
+
 def check_day(
     day: DayKey, recipes: list[CheckedRecipe], day_type: DayType, s: Settings
 ) -> DayReport:
     """Add up the day's recipes and hold the sum to the day type.
 
     Recipes of other days in `recipes` are left out. A recipe nutrition-mcp could not compute
-    counts as lacking every nutrient, so the day cannot pass as if it were not there.
+    counts as lacking every nutrient in all its ingredients (see `add_up_meals`).
     """
-    parts: list[tuple[str, Nutrients]] = []
-    incomplete: dict[str, list[str]] = {}
-    for recipe in (r for r in recipes if r.spec.day == day):
-        title = recipe.draft.title
-        meal = recipe.nutrition
-        if meal is None:
-            for key in NUTRIENT_KEYS:
-                _add_names(incomplete, key, [title])
-            continue
-        parts.append((title, meal.total))
-        for key in NUTRIENT_KEYS:
-            if key in meal.total_incomplete:
-                _add_names(incomplete, key, meal.total_incomplete[key])
-            elif meal.total.get(key) is None:
-                _add_names(incomplete, key, [title])
-
-    summed, _ = sum_nutrients(parts)
-    # Two decimals, as nutrition-mcp reports them, so the sum carries no float noise.
-    total = Nutrients.model_validate(
-        {key: None if value is None else round(value, DECIMALS) for key, value in summed}
+    todays = [r for r in recipes if r.spec.day == day]
+    total, incomplete = add_up_meals(
+        [(r.nutrition, [i.id for i in r.draft.ingredients]) for r in todays]
     )
     failures, soft = check_day_totals(total, incomplete, day_type, s)
     return DayReport(day=day, totals=dict(total), failures=failures, soft=soft)

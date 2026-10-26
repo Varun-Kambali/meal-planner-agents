@@ -4,7 +4,14 @@ import math
 from datetime import time
 from typing import Annotated, Literal, Self, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 DayKey = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 Diet = Literal["veg", "egg", "non_veg", "vegan"]
@@ -69,6 +76,17 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# The nutrients whose targets are fields of a day type, and the field of each.
+CORE_TARGET_FIELDS: dict[str, str] = {
+    "kcal": "kcal",
+    "protein_g": "protein_g",
+    "sat_fat_g": "sat_fat_g_max",
+    "fibre_g": "fibre_g_min",
+    "carbs_available_g": "carbs_g",
+    "fat_g": "fat_g",
+}
+
+
 class NutrientTarget(_Model):
     """A daily target for one nutrient: at least `value` (min) or at most `value` (max)."""
 
@@ -89,6 +107,29 @@ class DayType(_Model):
     sat_fat_g_max: float = Field(gt=0)
     fibre_g_min: float = Field(gt=0)
     extra: list[NutrientTarget] = []
+
+    @field_validator("extra")
+    @classmethod
+    def _extra_targets_are_new(cls, extra: list[NutrientTarget]) -> list[NutrientTarget]:
+        """A nutrient with a target of its own field has no second one in `extra`, and no
+        nutrient has two there, so each check and each target names one nutrient once."""
+        nutrients = [target.nutrient for target in extra]
+        repeated = [n for n in dict.fromkeys(nutrients) if n in CORE_TARGET_FIELDS]
+        if repeated:
+            fields = "; ".join(
+                f"'{n}' repeats a target the day type already has; "
+                f"set it in {CORE_TARGET_FIELDS[n]} and take it out of extra"
+                for n in repeated
+            )
+            raise ValueError(f"extra: {fields}")
+        twice = [n for n in dict.fromkeys(nutrients) if nutrients.count(n) > 1]
+        if twice:
+            verb = "is" if len(twice) == 1 else "are"
+            raise ValueError(
+                f"extra: {', '.join(f'{n!r}' for n in twice)} {verb} listed more than once; "
+                "a day type has one extra target for each nutrient"
+            )
+        return extra
 
 
 class Slot(_Model):
