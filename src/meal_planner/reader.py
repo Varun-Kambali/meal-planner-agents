@@ -8,9 +8,9 @@ nutrition figure, and nothing it adds to a reply is used. Code decides the rest:
 - A food is nutrition-mcp's top search result when it is the only one or its name, an alias or
   its id is the name typed; with several, the model picks one; a name with no result, or a pick
   that is none of the results, is `missing` and left out of the total.
-- An amount that is missing (no words for it in the text), vague ("some", "a handful") or a range
-  ("2-3") is `needs_amount` whatever number the model returned. The person is asked, never given
-  a guess.
+- An amount that is missing (the model's words for it are not in the text the person typed),
+  vague ("some", "a handful") or a range ("2-3") is `needs_amount` whatever number the model
+  returned. The person is asked, never given a guess.
 - A unit nutrition-mcp has for the food goes to it. Otherwise the catalogue's measure for the
   food turns the amount into grams, if it has one; the summary reads a logged unit the same way
   (`Catalogue.meal_item`). Otherwise the item is `unknown_unit`, with the units that would work.
@@ -57,6 +57,12 @@ _DASHES = "-" + chr(0x2013) + chr(0x2014)
 _RANGE = re.compile(rf"\b{_NUMBER}(?:\s*[{_DASHES}]\s*|\s+(?:to|or)\s+){_NUMBER}\b", re.IGNORECASE)
 # Words for an amount that is not a number: "some", "a little", "a bit", "a few", "a handful".
 _VAGUE = re.compile(r"\b(?:some|little|bit|few|handfuls?|lots?)\b", re.IGNORECASE)
+# What may not touch the words for an amount in the text: a letter next to a letter they start or
+# end with, and a digit (or a decimal point and a digit) next to a digit.
+_LETTER_BEFORE = r"(?<![^\W\d_])"
+_LETTER_AFTER = r"(?![^\W\d_])"
+_DIGIT_BEFORE = r"(?<![\d.])"
+_DIGIT_AFTER = r"(?!\.?\d)"
 
 Status = Literal["matched", "needs_amount", "unknown_unit", "missing"]
 
@@ -156,7 +162,7 @@ async def read_meal(
     for item in extracted.items:
         # A food with no name is nothing the person typed.
         if item.name.strip():
-            read, meal_item = await _read_item(item, deps)
+            read, meal_item = await _read_item(item, text, deps)
             items.append(read)
             if meal_item is not None:
                 to_total.append(meal_item)
@@ -168,11 +174,13 @@ async def read_meal(
     )
 
 
-async def _read_item(item: ExtractedItem, deps: _Deps) -> tuple[ReadItem, MealItemIn | None]:
+async def _read_item(
+    item: ExtractedItem, text: str, deps: _Deps
+) -> tuple[ReadItem, MealItemIn | None]:
     """The item, and what the meal's total is to ask nutrition-mcp about it if it matched."""
     name = item.name.strip()
     typed_unit = (item.unit or "").strip() or None
-    amount = _stated_amount(item)
+    amount = _stated_amount(item, text)
     food = await _find_food(name, deps)
     if food is None:
         return _unread(name, None, amount, typed_unit, "missing"), None
@@ -223,19 +231,36 @@ def _unread(
     )
 
 
-def _stated_amount(item: ExtractedItem) -> float | None:
+def _stated_amount(item: ExtractedItem, text: str) -> float | None:
     """The amount the person gave, or None when they gave none a meal can be worked out from.
 
-    Decided here and not by the model: no words for an amount ("roti and dal"), a range or a
-    vague word in them cancels whatever number the model chose.
+    Decided here and not by the model. The model's words for the amount have to be in the text
+    the person typed, so a number it made up with words to match ("roti and dal" read as amount
+    1, "1") is not used. No such words, a range or a vague word in them cancels whatever number
+    the model chose.
     """
     amount = item.amount
     if amount is None or not math.isfinite(amount) or not 0 < amount <= MAX_AMOUNT:
         return None
-    words = item.amount_text.strip()
-    if not words or _VAGUE.search(words) or _RANGE.search(words):
+    words = _folded(item.amount_text)
+    if not words or not _typed(words, _folded(text)):
+        return None
+    if _VAGUE.search(words) or _RANGE.search(words):
         return None
     return amount
+
+
+def _folded(text: str) -> str:
+    """Lower case, with every run of spaces read as one space."""
+    return " ".join(text.casefold().split())
+
+
+def _typed(words: str, text: str) -> bool:
+    """Whether `words` are in `text` on their own, and not only inside a longer number or word,
+    the way "2" is in "12" and "2.5" and "one" is in "honey"."""
+    before = _LETTER_BEFORE if words[0].isalpha() else _DIGIT_BEFORE if words[0].isdigit() else ""
+    after = _LETTER_AFTER if words[-1].isalpha() else _DIGIT_AFTER if words[-1].isdigit() else ""
+    return re.search(before + re.escape(words) + after, text) is not None
 
 
 def _valid_units(food: FoodSummary, catalogue: Catalogue, own: Iterable[str]) -> list[str]:

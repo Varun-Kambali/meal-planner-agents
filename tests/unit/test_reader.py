@@ -189,14 +189,69 @@ async def test_vague_words_need_an_amount_whatever_the_model_returned(amount_tex
 
 
 @pytest.mark.parametrize(
-    "amount_text", ["2", "two", "half", "1/2", "a couple", "2.5", "a", "bitter"]
+    ("text", "amount_text"),
+    [
+        ("2 rotis", "2"),
+        ("two rotis", "two"),
+        ("a couple of rotis", "a couple"),
+        ("rotis x2", "x2"),
+        ("2rotis", "2"),
+        ("1/2 a dozen rotis", "1/2 a dozen"),
+        # Case and spaces are folded on both sides.
+        ("TWO rotis", "two"),
+        ("two   Rotis", " Two "),
+        ("a couple\nof rotis", "A  Couple"),
+    ],
 )
-async def test_a_stated_amount_is_read(amount_text: str) -> None:
+async def test_an_amount_in_the_persons_words_is_read(text: str, amount_text: str) -> None:
     model = model_of(reading(said("roti", 2, "roti", amount_text)))
 
-    (item,) = (await read("2 rotis", model)).items
+    (item,) = (await read(text, model)).items
 
     assert (item.status, item.amount, item.grams) == ("matched", 2, 80)
+
+
+@pytest.mark.parametrize(
+    ("text", "amount_text"),
+    [
+        # Words the person did not type: the model made them up with the number.
+        ("2 rotis", "two"),
+        ("2 rotis", "half"),
+        ("2 rotis", "bitter"),
+        ("2 rotis", "2 plates"),
+        # In the text, but only inside a longer number or word.
+        ("12 rotis", "2"),
+        ("2.5 rotis", "2"),
+        ("roti with honey", "one"),
+        ("chapati", "a"),
+    ],
+)
+async def test_an_amount_the_person_did_not_type_is_not_read(text: str, amount_text: str) -> None:
+    nutrition = ReaderNutrition()
+    model = model_of(reading(said("roti", 2, "roti", amount_text)))
+
+    (item,) = (await read(text, model, nutrition)).items
+
+    assert (item.status, item.food_id, item.unit) == ("needs_amount", "chapati", "roti")
+    assert (item.amount, item.grams, item.nutrition) == (None, None, None)
+    assert [call[0] for call in nutrition.asked] == ["search"]
+
+
+async def test_roti_and_dal_with_an_invented_amount_text_need_amounts() -> None:
+    # The model made up the number and the words for it.
+    nutrition = ReaderNutrition()
+    model = model_of(
+        reading(said("roti", 1, None, "1"), said("dal", 1, "katori", "1 katori")), choosing(0)
+    )
+
+    result = await read("roti and dal", model, nutrition)
+
+    assert [(item.status, item.amount, item.grams) for item in result.items] == [
+        ("needs_amount", None, None),
+        ("needs_amount", None, None),
+    ]
+    assert (result.total, result.missing) == (None, [])
+    assert [call[0] for call in nutrition.asked] == ["search", "search"]
 
 
 @pytest.mark.parametrize("amount_text", ["", " ", "\n "])
@@ -247,7 +302,7 @@ async def test_an_amount_that_is_not_a_positive_number_needs_an_amount(amount: f
     nutrition = ReaderNutrition()
     model = model_of(reading(said("roti", amount, "roti", "2")))
 
-    (item,) = (await read("0 rotis", model, nutrition)).items
+    (item,) = (await read("2 rotis", model, nutrition)).items
 
     assert (item.status, item.amount, item.grams) == ("needs_amount", None, None)
     assert [call[0] for call in nutrition.asked] == ["search"]
@@ -355,7 +410,7 @@ async def test_a_unit_nobody_has_is_unknown_unit_with_the_valid_units() -> None:
         reading(
             said("pav", 2, None, "2"),
             said("egg", 2, "glasses", "2"),
-            said("roti", 1, "cup", "1"),
+            said("roti", 1, "cup", "a"),
         )
     )
 
@@ -395,7 +450,7 @@ async def test_an_amount_over_the_limit_needs_an_amount(
     nutrition = ReaderNutrition()
     model = model_of(reading(said(name, amount, unit, str(amount))))
 
-    result = await read("a lot of food", model, nutrition)
+    result = await read(f"{amount} {unit} {name}", model, nutrition)
 
     (item,) = result.items
     assert (item.status, item.amount, item.grams, item.nutrition) == (
@@ -412,7 +467,7 @@ async def test_an_amount_over_the_limit_needs_an_amount(
 async def test_exactly_5000_g_is_read() -> None:
     model = model_of(reading(said("chicken", 5000, "g", "5000")))
 
-    (item,) = (await read("5 kg chicken", model)).items
+    (item,) = (await read("5000 g chicken", model)).items
 
     assert (item.status, item.grams) == ("matched", 5000)
 
@@ -421,7 +476,7 @@ async def test_exactly_5000_g_is_read() -> None:
 
 
 async def test_a_name_with_one_result_is_taken_without_asking_the_model() -> None:
-    model = model_of(reading(said("phulka", 1, "roti", "1")))
+    model = model_of(reading(said("phulka", 1, "roti", "a")))
 
     (item,) = (await read("a phulka", model)).items
 
@@ -519,7 +574,7 @@ async def test_a_name_that_cannot_be_searched_for_is_missing(name: str) -> None:
 
 async def test_an_item_with_no_name_is_left_out() -> None:
     nutrition = ReaderNutrition()
-    model = model_of(reading(said("  ", 1, "g", "1"), said("roti", 1, "roti", "1")))
+    model = model_of(reading(said("  ", 1, "g", "1"), said("roti", 1, "roti", "a")))
 
     result = await read("a roti", model, nutrition)
 
@@ -531,7 +586,7 @@ async def test_items_come_back_in_the_order_written_and_missing_names_the_ones_n
     model = model_of(
         reading(
             said("pulao", 1, "plate", "a plate"),
-            said("roti", 1, "roti", "1"),
+            said("roti", 1, "roti", "a"),
             said("vada", 2, None, "2"),
             said("roti", 2, "roti", "2"),
         )
