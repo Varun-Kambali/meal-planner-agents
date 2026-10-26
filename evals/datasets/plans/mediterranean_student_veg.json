@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "name": "Mediterranean student meals without a stove",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 1900,
+      "protein_g": 82,
+      "carbs_g": 235,
+      "fat_g": 70,
+      "sat_fat_g_max": 20,
+      "fibre_g_min": 32,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:30",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "overnight jar breakfast",
+      "cook_when": "night_before",
+      "max_active_min": 5,
+      "max_total_min": 480
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:30",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "no-cook bowl",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:30",
+      "kcal_share": 0.4,
+      "protein_share": 0.4,
+      "style": "microwave bowl",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 20
+    }
+  ],
+  "gear": [
+    "microwave",
+    "kettle",
+    "jar_with_lid"
+  ],
+  "food": {
+    "diet": "veg",
+    "exclude_allergens": [
+      "tree_nuts"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "greek_yogurt",
+      "rolled_oats",
+      "olive_oil",
+      "cucumber"
+    ],
+    "cuisines": [
+      "Mediterranean"
+    ]
+  },
+  "shopping_days": [
+    "sun"
+  ]
+}

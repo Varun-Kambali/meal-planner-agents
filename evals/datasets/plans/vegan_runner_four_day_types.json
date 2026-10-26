@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "name": "Vegan runner's week with four kinds of day",
+  "day_types": [
+    {
+      "id": "long_run",
+      "name": "Long run day",
+      "kcal": 2900,
+      "protein_g": 116,
+      "carbs_g": 440,
+      "fat_g": 75,
+      "sat_fat_g_max": 15,
+      "fibre_g_min": 45,
+      "extra": [
+        {
+          "nutrient": "iron_mg",
+          "kind": "min",
+          "value": 18
+        }
+      ]
+    },
+    {
+      "id": "intervals",
+      "name": "Interval day",
+      "kcal": 2600,
+      "protein_g": 105,
+      "carbs_g": 390,
+      "fat_g": 70,
+      "sat_fat_g_max": 14,
+      "fibre_g_min": 42,
+      "extra": []
+    },
+    {
+      "id": "strength",
+      "name": "Strength day",
+      "kcal": 2500,
+      "protein_g": 124,
+      "carbs_g": 340,
+      "fat_g": 72,
+      "sat_fat_g_max": 15,
+      "fibre_g_min": 40,
+      "extra": []
+    },
+    {
+      "id": "rest",
+      "name": "Rest day",
+      "kcal": 2300,
+      "protein_g": 98,
+      "carbs_g": 325,
+      "fat_g": 68,
+      "sat_fat_g_max": 14,
+      "fibre_g_min": 38,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "rest",
+    "tue": "intervals",
+    "wed": "strength",
+    "thu": "intervals",
+    "fri": "rest",
+    "sat": "long_run",
+    "sun": "strength"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "06:30",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "porridge or smoothie bowl",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "mid_morning",
+      "name": "Mid-morning",
+      "eat_at": "10:30",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "fruit and seeds",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "grain bowl with pulses",
+      "cook_when": "evening_before",
+      "max_active_min": 35,
+      "max_total_min": 60
+    },
+    {
+      "id": "snack",
+      "name": "Before a run",
+      "eat_at": "17:00",
+      "kcal_share": 0.15,
+      "protein_share": 0.15,
+      "style": "pre-run snack",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 10
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "oven-roasted vegetables with tofu or chickpeas",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 50
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "blender",
+    "oven",
+    "stovetop_pan",
+    "rice_cooker"
+  ],
+  "food": {
+    "diet": "vegan",
+    "exclude_allergens": [],
+    "exclude_foods": [],
+    "liked_foods": [
+      "tofu",
+      "kabuli_chana",
+      "quinoa",
+      "banana"
+    ],
+    "cuisines": [
+      "South Indian",
+      "Mediterranean",
+      "Japanese"
+    ]
+  },
+  "shopping_days": [
+    "sun",
+    "thu"
+  ]
+}

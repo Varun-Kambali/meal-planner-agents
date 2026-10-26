@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "name": "Punjabi and Mediterranean strength training split",
+  "day_types": [
+    {
+      "id": "upper",
+      "name": "Upper body day",
+      "kcal": 2700,
+      "protein_g": 160,
+      "carbs_g": 335,
+      "fat_g": 80,
+      "sat_fat_g_max": 27,
+      "fibre_g_min": 36,
+      "extra": [
+        {
+          "nutrient": "sodium_mg",
+          "kind": "max",
+          "value": 2300
+        }
+      ]
+    },
+    {
+      "id": "lower",
+      "name": "Lower body day",
+      "kcal": 2850,
+      "protein_g": 165,
+      "carbs_g": 365,
+      "fat_g": 82,
+      "sat_fat_g_max": 27,
+      "fibre_g_min": 38,
+      "extra": [
+        {
+          "nutrient": "sodium_mg",
+          "kind": "max",
+          "value": 2300
+        }
+      ]
+    },
+    {
+      "id": "rest",
+      "name": "Rest day",
+      "kcal": 2400,
+      "protein_g": 145,
+      "carbs_g": 280,
+      "fat_g": 78,
+      "sat_fat_g_max": 26,
+      "fibre_g_min": 34,
+      "extra": [
+        {
+          "nutrient": "sodium_mg",
+          "kind": "max",
+          "value": 2300
+        }
+      ]
+    }
+  ],
+  "week": {
+    "mon": "upper",
+    "tue": "lower",
+    "wed": "rest",
+    "thu": "upper",
+    "fri": "lower",
+    "sat": "rest",
+    "sun": "rest"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:00",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "eggs with a grain",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 20
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "packed rajma or chicken bowl",
+      "cook_when": "evening_before",
+      "max_active_min": 35,
+      "max_total_min": 60
+    },
+    {
+      "id": "pre_workout",
+      "name": "Before training",
+      "eat_at": "17:00",
+      "kcal_share": 0.08,
+      "protein_share": 0.1,
+      "style": "light pre-workout snack",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "post_workout",
+      "name": "After training",
+      "eat_at": "19:00",
+      "kcal_share": 0.17,
+      "protein_share": 0.15,
+      "style": "blended shake or yogurt bowl",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 10
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "21:00",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "air-fryer or oven protein with vegetables",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 45
+    }
+  ],
+  "gear": [
+    "air_fryer",
+    "pressure_cooker",
+    "stovetop_pan",
+    "oven",
+    "blender"
+  ],
+  "food": {
+    "diet": "non_veg",
+    "exclude_allergens": [],
+    "exclude_foods": [],
+    "liked_foods": [
+      "chicken_breast",
+      "rajma",
+      "greek_yogurt"
+    ],
+    "cuisines": [
+      "Punjabi",
+      "Mediterranean"
+    ]
+  },
+  "shopping_days": [
+    "sun",
+    "wed"
+  ]
+}

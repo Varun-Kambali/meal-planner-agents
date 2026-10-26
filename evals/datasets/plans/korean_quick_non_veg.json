@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "name": "Korean-style quick meals",
+  "day_types": [
+    {
+      "id": "workday",
+      "name": "Workday",
+      "kcal": 2250,
+      "protein_g": 120,
+      "carbs_g": 285,
+      "fat_g": 70,
+      "sat_fat_g_max": 22,
+      "fibre_g_min": 29,
+      "extra": []
+    },
+    {
+      "id": "weekend",
+      "name": "Weekend",
+      "kcal": 2450,
+      "protein_g": 124,
+      "carbs_g": 310,
+      "fat_g": 80,
+      "sat_fat_g_max": 25,
+      "fibre_g_min": 29,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "workday",
+    "tue": "workday",
+    "wed": "workday",
+    "thu": "workday",
+    "fri": "workday",
+    "sat": "weekend",
+    "sun": "weekend"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.22,
+      "protein_share": 0.22,
+      "style": "rice and egg breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "dosirak lunch box",
+      "cook_when": "evening_before",
+      "max_active_min": 25,
+      "max_total_min": 40
+    },
+    {
+      "id": "snack",
+      "name": "Snack",
+      "eat_at": "16:30",
+      "kcal_share": 0.08,
+      "protein_share": 0.08,
+      "style": "fruit snack",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "stir-fry with rice and kimchi",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 35
+    }
+  ],
+  "gear": [
+    "rice_cooker",
+    "stovetop_pan",
+    "microwave"
+  ],
+  "food": {
+    "diet": "non_veg",
+    "exclude_allergens": [
+      "sesame"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "kimchi",
+      "egg",
+      "chicken_breast"
+    ],
+    "cuisines": [
+      "Korean"
+    ]
+  },
+  "shopping_days": [
+    "sat",
+    "wed"
+  ]
+}

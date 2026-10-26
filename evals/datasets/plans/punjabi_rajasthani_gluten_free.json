@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "name": "Punjabi and Rajasthani vegetarian without gluten",
+  "day_types": [
+    {
+      "id": "active",
+      "name": "Active day",
+      "kcal": 2300,
+      "protein_g": 104,
+      "carbs_g": 300,
+      "fat_g": 75,
+      "sat_fat_g_max": 26,
+      "fibre_g_min": 33,
+      "extra": []
+    },
+    {
+      "id": "quiet",
+      "name": "Quiet day",
+      "kcal": 2000,
+      "protein_g": 90,
+      "carbs_g": 255,
+      "fat_g": 68,
+      "sat_fat_g_max": 24,
+      "fibre_g_min": 31,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "active",
+    "tue": "quiet",
+    "wed": "active",
+    "thu": "quiet",
+    "fri": "active",
+    "sat": "active",
+    "sun": "quiet"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "besan chilla-style breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 20
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "dal or rajma with rice",
+      "cook_when": "evening_before",
+      "max_active_min": 35,
+      "max_total_min": 90
+    },
+    {
+      "id": "snack",
+      "name": "Snack",
+      "eat_at": "17:00",
+      "kcal_share": 0.15,
+      "protein_share": 0.15,
+      "style": "air-fried snack",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 20
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "paneer or vegetable curry with rice",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 40
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "kadhai",
+    "air_fryer"
+  ],
+  "food": {
+    "diet": "veg",
+    "exclude_allergens": [
+      "gluten"
+    ],
+    "exclude_foods": [
+      "maida"
+    ],
+    "liked_foods": [
+      "paneer",
+      "besan",
+      "rajma"
+    ],
+    "cuisines": [
+      "Punjabi",
+      "Rajasthani"
+    ]
+  },
+  "shopping_days": [
+    "sun"
+  ]
+}

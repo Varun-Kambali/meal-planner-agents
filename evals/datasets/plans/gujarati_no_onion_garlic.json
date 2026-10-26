@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "name": "Gujarati vegetarian without onion or garlic",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 1850,
+      "protein_g": 70,
+      "carbs_g": 260,
+      "fat_g": 60,
+      "sat_fat_g_max": 20,
+      "fibre_g_min": 27,
+      "extra": [
+        {
+          "nutrient": "iron_mg",
+          "kind": "min",
+          "value": 18
+        }
+      ]
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:00",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "steamed snack breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 40
+    },
+    {
+      "id": "mid_morning",
+      "name": "Mid-morning",
+      "eat_at": "10:30",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "fruit and nuts",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "12:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "dal, rice, roti and a shaak",
+      "cook_when": "fresh",
+      "max_active_min": 35,
+      "max_total_min": 50
+    },
+    {
+      "id": "snack",
+      "name": "Evening snack",
+      "eat_at": "17:00",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "steamed or roasted farsan",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 40
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "19:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "khichdi or thepla dinner",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 40
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "kadhai",
+    "steamer",
+    "blender"
+  ],
+  "food": {
+    "diet": "veg",
+    "exclude_allergens": [],
+    "exclude_foods": [
+      "onion",
+      "garlic",
+      "potato"
+    ],
+    "liked_foods": [
+      "besan",
+      "moong_dal",
+      "methi_leaves"
+    ],
+    "cuisines": [
+      "Gujarati"
+    ]
+  },
+  "shopping_days": [
+    "sun"
+  ]
+}

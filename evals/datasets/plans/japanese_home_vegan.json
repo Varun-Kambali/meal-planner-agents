@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "name": "Japanese-style vegan home meals",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 2000,
+      "protein_g": 88,
+      "carbs_g": 275,
+      "fat_g": 60,
+      "sat_fat_g_max": 12,
+      "fibre_g_min": 35,
+      "extra": [
+        {
+          "nutrient": "calcium_mg",
+          "kind": "min",
+          "value": 800
+        },
+        {
+          "nutrient": "iron_mg",
+          "kind": "min",
+          "value": 17
+        }
+      ]
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:30",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "rice bowl with tofu",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 35
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "12:30",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "bento box",
+      "cook_when": "evening_before",
+      "max_active_min": 35,
+      "max_total_min": 50
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "19:30",
+      "kcal_share": 0.4,
+      "protein_share": 0.4,
+      "style": "steamed vegetables, tofu and rice",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 40
+    }
+  ],
+  "gear": [
+    "rice_cooker",
+    "stovetop_pan",
+    "steamer",
+    "kettle"
+  ],
+  "food": {
+    "diet": "vegan",
+    "exclude_allergens": [
+      "peanut"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "tofu",
+      "white_rice",
+      "soy_sauce",
+      "cabbage"
+    ],
+    "cuisines": [
+      "Japanese"
+    ]
+  },
+  "shopping_days": [
+    "sat"
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "name": "Hostel room meals with a microwave and kettle",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 2200,
+      "protein_g": 100,
+      "carbs_g": 290,
+      "fat_g": 70,
+      "sat_fat_g_max": 22,
+      "fibre_g_min": 29,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.28,
+      "protein_share": 0.32,
+      "style": "microwave egg breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.36,
+      "protein_share": 0.34,
+      "style": "microwave meal",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.36,
+      "protein_share": 0.34,
+      "style": "kettle or microwave bowl",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    }
+  ],
+  "gear": [
+    "microwave",
+    "kettle"
+  ],
+  "food": {
+    "diet": "egg",
+    "exclude_allergens": [
+      "peanut",
+      "tree_nuts"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "egg",
+      "rolled_oats",
+      "banana"
+    ],
+    "cuisines": [
+      "North Indian"
+    ]
+  },
+  "shopping_days": [
+    "sat"
+  ]
+}

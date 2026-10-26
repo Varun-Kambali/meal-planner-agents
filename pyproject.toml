@@ -64,7 +64,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.mypy]
 strict = true
 # tests/fakes.py is here so mypy checks the fake nutrition-mcp against NutritionPort.
-files = ["src", "scripts", "tests/fakes.py"]
+files = ["src", "scripts", "evals", "tests/fakes.py"]
 plugins = ["pydantic.mypy"]
 
 # nutrition-mcp ships no py.typed marker, so mypy reads its source instead of treating it as Any.
