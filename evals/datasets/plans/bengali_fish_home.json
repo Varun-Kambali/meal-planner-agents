@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "name": "Bengali home cooking with fish",
+  "day_types": [
+    {
+      "id": "weekday",
+      "name": "Weekday",
+      "kcal": 2200,
+      "protein_g": 105,
+      "carbs_g": 275,
+      "fat_g": 75,
+      "sat_fat_g_max": 24,
+      "fibre_g_min": 31,
+      "extra": []
+    },
+    {
+      "id": "weekend",
+      "name": "Weekend",
+      "kcal": 2400,
+      "protein_g": 110,
+      "carbs_g": 300,
+      "fat_g": 85,
+      "sat_fat_g_max": 27,
+      "fibre_g_min": 31,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "weekday",
+    "tue": "weekday",
+    "wed": "weekday",
+    "thu": "weekday",
+    "fri": "weekday",
+    "sat": "weekend",
+    "sun": "weekend"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "light breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 25
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:30",
+      "kcal_share": 0.45,
+      "protein_share": 0.4,
+      "style": "rice, dal and a fish curry",
+      "cook_when": "fresh",
+      "max_active_min": 45,
+      "max_total_min": 75
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "21:00",
+      "kcal_share": 0.35,
+      "protein_share": 0.4,
+      "style": "rotis or rice with a vegetable",
+      "cook_when": "fresh",
+      "max_active_min": 35,
+      "max_total_min": 50
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "kadhai",
+    "stovetop_pan"
+  ],
+  "food": {
+    "diet": "non_veg",
+    "exclude_allergens": [
+      "peanut"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "rohu",
+      "mustard_oil",
+      "poppy_seeds"
+    ],
+    "cuisines": [
+      "Bengali"
+    ]
+  },
+  "shopping_days": [
+    "sun",
+    "wed"
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "name": "Mediterranean and Maharashtrian, cooked ahead",
+  "day_types": [
+    {
+      "id": "weekday",
+      "name": "Weekday",
+      "kcal": 2150,
+      "protein_g": 115,
+      "carbs_g": 260,
+      "fat_g": 72,
+      "sat_fat_g_max": 22,
+      "fibre_g_min": 31,
+      "extra": []
+    },
+    {
+      "id": "weekend",
+      "name": "Weekend",
+      "kcal": 2350,
+      "protein_g": 115,
+      "carbs_g": 290,
+      "fat_g": 80,
+      "sat_fat_g_max": 25,
+      "fibre_g_min": 31,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "weekday",
+    "tue": "weekday",
+    "wed": "weekday",
+    "thu": "weekday",
+    "fri": "weekday",
+    "sat": "weekend",
+    "sun": "weekend"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:30",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "egg breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "mid_morning",
+      "name": "Mid-morning",
+      "eat_at": "11:00",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "yogurt and fruit",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "batch-cooked grain bowl",
+      "cook_when": "evening_before",
+      "max_active_min": 45,
+      "max_total_min": 90
+    },
+    {
+      "id": "snack",
+      "name": "Snack",
+      "eat_at": "17:00",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "roasted chickpeas or fruit",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "oven tray dinner",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 50
+    }
+  ],
+  "gear": [
+    "oven",
+    "stovetop_pan",
+    "blender",
+    "air_fryer",
+    "kettle"
+  ],
+  "food": {
+    "diet": "egg",
+    "exclude_allergens": [
+      "mustard",
+      "fish"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "egg_white",
+      "greek_yogurt",
+      "olive_oil",
+      "kabuli_chana"
+    ],
+    "cuisines": [
+      "Mediterranean",
+      "Maharashtrian"
+    ]
+  },
+  "shopping_days": [
+    "sun"
+  ]
+}

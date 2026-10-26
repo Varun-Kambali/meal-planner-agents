@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "name": "Kerala home food without dairy",
+  "day_types": [
+    {
+      "id": "weekday",
+      "name": "Weekday",
+      "kcal": 2050,
+      "protein_g": 97,
+      "carbs_g": 260,
+      "fat_g": 70,
+      "sat_fat_g_max": 24,
+      "fibre_g_min": 29,
+      "extra": []
+    },
+    {
+      "id": "weekend",
+      "name": "Weekend",
+      "kcal": 2250,
+      "protein_g": 102,
+      "carbs_g": 285,
+      "fat_g": 78,
+      "sat_fat_g_max": 26,
+      "fibre_g_min": 29,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "weekday",
+    "tue": "weekday",
+    "wed": "weekday",
+    "thu": "weekday",
+    "fri": "weekday",
+    "sat": "weekend",
+    "sun": "weekend"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:30",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "steamed breakfast with egg curry",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 40
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "12:30",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "rice with a thoran and a curry",
+      "cook_when": "evening_before",
+      "max_active_min": 40,
+      "max_total_min": 60
+    },
+    {
+      "id": "snack",
+      "name": "Tea time",
+      "eat_at": "16:00",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "tea-time snack",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "19:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "light dinner",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 35
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "kadhai",
+    "steamer"
+  ],
+  "food": {
+    "diet": "egg",
+    "exclude_allergens": [
+      "milk"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "fresh_coconut",
+      "coconut_oil",
+      "egg",
+      "raw_banana"
+    ],
+    "cuisines": [
+      "Kerala",
+      "South Indian"
+    ]
+  },
+  "shopping_days": [
+    "sat"
+  ]
+}

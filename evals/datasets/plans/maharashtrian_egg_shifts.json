@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "name": "Maharashtrian home food on day and night shifts",
+  "day_types": [
+    {
+      "id": "day_shift",
+      "name": "Day shift",
+      "kcal": 2300,
+      "protein_g": 108,
+      "carbs_g": 310,
+      "fat_g": 70,
+      "sat_fat_g_max": 23,
+      "fibre_g_min": 33,
+      "extra": []
+    },
+    {
+      "id": "night_shift",
+      "name": "Night shift",
+      "kcal": 2150,
+      "protein_g": 104,
+      "carbs_g": 280,
+      "fat_g": 68,
+      "sat_fat_g_max": 22,
+      "fibre_g_min": 31,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "day_shift",
+    "tue": "day_shift",
+    "wed": "day_shift",
+    "thu": "night_shift",
+    "fri": "night_shift",
+    "sat": "night_shift",
+    "sun": "day_shift"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:30",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "poha-style or egg breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 20
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "bhakri or roti with usal",
+      "cook_when": "evening_before",
+      "max_active_min": 40,
+      "max_total_min": 70
+    },
+    {
+      "id": "snack",
+      "name": "Snack",
+      "eat_at": "17:30",
+      "kcal_share": 0.15,
+      "protein_share": 0.15,
+      "style": "quick egg snack",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "21:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "varan bhaat style dinner",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 40
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "stovetop_pan",
+    "microwave",
+    "kadhai"
+  ],
+  "food": {
+    "diet": "egg",
+    "exclude_allergens": [
+      "sesame"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "egg",
+      "moth_beans",
+      "besan"
+    ],
+    "cuisines": [
+      "Maharashtrian"
+    ]
+  },
+  "shopping_days": [
+    "sun",
+    "thu"
+  ]
+}

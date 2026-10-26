@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "name": "Korean and Japanese vegan meals",
+  "day_types": [
+    {
+      "id": "office",
+      "name": "Office day",
+      "kcal": 2100,
+      "protein_g": 90,
+      "carbs_g": 295,
+      "fat_g": 62,
+      "sat_fat_g_max": 12,
+      "fibre_g_min": 34,
+      "extra": []
+    },
+    {
+      "id": "home",
+      "name": "Work from home",
+      "kcal": 2000,
+      "protein_g": 88,
+      "carbs_g": 275,
+      "fat_g": 60,
+      "sat_fat_g_max": 12,
+      "fibre_g_min": 32,
+      "extra": []
+    },
+    {
+      "id": "weekend",
+      "name": "Weekend",
+      "kcal": 2300,
+      "protein_g": 95,
+      "carbs_g": 320,
+      "fat_g": 70,
+      "sat_fat_g_max": 14,
+      "fibre_g_min": 36,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "office",
+    "tue": "home",
+    "wed": "office",
+    "thu": "home",
+    "fri": "office",
+    "sat": "weekend",
+    "sun": "weekend"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "warm rice bowl",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 20
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "bento or dosirak box",
+      "cook_when": "evening_before",
+      "max_active_min": 25,
+      "max_total_min": 40
+    },
+    {
+      "id": "snack",
+      "name": "Snack",
+      "eat_at": "16:30",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "fruit",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "steamed or stir-fried vegetables with tofu",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 35
+    }
+  ],
+  "gear": [
+    "rice_cooker",
+    "steamer",
+    "stovetop_pan",
+    "kettle"
+  ],
+  "food": {
+    "diet": "vegan",
+    "exclude_allergens": [
+      "sesame"
+    ],
+    "exclude_foods": [
+      "brinjal"
+    ],
+    "liked_foods": [
+      "tofu",
+      "mushrooms",
+      "cabbage",
+      "soy_sauce"
+    ],
+    "cuisines": [
+      "Korean",
+      "Japanese"
+    ]
+  },
+  "shopping_days": [
+    "sat"
+  ]
+}

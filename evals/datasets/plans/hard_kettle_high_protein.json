@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "name": "Kettle-only vegetarian days without dairy",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 1400,
+      "protein_g": 175,
+      "carbs_g": 85,
+      "fat_g": 40,
+      "sat_fat_g_max": 10,
+      "fibre_g_min": 40,
+      "extra": [
+        {
+          "nutrient": "calcium_mg",
+          "kind": "min",
+          "value": 1000
+        }
+      ]
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.33,
+      "style": "kettle breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 10
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.35,
+      "protein_share": 0.34,
+      "style": "kettle lunch",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.35,
+      "protein_share": 0.33,
+      "style": "kettle dinner",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    }
+  ],
+  "gear": [
+    "kettle"
+  ],
+  "food": {
+    "diet": "veg",
+    "exclude_allergens": [
+      "milk"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "rolled_oats"
+    ],
+    "cuisines": [
+      "North Indian"
+    ]
+  },
+  "shopping_days": [
+    "sat"
+  ]
+}

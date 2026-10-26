@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "name": "South Indian office weekdays",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 2100,
+      "protein_g": 96,
+      "carbs_g": 285,
+      "fat_g": 65,
+      "sat_fat_g_max": 22,
+      "fibre_g_min": 32,
+      "extra": [
+        {
+          "nutrient": "calcium_mg",
+          "kind": "min",
+          "value": 900
+        }
+      ]
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:30",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "steamed or tawa breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 35
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "packed rice meal with a side",
+      "cook_when": "evening_before",
+      "max_active_min": 40,
+      "max_total_min": 60
+    },
+    {
+      "id": "snack",
+      "name": "Evening tiffin",
+      "eat_at": "16:30",
+      "kcal_share": 0.15,
+      "protein_share": 0.15,
+      "style": "light tiffin",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "one-pot dinner",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 45
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "kadhai",
+    "steamer",
+    "stovetop_pan"
+  ],
+  "food": {
+    "diet": "veg",
+    "exclude_allergens": [],
+    "exclude_foods": [
+      "bitter_gourd"
+    ],
+    "liked_foods": [
+      "toor_dal",
+      "fresh_coconut",
+      "curd"
+    ],
+    "cuisines": [
+      "South Indian",
+      "Kerala"
+    ]
+  },
+  "shopping_days": [
+    "sat"
+  ]
+}

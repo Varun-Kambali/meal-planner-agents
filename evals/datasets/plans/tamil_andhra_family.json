@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "name": "Tamil and Andhra family meals",
+  "day_types": [
+    {
+      "id": "work",
+      "name": "Work day",
+      "kcal": 2400,
+      "protein_g": 115,
+      "carbs_g": 315,
+      "fat_g": 75,
+      "sat_fat_g_max": 25,
+      "fibre_g_min": 31,
+      "extra": []
+    },
+    {
+      "id": "light",
+      "name": "Light day",
+      "kcal": 2100,
+      "protein_g": 105,
+      "carbs_g": 265,
+      "fat_g": 68,
+      "sat_fat_g_max": 23,
+      "fibre_g_min": 31,
+      "extra": []
+    },
+    {
+      "id": "feast",
+      "name": "Sunday lunch",
+      "kcal": 2650,
+      "protein_g": 120,
+      "carbs_g": 340,
+      "fat_g": 90,
+      "sat_fat_g_max": 32,
+      "fibre_g_min": 31,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "work",
+    "tue": "work",
+    "wed": "light",
+    "thu": "work",
+    "fri": "work",
+    "sat": "light",
+    "sun": "feast"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:30",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "idli, dosa or upma breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 35
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "12:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "rice, sambar and a dry curry",
+      "cook_when": "fresh",
+      "max_active_min": 40,
+      "max_total_min": 60
+    },
+    {
+      "id": "snack",
+      "name": "Evening snack",
+      "eat_at": "16:30",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "sundal-style snack",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 15
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "light tiffin",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 35
+    },
+    {
+      "id": "bedtime",
+      "name": "Bedtime",
+      "eat_at": "22:00",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "fruit",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "kadhai",
+    "steamer",
+    "stovetop_pan",
+    "blender",
+    "rice_cooker"
+  ],
+  "food": {
+    "diet": "non_veg",
+    "exclude_allergens": [
+      "tree_nuts",
+      "peanut"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "chicken_breast",
+      "egg",
+      "toor_dal",
+      "curry_leaves"
+    ],
+    "cuisines": [
+      "Tamil",
+      "Andhra",
+      "Chettinad"
+    ]
+  },
+  "shopping_days": [
+    "sun",
+    "wed"
+  ]
+}

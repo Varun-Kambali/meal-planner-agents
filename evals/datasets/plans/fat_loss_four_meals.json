@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "name": "Fat-loss plan with four meals",
+  "day_types": [
+    {
+      "id": "training",
+      "name": "Training day",
+      "kcal": 2050,
+      "protein_g": 160,
+      "carbs_g": 220,
+      "fat_g": 60,
+      "sat_fat_g_max": 18,
+      "fibre_g_min": 32,
+      "extra": []
+    },
+    {
+      "id": "rest",
+      "name": "Rest day",
+      "kcal": 2050,
+      "protein_g": 160,
+      "carbs_g": 195,
+      "fat_g": 70,
+      "sat_fat_g_max": 20,
+      "fibre_g_min": 32,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "training",
+    "tue": "training",
+    "wed": "rest",
+    "thu": "training",
+    "fri": "training",
+    "sat": "training",
+    "sun": "rest"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "08:00",
+      "kcal_share": 0.25,
+      "protein_share": 0.25,
+      "style": "oats or egg breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 20,
+      "max_total_min": 25
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "curry with rice or roti",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 40
+    },
+    {
+      "id": "snack",
+      "name": "Snack",
+      "eat_at": "17:00",
+      "kcal_share": 0.15,
+      "protein_share": 0.15,
+      "style": "high-protein snack",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 10
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "20:30",
+      "kcal_share": 0.3,
+      "protein_share": 0.3,
+      "style": "pan-cooked protein with vegetables",
+      "cook_when": "fresh",
+      "max_active_min": 25,
+      "max_total_min": 35
+    }
+  ],
+  "gear": [
+    "stovetop_pan",
+    "pressure_cooker"
+  ],
+  "food": {
+    "diet": "non_veg",
+    "exclude_allergens": [],
+    "exclude_foods": [],
+    "liked_foods": [
+      "chicken_breast",
+      "egg",
+      "chia_seeds",
+      "pumpkin_seeds",
+      "sunflower_seeds"
+    ],
+    "cuisines": [
+      "North Indian",
+      "South Indian",
+      "Mediterranean",
+      "East Asian"
+    ]
+  },
+  "shopping_days": [
+    "sun"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "name": "Vegan jar meals without soy or peanut",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 1900,
+      "protein_g": 150,
+      "carbs_g": 200,
+      "fat_g": 55,
+      "sat_fat_g_max": 12,
+      "fibre_g_min": 35,
+      "extra": []
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:00",
+      "kcal_share": 0.25,
+      "protein_share": 0.4,
+      "style": "no-cook jar breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 5,
+      "max_total_min": 5
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "13:00",
+      "kcal_share": 0.4,
+      "protein_share": 0.3,
+      "style": "no-cook jar salad",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 10
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "19:30",
+      "kcal_share": 0.35,
+      "protein_share": 0.3,
+      "style": "no-cook jar bowl",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 10
+    }
+  ],
+  "gear": [
+    "jar_with_lid"
+  ],
+  "food": {
+    "diet": "vegan",
+    "exclude_allergens": [
+      "soy",
+      "peanut"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "chia_seeds",
+      "rolled_oats"
+    ],
+    "cuisines": [
+      "Mediterranean"
+    ]
+  },
+  "shopping_days": [
+    "sun"
+  ]
+}

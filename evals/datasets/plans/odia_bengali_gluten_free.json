@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "name": "Odia and Bengali rice meals without gluten",
+  "day_types": [
+    {
+      "id": "everyday",
+      "name": "Every day",
+      "kcal": 1700,
+      "protein_g": 60,
+      "carbs_g": 250,
+      "fat_g": 50,
+      "sat_fat_g_max": 16,
+      "fibre_g_min": 25,
+      "extra": [
+        {
+          "nutrient": "calcium_mg",
+          "kind": "min",
+          "value": 1000
+        }
+      ]
+    }
+  ],
+  "week": {
+    "mon": "everyday",
+    "tue": "everyday",
+    "wed": "everyday",
+    "thu": "everyday",
+    "fri": "everyday",
+    "sat": "everyday",
+    "sun": "everyday"
+  },
+  "slots": [
+    {
+      "id": "breakfast",
+      "name": "Breakfast",
+      "eat_at": "07:00",
+      "kcal_share": 0.2,
+      "protein_share": 0.2,
+      "style": "soft breakfast",
+      "cook_when": "fresh",
+      "max_active_min": 15,
+      "max_total_min": 25
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch",
+      "eat_at": "12:30",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "rice, dal and a vegetable",
+      "cook_when": "fresh",
+      "max_active_min": 40,
+      "max_total_min": 60
+    },
+    {
+      "id": "snack",
+      "name": "Snack",
+      "eat_at": "16:30",
+      "kcal_share": 0.1,
+      "protein_share": 0.1,
+      "style": "light snack",
+      "cook_when": "fresh",
+      "max_active_min": 10,
+      "max_total_min": 10
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner",
+      "eat_at": "19:30",
+      "kcal_share": 0.35,
+      "protein_share": 0.35,
+      "style": "dalma or khichdi",
+      "cook_when": "fresh",
+      "max_active_min": 35,
+      "max_total_min": 50
+    }
+  ],
+  "gear": [
+    "pressure_cooker",
+    "kadhai"
+  ],
+  "food": {
+    "diet": "veg",
+    "exclude_allergens": [
+      "gluten"
+    ],
+    "exclude_foods": [],
+    "liked_foods": [
+      "moong_dal",
+      "pumpkin",
+      "raw_banana"
+    ],
+    "cuisines": [
+      "Odia",
+      "Bengali"
+    ]
+  },
+  "shopping_days": [
+    "mon",
+    "thu"
+  ]
+}
