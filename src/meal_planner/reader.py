@@ -57,8 +57,11 @@ MAX_AMOUNT = 100_000
 _NUMBER = r"(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)"
 _DASHES = "-" + chr(0x2013) + chr(0x2014)
 _RANGE = re.compile(rf"\b{_NUMBER}(?:\s*[{_DASHES}]\s*|\s+(?:to|or)\s+){_NUMBER}\b", re.IGNORECASE)
-# Words for an amount that is not a number: "some", "a little", "a bit", "a few", "a handful".
-_VAGUE = re.compile(r"\b(?:some|little|bit|few|handfuls?|lots?)\b", re.IGNORECASE)
+# Words for an amount that is not a number: "some", "a little", "a bit", "a few", "a handful",
+# "several", "many", "plenty".
+_VAGUE = re.compile(
+    r"\b(?:some|little|bit|few|handfuls?|lots?|several|many|plenty)\b", re.IGNORECASE
+)
 # What may not touch the words for an amount in the text: a letter next to a letter they start or
 # end with, and a digit (or a decimal point and a digit) next to a digit.
 _LETTER_BEFORE = r"(?<![^\W\d_])"

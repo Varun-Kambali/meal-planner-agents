@@ -178,7 +178,22 @@ async def test_range_amount_needs_amount(amount_text: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "amount_text", ["some", "a little", "a bit", "a few", "a handful", "lots of", "a lot", "Some"]
+    "amount_text",
+    [
+        "some",
+        "a little",
+        "a bit",
+        "a few",
+        "a handful",
+        "lots of",
+        "a lot",
+        "Some",
+        "several",
+        "many",
+        "so many",
+        "plenty of",
+        "Plenty",
+    ],
 )
 async def test_vague_words_need_an_amount_whatever_the_model_returned(amount_text: str) -> None:
     model = model_of(reading(said("roti", 1, "roti", amount_text)))
