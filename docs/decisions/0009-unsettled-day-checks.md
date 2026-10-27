@@ -28,4 +28,4 @@ A user sees "not known" with the foods named on an unsettled day, instead of a f
 
 A day whose recipes all lack numbers, because nutrition-mcp could not work them out, is unsettled too. Those recipes still fail on their own, so the week does not pass, and they are what repair rewrites.
 
-What the model is sent changes, because unsettled checks leave the repair prompts, so the smoke recording is made again and the thresholds are set from its replay ([0008](0008-smoke-replay-gates-every-pr.md)).
+What the model is sent changes, because unsettled checks leave the repair prompts, so the smoke recording is made again and the thresholds are set from its replay ([0008](0008-smoke-replay-gates-every-pr.md)). Days now pass in the slice, so the gate holds the share of days passing and of weeks with no failure, and a maximum on the share of days left unsettled.

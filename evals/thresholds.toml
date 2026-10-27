@@ -1,20 +1,25 @@
 # What make eval-smoke holds the replayed smoke slice to, on every PR. Why these numbers and these
 # metrics: docs/decisions/0008-smoke-replay-gates-every-pr.md.
 #
-# Set from the replay of evals/recordings/smoke.jsonl at commit 51b7e0a (3 plans, 10 meals). A
-# replay gives the same numbers every time, so each minimum is the replayed value rounded down to
-# two decimal places and each maximum rounded up: losing one recipe or one food fails the gate.
-# A change that moves a number on purpose sets the new value here in the same PR, with the reason.
+# Set from the replay of evals/recordings/smoke.jsonl recorded at commit c464b04 (3 plans, 10
+# meals), after unsettled day checks left the repair prompts (docs/decisions/0009). A replay gives
+# the same numbers every time, so each minimum is the replayed value rounded down to two decimal
+# places and each maximum rounded up: losing one recipe, day or food fails the gate. A change that
+# moves a number on purpose sets the new value here in the same PR, with the reason.
 
 [min]
-# 46 of 70 recipes pass every hard check.
-"recipes.pipeline.recipe_pass_share" = 0.65
-# 27 of 70 pass at their first attempt, before any repair.
-"recipes.pipeline.first_attempt_pass_share" = 0.38
-# 66 of 70 pass the variety checks.
-"recipes.pipeline.variety_pass_share" = 0.94
-# 7 of 70 for the single-call baseline, so a change cannot flatter the comparison by weakening it.
-"recipes.baseline.recipe_pass_share" = 0.10
+# 50 of 70 recipes pass every hard check.
+"recipes.pipeline.recipe_pass_share" = 0.71
+# 26 of 70 pass at their first attempt, before any repair.
+"recipes.pipeline.first_attempt_pass_share" = 0.37
+# 68 of 70 pass the variety checks.
+"recipes.pipeline.variety_pass_share" = 0.97
+# 3 of 21 days pass every check. Held now that a missing value no longer fails a day.
+"recipes.pipeline.day_pass_share" = 0.14
+# 1 of 3 weeks has no failing recipe or day.
+"recipes.pipeline.week_without_failure_share" = 0.33
+# 3 of 70 for the single-call baseline, so a change cannot flatter the comparison by weakening it.
+"recipes.baseline.recipe_pass_share" = 0.04
 # 15 of the reader's 16 foods are right.
 "reading.all.food_precision" = 0.93
 # 15 of 17 labelled foods are found.
@@ -27,6 +32,8 @@
 "reading.all.missing_share" = 1.0
 
 [max]
+# 4 of 21 days the checks could not settle, so a change that leaves more days unsettled fails.
+"recipes.pipeline.day_unsettled_share" = 0.20
 # 12.5% mean calorie error against the labels, over 8 meals.
 "reading.all.kcal_mape" = 0.13
 "reading.all.reads_failed" = 0
