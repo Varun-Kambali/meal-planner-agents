@@ -293,7 +293,10 @@ def _run(
     recorder = (
         CaseRecorder(inner, args.record, folder / PENDING_FILE) if args.record is not None else None
     )
-    log = CaseLog(folder / CASES_FILE)
+    try:
+        log = CaseLog(folder / CASES_FILE)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from exc
     hint = f"finished cases are kept in {folder}; run the same command with --resume {folder}"
 
     async def work() -> str | None:
@@ -369,7 +372,7 @@ def _finish(
     if thresholds is not None:
         problems = check_thresholds(results, thresholds)
         for problem in problems:
-            _err(f"below threshold: {problem}")
+            _err(f"threshold not met: {problem}")
         if problems:
             code = 1
         else:

@@ -638,3 +638,17 @@ def test_with_the_key_set_the_model_is_called_through_litellm(
     )
     assert made == ["gemini/gemini-2.5-flash"]
     assert results_in(tmp_path)["model"] == "gemini/gemini-2.5-flash"
+
+
+def test_a_run_folder_with_a_broken_case_line_is_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = ["--suite", "reading", "--only", "m01,m28", "--out", str(tmp_path)]
+    assert run(*argv, model=ScriptedModel(limit=1)) == 3
+    (folder,) = (tmp_path / "runs").iterdir()
+    (folder / "cases.jsonl").write_text('{"kind": "reading"}\n')
+
+    code = run(*argv, "--resume", str(folder), model=ScriptedModel())
+
+    assert code == 2
+    assert "line 1, is not a case line" in capsys.readouterr().err
