@@ -3,11 +3,13 @@
 
 Progress goes to stderr one line per event. It holds the kind of event, slot ids (the plan's own
 slugs, such as "breakfast"), days, an attempt number and the names of checks, never the plan's
-free text or what the model wrote. The week goes to `--out`, or to stdout; what `read` finds and
-the summary go to stdout. A log that does not fit is named entry by entry, as the API's 422 names
-it. Exit codes: 0 a week was written (recipes that still fail are in it), a meal was read or a
-log was added up, 1 the app could not start or the run failed, 2 the rules, the text or the log
-could not be used, 130 the run was stopped with Ctrl-C.
+free text or what the model wrote. The last line names, for each day, the checks it fails and
+those it leaves unsettled because a food has no value for the nutrient. The week goes to
+`--out`, or to stdout; what `read` finds and the summary go to stdout. A log that does not fit is
+named entry by entry, as the API's 422 names it. Exit codes: 0 a week was written (recipes that
+still fail are in it), a meal was read or a log was added up, 1 the app could not start or the
+run failed, 2 the rules, the text or the log could not be used, 130 the run was stopped with
+Ctrl-C.
 
 Settings come from the environment only; the command does not read a .env file, so run it with
 `uv run --env-file .env meal-planner ...` to use one.
@@ -16,7 +18,7 @@ Settings come from the environment only; the command does not read a .env file, 
 import argparse
 import asyncio
 import sys
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
@@ -26,6 +28,7 @@ from meal_planner.llm import ModelPort
 from meal_planner.nutrition import NutritionPort
 from meal_planner.problems import Problem, meal_text_problems, problems_from, unknown_foods, where
 from meal_planner.reader import ReadError, ReadResult, read_meal
+from meal_planner.recipes import Failure
 from meal_planner.rules import PlanRules
 from meal_planner.startup import Services, StartupError, start_services
 from meal_planner.summary import LogRejected, MealLog, SummaryError, WeekSummary, summarise
@@ -73,10 +76,17 @@ def progress_line(event: WeekEvent) -> str:
             )
         case WeekDone():
             week = event.week
+            failing = _day_checks((day.day, day.failures) for day in week.days)
+            unsettled = _day_checks((day.day, day.unsettled) for day in week.days)
             return (
                 f"{event.kind} recipes={len(week.recipes)} unwritten={len(week.unwritten)} "
-                f"calls={week.calls}"
+                f"calls={week.calls} day_failures={failing} day_unsettled={unsettled}"
             )
+
+
+def _day_checks(days: Iterable[tuple[str, list[Failure]]]) -> str:
+    """Each day's check names as "mon:day_kcal", joined by commas, or "none"."""
+    return ",".join(f"{day}:{failure.check}" for day, found in days for failure in found) or "none"
 
 
 def _read_file[T: BaseModel](path: Path, schema: type[T]) -> T | int:
