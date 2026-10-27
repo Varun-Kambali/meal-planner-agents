@@ -318,11 +318,14 @@ def _run(
 
     try:
         stopped = asyncio.run(work())
-    except KeyboardInterrupt:
-        _err(f"stopped; {hint}")
-        return 130
-    except Exception as exc:
+    except BaseException as exc:
+        # nutrition-mcp's client runs in task groups, which can wrap what was raised in a group.
         inner_exc = _innermost(exc)
+        if isinstance(inner_exc, KeyboardInterrupt):
+            _err(f"stopped; {hint}")
+            return 130
+        if not isinstance(inner_exc, Exception):
+            raise
         if isinstance(inner_exc, StartupError):
             _err(str(inner_exc))
             return 1

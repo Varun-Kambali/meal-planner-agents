@@ -380,3 +380,13 @@ async def test_run_cases_skips_finished_cases_and_keeps_those_done_before_a_stop
     ]
     assert len(said_lines) == 1
     assert said_lines[0].startswith("recipes/pipeline/a: 28 of 28 recipes pass, 4 calls, ")
+
+
+async def test_a_label_nutrition_mcp_refuses_is_an_error_not_a_stop() -> None:
+    unknown = meal_label(
+        "1 bowl of something",
+        [{"food_id": "no_such_food", "status": "matched", "amount": 1, "unit": "g", "grams": 10}],
+    )
+
+    with pytest.raises(NutritionError):
+        await label_kcal(unknown, ReaderNutrition())

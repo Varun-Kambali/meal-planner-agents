@@ -264,8 +264,51 @@ def test_a_metric_that_is_missing_or_not_measured_fails(tmp_path: Path) -> None:
         "[least]\nx = 1\n",
         "[min]\nx = true\n",
         "not toml at all [",
+        "min = 3\n",
+        "[min]\nx = inf\n",
     ],
 )
 def test_a_thresholds_file_that_cannot_be_read_is_refused(tmp_path: Path, text: str) -> None:
     with pytest.raises(ThresholdsError):
         load_thresholds(write_thresholds(tmp_path, text))
+
+
+def test_a_threshold_on_something_that_is_not_a_number_fails(tmp_path: Path) -> None:
+    path = write_thresholds(tmp_path, '[min]\n"recipes.pipeline.call_errors" = 1\n')
+
+    assert check_thresholds(results(), load_thresholds(path)) == [
+        "recipes.pipeline.call_errors is not a number"
+    ]
+
+
+def test_counts_with_nothing_to_count_and_unknown_costs_read_as_such(tmp_path: Path) -> None:
+    unpriced = [
+        c.model_copy(update={"usage": c.usage.model_copy(update={"cost_unknown_calls": 1})})
+        for c in ALL_CASES
+    ]
+    built = build_results(info(), unpriced, FIXED_LABELS, finished_at="2026-10-27T10:00")
+    write_results(tmp_path, built)
+
+    rows = {row[0]: row[1:] for row in table_rows(build_summary(tmp_path) or "")}
+
+    assert rows["Cost per week at list price (mean)"] == ["not known", "not known"]
+    assert rows["Cost per meal at list price (mean)"] == ["not known", "not known"]
+
+
+def test_a_share_with_nothing_to_count_says_so(tmp_path: Path) -> None:
+    labels = {"m1": FIXED_LABELS["m1"].model_copy(update={"missing": []})}
+    built = build_results(
+        info(suite="reading", plans=[], meals=["m1"]),
+        [FIXED_READS[0]],
+        labels,
+        finished_at="2026-10-27T10:00",
+    )
+    write_results(tmp_path, built)
+
+    rows = {row[0]: row[1:] for row in table_rows(build_summary(tmp_path) or "")}
+
+    # All meals, and the other meals (m1 is not an expected miss).
+    assert rows["Foods not in the data reported missing (share)"] == [
+        "none to count",
+        "none to count",
+    ]

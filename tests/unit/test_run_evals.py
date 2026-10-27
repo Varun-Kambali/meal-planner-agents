@@ -487,3 +487,154 @@ def test_a_catalogue_that_cannot_be_loaded_is_a_startup_error(
         model=ScriptedModel(),
     )
     assert again == 0
+
+
+def test_a_call_missing_from_the_recording_fails_the_replay(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recording = tmp_path / "smoke.jsonl"
+    argv = ["--suite", "reading", "--only", "m01,m28"]
+    assert (
+        run(*argv, "--record", str(recording), "--out", str(tmp_path / "a"), model=ScriptedModel())
+        == 0
+    )
+    first_call_only = recording.read_text().splitlines()[0]
+    recording.write_text(first_call_only + "\n")
+
+    code = run(*argv, "--replay", str(recording), "--out", str(tmp_path / "b"))
+
+    assert code == 1
+    assert "1 calls had no recording" in capsys.readouterr().err
+    assert results_in(tmp_path / "b")["reading"]["all"]["reads_failed"] == 1
+
+
+def test_a_check_that_passes_says_so(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    thresholds = tmp_path / "thresholds.toml"
+    thresholds.write_text('[min]\n"reading.all.food_recall" = 0.5\n')
+
+    code = run(
+        "--suite",
+        "reading",
+        "--only",
+        "m28",
+        "--check",
+        str(thresholds),
+        "--out",
+        str(tmp_path / "out"),
+        model=ScriptedModel(),
+    )
+
+    assert code == 0
+    assert f"every metric in {thresholds} is within its threshold" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("lines", "message"),
+    [
+        ([], "holds no recorded calls"),
+        (["model-a", "model-b"], "more than one model"),
+    ],
+)
+def test_a_recording_that_cannot_be_replayed_is_refused(
+    tmp_path: Path, lines: list[str], message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recording = tmp_path / "smoke.jsonl"
+    recording.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "key": str(i),
+                    "task": "read_meal",
+                    "raw": "{}",
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cost_usd": None,
+                    "model": model,
+                }
+            )
+            + "\n"
+            for i, model in enumerate(lines)
+        )
+    )
+
+    assert run("--smoke", "--replay", str(recording), "--out", str(tmp_path)) == 2
+    assert message in capsys.readouterr().err
+
+
+def test_the_model_cannot_be_named_for_a_replay(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recording = tmp_path / "smoke.jsonl"
+    recording.write_text("")
+
+    assert run("--smoke", "--replay", str(recording), "--model", "x", "--out", str(tmp_path)) == 2
+    assert "--model cannot be used with --replay" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("run_json", "message"), [(None, "is not a run folder"), ("{}", "cannot be read")]
+)
+def test_a_folder_that_is_not_a_run_cannot_be_resumed(
+    tmp_path: Path, run_json: str | None, message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = tmp_path / "runs" / "x"
+    folder.mkdir(parents=True)
+    if run_json is not None:
+        (folder / "run.json").write_text(run_json)
+
+    code = run(
+        "--only", "m28", "--resume", str(folder), "--out", str(tmp_path), model=ScriptedModel()
+    )
+
+    assert code == 2
+    assert message in capsys.readouterr().err
+
+
+def test_ctrl_c_keeps_what_finished_and_says_how_to_resume(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class Interrupted(ScriptedModel):
+        async def structured(self, **kwargs: Any) -> Any:
+            if self.calls:
+                raise KeyboardInterrupt
+            return await super().structured(**kwargs)
+
+    code = run(
+        "--suite", "reading", "--only", "m01,m28", "--out", str(tmp_path), model=Interrupted()
+    )
+
+    assert code == 130
+    assert "--resume" in capsys.readouterr().err
+    (folder,) = (tmp_path / "runs").iterdir()
+    assert len((folder / "cases.jsonl").read_text().splitlines()) == 1
+
+
+def test_with_the_key_set_the_model_is_called_through_litellm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import run_evals
+
+    made: list[str] = []
+
+    def fake_litellm(model: str) -> ScriptedModel:
+        made.append(model)
+        return ScriptedModel()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "not-a-real-key")
+    monkeypatch.setattr(run_evals, "LiteLLMModel", fake_litellm)
+
+    assert (
+        run(
+            "--suite",
+            "reading",
+            "--only",
+            "m28",
+            "--model",
+            "gemini/gemini-2.5-flash",
+            "--out",
+            str(tmp_path),
+        )
+        == 0
+    )
+    assert made == ["gemini/gemini-2.5-flash"]
+    assert results_in(tmp_path)["model"] == "gemini/gemini-2.5-flash"
