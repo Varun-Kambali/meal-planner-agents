@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-27",
+  "model": "gemini/gemini-3.1-flash-lite",
+  "commit": "ed08bf8",
+  "dirty": false,
+  "dataset_version": "4a35ea1576a9",
+  "litellm_version": "1.105.1",
+  "suite": "all",
+  "slice": "smoke",
+  "plans": [
+    "bengali_fish_home",
+    "hard_vegan_jar_breakfast",
+    "kerala_egg_no_dairy"
+  ],
+  "meals": [
+    "m01",
+    "m03",
+    "m04",
+    "m09",
+    "m10",
+    "m28",
+    "m36",
+    "m43",
+    "m47",
+    "m52"
+  ],
+  "switches": {
+    "fit_portions": true,
+    "writer_nutrient_hints": true
+  },
+  "replayed": false,
+  "settings": {
+    "recipe_kcal_tolerance": 0.1,
+    "recipe_protein_min_share": 0.9,
+    "day_kcal_tolerance": 0.05,
+    "max_repair_attempts": 3,
+    "variety_jaccard_fail_at": 0.6,
+    "no_waste_keeps_days": 7,
+    "no_waste_min_pack_share": 0.5,
+    "portion_scale_min": 0.5,
+    "portion_scale_max": 2.0,
+    "max_concurrent_model_calls": 4,
+    "slot_call_timeout_s": 120.0,
+    "reader_call_timeout_s": 30.0,
+    "catalogue_path": "data/catalogue.yaml",
+    "nutrition_data_dirs": "data/foods"
+  }
+}
