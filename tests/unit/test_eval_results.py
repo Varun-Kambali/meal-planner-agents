@@ -192,13 +192,40 @@ def test_the_recipe_rows_keep_their_order_with_the_headline_first(tmp_path: Path
     assert by_name["Weeks with no failing recipe or day (share)"] == ["33.3% (1 of 3)"] * 2
 
 
+def test_unsettled_is_defined_whenever_it_was_measured_even_at_zero(tmp_path: Path) -> None:
+    write_results(tmp_path, results())
+
+    summary = build_summary(tmp_path) or ""
+
+    # Nothing was unsettled, so there is no table, but the row still needs its meaning.
+    assert "Days that ended unsettled on each check" not in summary
+    assert DEFINITION in summary
+    assert summary.index(DEFINITION) < summary.index("Days that ended failing each check:")
+
+
+# What summary.md says unsettled means, and how the table of unsettled checks counts days.
+DEFINITION = (
+    "A day check is unsettled when a food in the day has no value for the nutrient in "
+    "nutrition-mcp's data, or a recipe in it has no numbers from nutrition-mcp"
+)
+BY_CHECK = (
+    "A day is counted on each check it left unsettled, also when it fails another check, so "
+    "these counts can be larger than the days the checks could not settle."
+)
+
+
 def test_the_summary_counts_the_days_left_unsettled_on_each_check(tmp_path: Path) -> None:
     unsettled = FailureRecord(check="day_sat_fat_g", message="saturated fat not known")
     b = FIXED_WEEKS[1].model_copy(
         update={"days": [DayOutcome(day="mon", failures=[], unsettled=[unsettled])]}
     )
+    # a's second day fails day_kcal and also leaves saturated fat unsettled.
+    a_days = FIXED_WEEKS[0].days
+    a = FIXED_WEEKS[0].model_copy(
+        update={"days": [a_days[0], a_days[1].model_copy(update={"unsettled": [unsettled]})]}
+    )
     cases: list[RecipeCase | ReadingCase] = [
-        FIXED_WEEKS[0],
+        a,
         b,
         FIXED_WEEKS[2],
         *(baseline_of(c) for c in FIXED_WEEKS),
@@ -211,14 +238,16 @@ def test_the_summary_counts_the_days_left_unsettled_on_each_check(tmp_path: Path
     summary = build_summary(tmp_path) or ""
 
     rows = {row[0]: row[1:] for row in table_rows(summary)}
+    # One day could not be settled, and two days ended with saturated fat unsettled: the failing
+    # day is counted on the check too.
     assert rows["Days the checks could not settle (share)"] == ["0.0% (0 of 4)", "25.0% (1 of 4)"]
-    assert rows["`day_sat_fat_g`"] == ["0", "1"]
+    assert rows["`day_sat_fat_g`"] == ["0", "2"]
     failing = summary.index("Days that ended failing each check:")
     left = summary.index("Days that ended unsettled on each check:")
     assert failing < left
-    after = summary[left:]
-    assert "no value for the nutrient" in after
-    assert "no recipe is rewritten" in after
+    assert BY_CHECK in summary[left:]
+    assert DEFINITION in summary
+    assert "no recipe is rewritten for it" in summary
 
 
 def test_a_results_file_from_before_unsettled_days_still_loads_and_says_not_measured(
@@ -245,6 +274,7 @@ def test_a_results_file_from_before_unsettled_days_still_loads_and_says_not_meas
     assert rows["Weeks with no failing recipe or day (share)"] == ["not measured"] * 2
     assert rows["Days passing every check (share)"] == ["75.0% (3 of 4)"] * 2
     assert "Days that ended unsettled on each check: not measured in this run." in summary
+    assert DEFINITION not in summary
 
 
 def test_the_summary_uses_the_newest_full_clean_live_run_for_each_suite(tmp_path: Path) -> None:

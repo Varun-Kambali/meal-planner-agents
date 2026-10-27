@@ -251,10 +251,17 @@ def _cost_note(results: Results) -> str:
     )
 
 
+# What unsettled means, given under the recipe table whenever the run measured unsettled days.
 UNSETTLED_NOTE = (
     "A day check is unsettled when a food in the day has no value for the nutrient in "
-    "nutrition-mcp's data, so the day can be shown neither to meet the target nor to miss it: "
-    "the day does not pass, and no recipe is rewritten for it."
+    "nutrition-mcp's data, or a recipe in it has no numbers from nutrition-mcp, so the day can be "
+    "shown neither to meet the target nor to miss it: the day does not pass, and no recipe is "
+    "rewritten for it."
+)
+# Under the table of unsettled checks, which counts days the row of unsettled days leaves out.
+UNSETTLED_BY_CHECK = (
+    "A day is counted on each check it left unsettled, also when it fails another check, so "
+    "these counts can be larger than the days the checks could not settle."
 )
 
 
@@ -264,6 +271,11 @@ def _unsettled_cell(m: RecipeMetrics, check: str) -> str:
         if m.unsettled_day_checks is None
         else str(m.unsettled_day_checks.get(check, 0))
     )
+
+
+def _measures_unsettled(base: RecipeMetrics, pipe: RecipeMetrics) -> bool:
+    """Whether the results file counts unsettled days; one written before it could does not."""
+    return base.days_unsettled is not None or pipe.days_unsettled is not None
 
 
 def _unsettled_lines(base: RecipeMetrics, pipe: RecipeMetrics) -> list[str]:
@@ -282,7 +294,7 @@ def _unsettled_lines(base: RecipeMetrics, pipe: RecipeMetrics) -> list[str]:
             ([f"`{c}`", _unsettled_cell(base, c), _unsettled_cell(pipe, c)] for c in checks),
         ),
         "",
-        UNSETTLED_NOTE,
+        UNSETTLED_BY_CHECK,
     ]
 
 
@@ -305,7 +317,9 @@ def _recipes_section(name: str, results: Results) -> list[str]:
         "ingredient list the pipeline's writer gets, and its recipes go through the same checks "
         "with no portion fitting and no repair. Every share counts over the recipes the plans "
         "ask for, so a recipe that was never written counts as failing. A day's own checks are "
-        "counted on the day. " + _cost_note(results),
+        "counted on the day. "
+        + (UNSETTLED_NOTE + " " if _measures_unsettled(base, pipe) else "")
+        + _cost_note(results),
     ]
     if checks:
         lines += [
