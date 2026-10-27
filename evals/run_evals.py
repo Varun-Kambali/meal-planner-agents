@@ -21,6 +21,7 @@ can be resumed; 130 stopped with Ctrl-C, and can be resumed.
 
 import argparse
 import asyncio
+import os
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -56,7 +57,8 @@ PROG = "run_evals"
 RUN_FILE = "run.json"
 CASES_FILE = "cases.jsonl"
 PENDING_FILE = "recording-pending.jsonl"
-# The settings that decide whether a recipe or day passes, and how hard the pipeline tries.
+# The settings that decide whether a recipe or day passes, and how hard the pipeline tries. The
+# data paths are recorded beside them (`data_paths`).
 RECORDED_SETTINGS = (
     "recipe_kcal_tolerance",
     "recipe_protein_min_share",
@@ -134,6 +136,30 @@ def git_dirty() -> bool:
     """Whether the code a run uses differs from the commit; True when git cannot say."""
     status = _git("status", "--porcelain", "--untracked-files=all", "--", *_CODE_PATHS)
     return status is None or status != ""
+
+
+def data_paths(settings: Settings) -> tuple[dict[str, str], bool]:
+    """The catalogue and nutrition-mcp's extra data folders as a results file records them, and
+    whether they are all inside the repository.
+
+    A path inside the repository is written relative to it, so a results file names the file
+    the commit holds and no folder of this machine. One outside it is written as given; such a
+    run cannot be traced to the commit, and is marked dirty so it never feeds summary.md.
+    """
+
+    def shown(path: Path) -> tuple[str, bool]:
+        try:
+            return path.resolve().relative_to(REPO_ROOT).as_posix(), True
+        except ValueError:
+            return str(path), False
+
+    catalogue, catalogue_inside = shown(settings.catalogue_path)
+    folders = [shown(Path(part)) for part in settings.nutrition_data_dirs.split(os.pathsep) if part]
+    recorded = {
+        "catalogue_path": catalogue,
+        "nutrition_data_dirs": os.pathsep.join(path for path, _ in folders),
+    }
+    return recorded, catalogue_inside and all(inside for _, inside in folders)
 
 
 def recorded_model(path: Path) -> str:
@@ -254,11 +280,12 @@ def _run(
             return 1
         inner = LiteLLMModel(settings.model)
 
+    paths, inside = data_paths(settings)
     info = RunInfo(
         date=date.today().isoformat(),
         model=model_id,
         commit=git_commit(),
-        dirty=git_dirty(),
+        dirty=git_dirty() or not inside,
         dataset_version=dataset_version(),
         litellm_version=metadata.version("litellm"),
         suite=args.suite,
@@ -270,7 +297,7 @@ def _run(
             writer_nutrient_hints=settings.writer_nutrient_hints,
         ),
         replayed=args.replay is not None,
-        settings={name: getattr(settings, name) for name in RECORDED_SETTINGS},
+        settings={**{name: getattr(settings, name) for name in RECORDED_SETTINGS}, **paths},
     )
     if args.resume is not None:
         folder = args.resume
@@ -286,8 +313,9 @@ def _run(
     (folder / RUN_FILE).write_text(info.model_dump_json(indent=2) + "\n", encoding="utf-8")
     if info.dirty:
         _err(
-            "the code differs from the commit, so these results will not feed summary.md; "
-            "commit first for results that can be published"
+            "the code or data differ from the commit, so these results will not feed "
+            "summary.md; commit first, with the data inside the repository, for results that "
+            "can be published"
         )
 
     recorder = (

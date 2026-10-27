@@ -31,7 +31,7 @@ from results import (
 )
 from run_evals import main
 
-from meal_planner.config import Settings
+from meal_planner.config import REPO_ROOT, Settings
 
 
 def test_metrics_on_fixed_results() -> None:
@@ -654,3 +654,52 @@ def test_a_run_folder_with_a_broken_case_line_is_named(
 
     assert code == 2
     assert "line 1, is not a case line" in capsys.readouterr().err
+
+
+def test_the_data_paths_are_recorded_relative_to_the_repository(tmp_path: Path) -> None:
+    assert (
+        run("--suite", "reading", "--only", "m28", "--out", str(tmp_path), model=ScriptedModel())
+        == 0
+    )
+
+    settings = results_in(tmp_path)["settings"]
+    assert settings["catalogue_path"] == "data/catalogue.yaml"
+    assert settings["nutrition_data_dirs"] == "data/foods"
+
+
+def test_data_from_outside_the_repository_is_recorded_and_marks_the_run_dirty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import run_evals
+
+    monkeypatch.setattr(run_evals, "git_dirty", lambda: False)
+    copy = tmp_path / "catalogue.yaml"
+    copy.write_text((REPO_ROOT / "data" / "catalogue.yaml").read_text())
+
+    code = main(
+        ["--suite", "reading", "--only", "m28", "--out", str(tmp_path / "out")],
+        settings=Settings(catalogue_path=copy),
+        model=ScriptedModel(),
+    )
+
+    data = results_in(tmp_path / "out")
+    assert code == 0
+    assert data["settings"]["catalogue_path"] == str(copy)
+    assert data["dirty"] is True
+
+
+def test_resuming_with_other_data_paths_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = ["--suite", "reading", "--only", "m28", "--out", str(tmp_path)]
+    assert run(*argv, model=ScriptedModel(limit=0)) == 3
+    (folder,) = (tmp_path / "runs").iterdir()
+
+    code = main(
+        [*argv, "--resume", str(folder)],
+        settings=Settings(nutrition_data_dirs=""),
+        model=ScriptedModel(),
+    )
+
+    assert code == 2
+    assert "these differ now: settings" in capsys.readouterr().err
