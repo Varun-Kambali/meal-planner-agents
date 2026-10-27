@@ -3,8 +3,9 @@
 
 Progress goes to stderr one line per event. It holds the kind of event, slot ids (the plan's own
 slugs, such as "breakfast"), days, an attempt number and the names of checks, never the plan's
-free text or what the model wrote. The last line names, for each day, the checks it fails and
-those it leaves unsettled because a food has no value for the nutrient. The week goes to
+free text or what the model wrote. The `week_done` line names, for each day, the checks it fails
+and those it leaves unsettled because a food has no value for the nutrient or a recipe has no
+numbers. The week goes to
 `--out`, or to stdout; what `read` finds and the summary go to stdout. A log that does not fit is
 named entry by entry, as the API's 422 names it. Exit codes: 0 a week was written (recipes that
 still fail are in it), a meal was read or a log was added up, 1 the app could not start or the

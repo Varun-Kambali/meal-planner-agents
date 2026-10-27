@@ -462,8 +462,8 @@ def _evaluate(
     changed; when both or neither are, to the later day. A day that misses its targets is blamed
     on a recipe in `repairable`, once per failed check, only when every slot of the day is there
     and none of them fails on its own: those are rewritten first, and the day is then worked out
-    again. A check the day leaves unsettled, because a food has no value for the nutrient, is
-    never blamed, so it never reaches a repair prompt.
+    again. A check the day leaves unsettled, because a food has no value for the nutrient or a
+    recipe has no numbers, is never blamed, so it never reaches a repair prompt.
     """
     found: dict[_RecipeKey, list[Failure]] = {}
     for key, recipe in recipes.items():

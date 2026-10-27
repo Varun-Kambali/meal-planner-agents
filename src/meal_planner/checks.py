@@ -4,7 +4,7 @@ Nothing here calls a model or nutrition-mcp: each function takes numbers that ar
 computed and returns `Failure`s whose messages say what to change. A passing check returns an
 empty list.
 
-Two conventions run through the nutrition checks:
+These conventions run through the nutrition checks:
 
 - A nutrient that is `None` is not known, and is never read as 0.
 - nutrition-mcp reports a total as a lower bound when some food in it has no value for the
@@ -15,10 +15,18 @@ Two conventions run through the nutrition checks:
   or as over the maximum if the known part already is.
 - A day's checks hold such a total between two bounds: the part known below, and above it a
   ceiling when one can be worked out from nutrition-mcp's numbers (for saturated fat, the total
-  fat of the foods that lack it, see `sat_fat_ceiling`). The day fails a check the bounds show
-  it misses and passes one they show it meets. Anything else is unsettled, a verdict of its own:
-  the foods with no value might put the day either side of the limit, so it is neither a pass
-  nor a failure, and no rewrite of a recipe can settle it short of dropping the food.
+  fat of the foods that lack it, see `sat_fat_ceiling`). A recipe nutrition-mcp could not work
+  out counts as lacking every nutrient in its foods (see `add_up_meals`). The day fails a check
+  the bounds show it misses and passes one they show it meets. Anything else is unsettled, a
+  verdict of its own: the missing values might put the day either side of the limit, so it is
+  neither a pass nor a failure.
+- An unsettled check is never sent to repair. That is a choice, not a limit. Calories, and a cap
+  with no ceiling, cannot be settled by a rewrite short of dropping the food, since nothing bounds
+  the missing part from above. The rest can: less of a food with no value lowers the
+  saturated-fat ceiling, and more of what is known raises a floor's known part. Repair is not
+  asked to, because the missing value usually settles the check by itself (a dal with no fibre
+  value has fibre, and rohu's fat is not all saturated), and chasing it would spend model calls.
+  A day a rewrite could have settled is left as it is.
 """
 
 import math
