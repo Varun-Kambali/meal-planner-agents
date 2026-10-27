@@ -73,8 +73,10 @@ def test_metrics_on_fixed_results() -> None:
     assert (reading.expected_items, reading.expected_found, reading.food_recall) == (4, 2, 0.5)
     # Only dal has the label's status (chapati should have asked).
     assert (reading.status_matched, reading.status_accuracy) == (1, 0.25)
-    # Chapati was given an amount; sambar was not returned, so nothing was invented for it.
-    assert (reading.ask_labels, reading.asked, reading.asked_share) == (2, 1, 0.5)
+    # Chapati was paired and given an amount, so it was not asked. Sambar's read failed, so its
+    # label is left out of the share (the failure is in reads_failed).
+    assert (reading.ask_labels, reading.asked, reading.asked_share) == (1, 0, 0.0)
+    assert reading.ask_labels_unpaired == 0
     # |300 - 200| / 200 = 0.5 and |0 - 100| / 100 = 1.0.
     assert (reading.kcal_meals, reading.kcal_mape) == (2, 0.75)
     assert (reading.missing_labels, reading.missing_reported, reading.missing_share) == (

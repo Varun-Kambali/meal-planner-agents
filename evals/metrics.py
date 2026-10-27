@@ -10,6 +10,9 @@ for and every day passes. No-waste flags are warnings, as in the app, and pass o
 Reading metrics compare the reader's items with the labels in evals/datasets/meals.jsonl. A
 labelled item is found when the reader returns its food id or one in its `also_accept`, each
 reader item standing for at most one label (the largest such pairing, tried in written order).
+"Asked when it should" counts a label that needs an amount or a unit as asked only when the reader
+returned that food and did not match it; a label the reader did not return (left out, or named
+as another food) is counted apart as unpaired, and a read that failed is left out of the measure.
 
 Shares are kept with the counts they come from, so a reader can check every one.
 """
@@ -19,7 +22,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 
 from cases import MealLabel
-from nutrition_mcp.search import normalise
+from nutrition_mcp.search import PLURAL_MIN_LETTERS, normalise
 from pydantic import BaseModel
 from records import ReadingCase, ReadItemRecord, RecipeCase, RecipeOutcome, Usage
 
@@ -221,11 +224,26 @@ def found_by(label_food: str, also_accept: Sequence[str], item: ReadItemRecord) 
     return item.food_id is not None and item.food_id in (label_food, *also_accept)
 
 
+def _words(name: str) -> list[str]:
+    """The name's words after nutrition-mcp's normalising (case, punctuation, common spellings),
+    each read in the singular the way nutrition-mcp's search reads it: a final "s" dropped from a
+    word of PLURAL_MIN_LETTERS letters or more."""
+    return [
+        word.removesuffix("s") if len(word) >= PLURAL_MIN_LETTERS else word
+        for word in normalise(name).split()
+    ]
+
+
+def _runs_inside(part: list[str], whole: list[str]) -> bool:
+    return any(whole[i : i + len(part)] == part for i in range(len(whole) - len(part) + 1))
+
+
 def names_match(label: str, reported: str) -> bool:
-    """Whether a name the reader reports missing is the labelled one: after nutrition-mcp's own
-    normalising (case, punctuation, common spellings), either name contains the other."""
-    a, b = normalise(label), normalise(reported)
-    return bool(a and b) and (a in b or b in a)
+    """Whether a name the reader reports missing is the labelled one: the words of either name
+    run, whole and in order, inside the other's ("coffee" in "black coffee", not "a" in
+    "raita")."""
+    a, b = _words(label), _words(reported)
+    return bool(a and b) and (_runs_inside(a, b) or _runs_inside(b, a))
 
 
 class ReadingMetrics(BaseModel):
@@ -241,10 +259,13 @@ class ReadingMetrics(BaseModel):
     # Labelled items found with the status the label gives.
     status_matched: int
     status_accuracy: float | None
-    # needs_amount and unknown_unit labels, and those the reader did not return as matched.
+    # needs_amount and unknown_unit labels in reads that did not fail; those the reader returned
+    # (paired) and did not match; and those it did not return at all (left out, or named as
+    # another food), which count as not asked.
     ask_labels: int
     asked: int
     asked_share: float | None
+    ask_labels_unpaired: int
     # Meals whose labelled matched items give calories above 0, and the mean absolute
     # percentage error of the reader's total against them, as a fraction.
     kcal_meals: int
@@ -268,11 +289,12 @@ def reading_metrics(
 ) -> ReadingMetrics:
     """The reading metrics over the meals in `cases`, each scored against its label.
 
-    A failed read returned no items: its labelled items count as not found, and as asked, since
-    no amount was made up; its calories count as 0 against the label.
+    A failed read returned no items: its labelled items count as not found and its calories as 0
+    against the label, but its labels that ask are left out of "asked when it should" (it is
+    counted in `reads_failed` instead).
     """
     reader_items = found_reader = expected = found = status_ok = 0
-    ask = asked = missing_labels = missing_reported = 0
+    ask = asked = unpaired = missing_labels = missing_reported = 0
     errors: list[float] = []
     for case in cases:
         label = labels[case.meal]
@@ -287,9 +309,10 @@ def reading_metrics(
             item = with_food[j] if j is not None else None
             found += item is not None
             status_ok += item is not None and item.status == lab.status
-            if lab.status in ASK_STATUSES:
+            if lab.status in ASK_STATUSES and case.error is None:
                 ask += 1
-                asked += item is None or item.status != "matched"
+                unpaired += item is None
+                asked += item is not None and item.status != "matched"
         missing_labels += len(label.missing)
         missing_reported += sum(
             1 for j in pair(label.missing, case.missing, names_match) if j is not None
@@ -314,6 +337,7 @@ def reading_metrics(
         ask_labels=ask,
         asked=asked,
         asked_share=share(asked, ask),
+        ask_labels_unpaired=unpaired,
         kcal_meals=len(errors),
         kcal_mape=round(sum(errors) / len(errors), SHARE_PLACES) if errors else None,
         missing_labels=missing_labels,

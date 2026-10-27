@@ -116,15 +116,22 @@ def test_pair_leaves_an_item_unpaired_when_nothing_fits() -> None:
     ("label", "reported", "same"),
     [
         ("black coffee", "coffee", True),
+        ("coffee", "Black Coffee", True),
         ("medu vada", "Medu vadas", True),
+        ("momo", "momos", True),
         ("sabzi", "aloo sabzi", True),
         ("chicken biryani", "biryani", True),
+        ("paneer tikka", "paneer tikka pieces", True),
+        ("raita", "a", False),
+        ("chai", "chaix", False),
+        ("tea", "steak", False),
+        ("miso soup", "soup miso", False),
         ("chai", "poha", False),
         ("chai", "", False),
         ("", "", False),
     ],
 )
-def test_a_missing_name_matches_when_either_contains_the_other(
+def test_a_missing_name_matches_when_the_words_of_one_run_inside_the_other(
     label: str, reported: str, same: bool
 ) -> None:
     assert names_match(label, reported) is same
@@ -309,6 +316,42 @@ def test_asked_counts_a_label_that_asks_unless_the_reader_matched_it(
 
     assert (metrics.ask_labels, metrics.asked) == (1, asked)
     assert metrics.status_matched == (1 if status == "needs_amount" else 0)
+
+
+def test_a_failed_reads_ask_labels_are_left_out_of_asked() -> None:
+    labels = {
+        "m": label(
+            "m",
+            [
+                {"food_id": "chapati", "status": "needs_amount"},
+                {"food_id": "pav", "status": "unknown_unit"},
+            ],
+        )
+    }
+
+    metrics = reading_metrics([read("m", [], error="the model could not be reached")], labels)
+
+    assert metrics.reads_failed == 1
+    assert (metrics.ask_labels, metrics.asked, metrics.asked_share) == (0, 0, None)
+    assert metrics.ask_labels_unpaired == 0
+
+
+def test_an_ask_label_the_reader_left_out_is_unpaired_and_not_asked() -> None:
+    labels = {"m": label("m", [{"food_id": "chapati", "status": "needs_amount"}])}
+
+    metrics = reading_metrics([read("m", [("dal_tadka", "matched")])], labels)
+
+    assert (metrics.ask_labels, metrics.asked, metrics.ask_labels_unpaired) == (1, 0, 1)
+    assert metrics.asked_share == 0.0
+
+
+def test_an_ask_label_returned_as_another_food_with_an_amount_is_unpaired_and_not_asked() -> None:
+    # The person gave no amount for the rice; the reader named another rice and gave it one.
+    labels = {"m": label("m", [{"food_id": "steamed_rice", "status": "needs_amount"}])}
+
+    metrics = reading_metrics([read("m", [("basmati_rice", "matched")])], labels)
+
+    assert (metrics.ask_labels, metrics.asked, metrics.ask_labels_unpaired) == (1, 0, 1)
 
 
 def test_a_meal_whose_label_has_no_calories_is_left_out_of_the_error() -> None:

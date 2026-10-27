@@ -211,6 +211,10 @@ READING_ROWS: list[Row] = [
     ("Status accuracy", lambda m: _counted(m.status_matched, m.expected_items)),
     ("Asked when it should (share)", lambda m: _counted(m.asked, m.ask_labels)),
     (
+        "Labels that ask, food not returned by the reader",
+        lambda m: f"{m.ask_labels_unpaired} of {m.ask_labels}",
+    ),
+    (
         "Calorie error against the label (MAPE)",
         lambda m: (
             "none to count"
@@ -314,8 +318,10 @@ def _reading_section(name: str, results: Results) -> list[str]:
         ),
         "",
         "A labelled food is found when the reader returns its food id or one the label also "
-        "accepts. The expected misses name foods the reader cannot reach today (see "
-        "`evals/datasets/README.md`). " + _cost_note(results),
+        "accepts. A label that needs an amount or a unit counts as asked when the reader returned "
+        "that food and did not match it; one whose food the reader did not return is counted on "
+        "its own row, and a read that failed is left out of both. The expected misses name foods "
+        "the reader cannot reach today (see `evals/datasets/README.md`). " + _cost_note(results),
     ]
 
 

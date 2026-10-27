@@ -167,6 +167,8 @@ def test_the_summary_shows_shares_with_their_counts(tmp_path: Path) -> None:
     assert rows["Cost per week at list price (mean)"] == ["$0.01", "$0.01"]
     assert rows["Seconds per week (p95)"] == ["30.0", "30.0"]
     assert rows["Food recall"][0] == "50.0% (2 of 4)"
+    assert rows["Asked when it should (share)"][0] == "0.0% (0 of 1)"
+    assert rows["Labels that ask, food not returned by the reader"][0] == "0 of 1"
     assert rows["Calorie error against the label (MAPE)"][0] == "75.0% over 2 meals"
 
 

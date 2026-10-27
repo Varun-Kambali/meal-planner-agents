@@ -145,7 +145,8 @@ FIXED_READS = [
         kcal=300.0,
         label_kcal=200.0,
     ),
-    # The read failed: nothing found, nothing invented, no calories against the label's 100.
+    # The read failed: nothing found, its ask label left out of "asked when it should", and no
+    # calories against the label's 100.
     ReadingCase(
         case="reading/m2",
         meal="m2",
