@@ -15,5 +15,7 @@ build/
 .cache/
 node_modules/
 frontend/dist/
+# What make eval-smoke writes; each run starts it afresh.
+.eval-smoke/
 # Private values that test_datasets checks the eval datasets against. Never commit.
 evals/datasets/.forbidden-local.txt

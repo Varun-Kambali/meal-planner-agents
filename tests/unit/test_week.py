@@ -38,9 +38,9 @@ from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
 from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.recipes import CheckedRecipe, DraftRecipe, SlotDraft
+from meal_planner.recipes import CheckedRecipe, DraftRecipe, Failure, SlotDraft
 from meal_planner.rules import DayKey, PlanRules, expand
-from meal_planner.week import replace_recipe, run_week, with_numbers
+from meal_planner.week import evaluate_week, replace_recipe, run_week, with_numbers
 from meal_planner.week_events import (
     RecipeChecked,
     RepairStarted,
@@ -1366,6 +1366,91 @@ async def test_no_waste_is_reported_and_not_repaired() -> None:
     assert week.calls == 4
     assert list(week.no_waste) == [("cucumber", "sat")]
     assert week.no_waste[("cucumber", "sat")].check == "no_waste"
+
+
+# Checking a finished week outside the graph (the eval's single-call baseline)
+
+
+def unchecked(week: WeekResult) -> list[CheckedRecipe]:
+    """The week's recipes with their numbers and none of the failures the graph gave them."""
+    return [r.model_copy(update={"failures": []}) for r in week.recipes]
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        lambda: model_for(
+            writes={"snack": [changed("snack", lambda r: r | {"cuisine": "South Indian"}, "tue")]}
+        ),
+        overshoot_monday,
+        lambda: model_for(writes={"lunch": [changed("lunch", without_protein, "wed", "thu")]}),
+    ],
+    ids=["clash", "day_over", "low_protein"],
+)
+async def test_evaluate_week_gives_what_the_graphs_last_check_gives(
+    model: Callable[[], SlotModel],
+) -> None:
+    cucumber = item("cucumber", pack_g=1000, keeps=3)
+    cat = Catalogue({**catalogue().items, "cucumber": cucumber})
+    # With no repair the graph's only check is its last one, with every recipe new.
+    _, week = await run(model(), cat=cat, max_repair_attempts=0)
+
+    recipes, days, no_waste = evaluate_week(
+        unchecked(week), plan_rules(), catalogue=cat, settings=Settings()
+    )
+
+    assert recipes == week.recipes
+    assert days == week.days
+    assert no_waste == week.no_waste
+    assert any(r.failures for r in recipes) or any(d.failures for d in days)
+
+
+async def test_evaluate_week_blames_a_clash_on_the_later_day() -> None:
+    _, week = await run(model_for(), max_repair_attempts=0)
+    mon = by_key(week)[("mon", "snack")]
+    tue = by_key(week)[("tue", "snack")]
+    twin = tue.model_copy(update={"draft": mon.draft.model_copy(update={"day": "tue"})})
+    keyed = by_key(week) | {("tue", "snack"): twin}
+
+    recipes, _, _ = evaluate_week(
+        list(keyed.values()), plan_rules(), catalogue=catalogue(), settings=Settings()
+    )
+
+    checked = {(r.spec.day, r.spec.slot.id): r for r in recipes}
+    assert checked[("mon", "snack")].failures == []
+    assert {f.check for f in checked[("tue", "snack")].failures} >= {
+        "variety_title",
+        "variety_ingredients",
+    }
+
+
+async def test_evaluate_week_keeps_why_a_recipe_has_no_numbers() -> None:
+    _, week = await run(model_for(), max_repair_attempts=0)
+    first = week.recipes[0]
+    refused = first.model_copy(
+        update={
+            "nutrition": None,
+            "failures": [Failure(check="nutrition_failed", message="refused")],
+        }
+    )
+
+    recipes, _, _ = evaluate_week(
+        [refused, *unchecked(week)[1:]], plan_rules(), catalogue=catalogue(), settings=Settings()
+    )
+
+    assert "nutrition_failed" in [f.check for f in recipes[0].failures]
+
+
+async def test_evaluate_week_puts_recipes_in_week_order() -> None:
+    _, week = await run(model_for(), max_repair_attempts=0)
+
+    recipes, _, _ = evaluate_week(
+        list(reversed(unchecked(week))), plan_rules(), catalogue=catalogue(), settings=Settings()
+    )
+
+    assert [(r.spec.day, r.spec.slot.id) for r in recipes] == [
+        (r.spec.day, r.spec.slot.id) for r in week.recipes
+    ]
 
 
 # What the model is asked

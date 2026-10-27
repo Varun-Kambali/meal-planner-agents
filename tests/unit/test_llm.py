@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
 import litellm
 import pytest
 from pydantic import BaseModel
@@ -41,8 +42,12 @@ class Dish(BaseModel):
     servings: int
 
 
-def rate_limit() -> Exception:
-    return litellm.RateLimitError(message="429", llm_provider="gemini", model=MODEL)
+def rate_limit(headers: dict[str, str] | None = None, message: str = "429") -> Exception:
+    """A 429. `headers` are the provider's response headers, where a Retry-After would be."""
+    response = httpx.Response(429, headers=headers) if headers is not None else None
+    return litellm.RateLimitError(
+        message=message, llm_provider="gemini", model=MODEL, response=response
+    )
 
 
 def timeout() -> Exception:
@@ -117,13 +122,21 @@ class Sleeps:
 
 
 def client(
-    stub: StubCompletion, sleeps: Sleeps | None = None, *, model: str = MODEL, max_retries: int = 3
+    stub: StubCompletion,
+    sleeps: Sleeps | None = None,
+    *,
+    model: str = MODEL,
+    max_retries: int = 3,
+    jitter: float = 0.0,
 ) -> LiteLLMModel:
+    """The client with its call stubbed. `jitter` is the random draw every wait gets, so a test
+    knows each wait exactly."""
     return LiteLLMModel(
         model,
         max_retries=max_retries,
         acompletion=stub,
         sleep=sleeps if sleeps is not None else Sleeps(),
+        random=lambda: jitter,
     )
 
 
@@ -284,8 +297,117 @@ async def test_retry_then_rate_limited() -> None:
     assert reply.error == "rate_limited"
     assert len(stub.calls) == 3
     # Backoff doubles, and there is no wait after the last try.
-    assert len(sleeps.delays) == 2
-    assert sleeps.delays[1] == 2 * sleeps.delays[0] > 0
+    assert sleeps.delays == [1.0, 2.0]
+
+
+async def test_each_wait_gets_jitter_so_parallel_calls_do_not_retry_together() -> None:
+    stub = StubCompletion(rate_limit(), rate_limit(), rate_limit())
+    sleeps = Sleeps()
+
+    await ask(client(stub, sleeps, jitter=0.5))
+
+    # Half the jitter share (0.5) is added to each doubled wait.
+    assert sleeps.delays == [1.25, 2.5]
+
+
+async def test_the_default_jitter_is_random() -> None:
+    stub = StubCompletion(*[rate_limit()] * 6)
+    sleeps = Sleeps()
+    model = LiteLLMModel(MODEL, acompletion=stub, sleep=sleeps)
+
+    await ask(model)
+    await ask(model)
+
+    first, second = sleeps.delays[0], sleeps.delays[2]
+    assert 1.0 <= first < 1.5
+    assert 1.0 <= second < 1.5
+    assert first != second
+
+
+@pytest.mark.parametrize(
+    ("headers", "wait"),
+    [
+        ({"retry-after": "7"}, 7.0),
+        ({"Retry-After": "2.5"}, 2.5),
+        ({"retry-after-ms": "1500"}, 1.5),
+        ({"retry-after-ms": "1500", "retry-after": "9"}, 1.5),
+    ],
+    ids=["seconds", "decimal", "milliseconds", "milliseconds-first"],
+)
+async def test_a_retry_after_header_sets_the_wait(headers: dict[str, str], wait: float) -> None:
+    stub = StubCompletion(rate_limit(headers), completion(REPLY))
+    sleeps = Sleeps()
+
+    reply = await ask(client(stub, sleeps, jitter=0.25))
+
+    assert reply.error is None
+    # Up to one base wait of jitter goes on top, so calls told the same time spread out.
+    assert sleeps.delays == [wait + 0.25]
+
+
+async def test_a_retry_after_date_sets_the_wait_up_to_the_cap() -> None:
+    far = "Wed, 21 Oct 2099 07:28:00 GMT"
+    stub = StubCompletion(rate_limit({"retry-after": far}), completion(REPLY))
+    sleeps = Sleeps()
+
+    await ask(client(stub, sleeps))
+
+    assert sleeps.delays == [60.0]
+
+
+async def test_a_retry_after_date_in_the_past_waits_no_time() -> None:
+    stub = StubCompletion(rate_limit({"retry-after": "Mon, 01 Jan 2001 00:00:00 GMT"}))
+    stub.outcomes.append(completion(REPLY))
+    sleeps = Sleeps()
+
+    await ask(client(stub, sleeps))
+
+    assert sleeps.delays == [0.0]
+
+
+async def test_a_long_retry_after_is_cut_to_the_cap() -> None:
+    stub = StubCompletion(rate_limit({"retry-after": "3600"}), completion(REPLY))
+    sleeps = Sleeps()
+
+    await ask(client(stub, sleeps, jitter=0.5))
+
+    assert sleeps.delays == [60.5]
+
+
+async def test_gemini_retry_delay_in_the_error_body_sets_the_wait() -> None:
+    # Gemini answers a 429 with a RetryInfo detail in the body rather than a header.
+    body = '{"error": {"code": 429, "details": [{"retryDelay": "17s"}]}}'
+    stub = StubCompletion(rate_limit(message=f"geminiException - {body}"), completion(REPLY))
+    sleeps = Sleeps()
+
+    await ask(client(stub, sleeps))
+
+    assert sleeps.delays == [17.0]
+
+
+@pytest.mark.parametrize("value", ["soon", "-5", "nan", "inf", ""])
+async def test_a_retry_after_that_is_not_a_wait_falls_back_to_backoff(value: str) -> None:
+    stub = StubCompletion(rate_limit({"retry-after": value}), completion(REPLY))
+    sleeps = Sleeps()
+
+    await ask(client(stub, sleeps))
+
+    assert sleeps.delays == [1.0]
+
+
+async def test_a_server_error_with_retry_after_is_honoured_too() -> None:
+    error = litellm.ServiceUnavailableError(
+        message="503",
+        llm_provider="gemini",
+        model=MODEL,
+        response=httpx.Response(503, headers={"retry-after": "4"}),
+    )
+    stub = StubCompletion(error, completion(REPLY))
+    sleeps = Sleeps()
+
+    await ask(client(stub, sleeps))
+
+    assert sleeps.delays == [4.0]
 
 
 async def test_retry_then_timeout() -> None:
@@ -597,6 +719,34 @@ async def test_recording_skips_a_call_that_got_no_reply(tmp_path: Path) -> None:
     reply = await ask(RecordingModel(client(stub), path))
 
     assert reply.error == "rate_limited"
+    assert not path.exists()
+
+
+async def test_recording_keeps_a_reply_with_no_text_so_it_replays_the_same(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "smoke.jsonl"
+    stub = StubCompletion(completion(None, prompt_tokens=30, completion_tokens=0))
+    live = await ask(RecordingModel(client(stub), path))
+
+    replayed = await ask(ReplayModel(path))
+
+    assert live.error == "invalid_json"
+    assert (replayed.value, replayed.error, replayed.raw) == (None, "invalid_json", "")
+    assert (replayed.input_tokens, replayed.output_tokens) == (30, 0)
+    assert replayed.cost_usd == live.cost_usd
+
+
+@pytest.mark.parametrize("make_error", [rate_limit, timeout, server_error, bad_key])
+async def test_recording_skips_every_call_that_got_no_reply(
+    tmp_path: Path, make_error: Any
+) -> None:
+    path = tmp_path / "smoke.jsonl"
+    stub = StubCompletion(*[make_error()] * 3)
+
+    reply = await ask(RecordingModel(client(stub), path))
+
+    assert reply.raw == ""
     assert not path.exists()
 
 
