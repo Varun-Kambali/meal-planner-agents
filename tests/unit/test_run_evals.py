@@ -45,8 +45,10 @@ def test_metrics_on_fixed_results() -> None:
     # No variety failure: everything written but a3.
     assert (recipes.variety_passing, recipes.variety_pass_share) == (5, 0.7143)
     assert (recipes.days, recipes.days_passing, recipes.day_pass_share) == (4, 3, 0.75)
+    assert (recipes.days_unsettled, recipes.unsettled_day_checks) == (0, {})
     # Only c passes whole: a has failing recipes and a failing day, b a failing recipe.
     assert (recipes.weeks_passing, recipes.week_pass_share) == (1, 0.3333)
+    assert (recipes.weeks_without_failure, recipes.week_without_failure_share) == (1, 0.3333)
     assert (recipes.calls, recipes.calls_per_week) == (9, 3.0)
     assert (recipes.input_tokens, recipes.output_tokens, recipes.tokens_per_week) == (
         170,

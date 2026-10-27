@@ -83,6 +83,9 @@ class RecipeOutcome(_Record):
 class DayOutcome(_Record):
     day: DayKey
     failures: list[FailureRecord]
+    # The checks the day could be shown neither to meet nor to miss, because a food in it has no
+    # value for the nutrient. Empty in a line written before days could be unsettled.
+    unsettled: list[FailureRecord] = []
 
 
 class RecipeCase(_Record):
@@ -205,7 +208,10 @@ def recipe_case(
         seconds=round(seconds, 3),
         usage=usage,
         recipes=outcomes,
-        days=[DayOutcome(day=d.day, failures=_failures(d.failures)) for d in week.days],
+        days=[
+            DayOutcome(day=d.day, failures=_failures(d.failures), unsettled=_failures(d.unsettled))
+            for d in week.days
+        ],
         no_waste=len(week.no_waste),
     )
 
