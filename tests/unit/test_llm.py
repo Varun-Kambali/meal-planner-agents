@@ -21,6 +21,7 @@ from meal_planner.llm import (
     ModelReply,
     RecordingModel,
     ReplayModel,
+    recording_key,
 )
 
 pytestmark = pytest.mark.anyio
@@ -689,7 +690,7 @@ async def test_a_recording_is_one_json_line_per_call_without_the_prompt(tmp_path
 
     first, second = recorded(path)
     assert set(first) == {
-        "key",
+        "prompt_sha256",
         "task",
         "raw",
         "input_tokens",
@@ -699,8 +700,22 @@ async def test_a_recording_is_one_json_line_per_call_without_the_prompt(tmp_path
     }
     assert (first["task"], second["task"]) == ("write", "read")
     assert first["raw"] == REPLY
-    assert first["key"] != second["key"]
+    assert first["prompt_sha256"] != second["prompt_sha256"]
     assert "cashews" not in path.read_text()
+
+
+async def test_a_recording_line_holds_the_prompt_hash_as_prompt_sha256_and_has_no_key_field(
+    tmp_path: Path,
+) -> None:
+    """A field called `key` holding 64 hex characters reads as an API key to a secret scanner."""
+    path = tmp_path / "smoke.jsonl"
+
+    await ask(RecordingModel(FakeModel({"write": [REPLY]}), path))
+
+    (line,) = recorded(path)
+    assert line["prompt_sha256"] == recording_key(SYSTEM, USER)
+    assert len(line["prompt_sha256"]) == 64
+    assert "key" not in line
 
 
 async def test_recording_appends_to_an_existing_file(tmp_path: Path) -> None:
