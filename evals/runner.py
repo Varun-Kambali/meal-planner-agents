@@ -258,8 +258,8 @@ class CaseLog:
 
 class CaseRecorder:
     """Records each case's model calls apart, and adds them to the recording only once the case
-    has finished. A case that stopped part-way runs again on resume, and its first calls would
-    otherwise be in the recording twice, with the abandoned replies first."""
+    has finished and is in the log. A case that stopped part-way runs again on resume, and its
+    first calls would otherwise be in the recording twice, with the abandoned replies first."""
 
     def __init__(self, inner: ModelPort, path: Path, pending: Path) -> None:
         self._inner = inner
@@ -334,7 +334,10 @@ async def run_cases(
 def _finish(
     record: CaseRecord, log: CaseLog, recorder: CaseRecorder | None, say: Callable[[str], None]
 ) -> None:
+    # The log first: killed between the two, the case's calls are missing from the recording,
+    # which a replay reports as calls with no recording, rather than kept for a case the log does
+    # not hold, whose replies a rerun would then be answered with.
+    log.append(record)
     if recorder is not None:
         recorder.keep()
-    log.append(record)
     say(describe(record))

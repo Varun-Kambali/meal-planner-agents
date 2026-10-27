@@ -414,3 +414,38 @@ async def test_a_label_nutrition_mcp_refuses_is_an_error_not_a_stop() -> None:
 
     with pytest.raises(NutritionError):
         await label_kcal(unknown, ReaderNutrition())
+
+
+async def test_a_case_is_logged_before_its_calls_join_the_recording(tmp_path: Path) -> None:
+    """Killed between the two writes, the case is in the log and its calls are not in the
+    recording, which a replay reports as calls with no recording rather than as replies that
+    differ from the log."""
+
+    class KilledWhileKeeping(CaseRecorder):
+        def keep(self) -> None:
+            raise RuntimeError("killed")
+
+    log = CaseLog(tmp_path / "cases.jsonl")
+    recorder = KilledWhileKeeping(
+        baseline_model(), tmp_path / "smoke.jsonl", tmp_path / "pending.jsonl"
+    )
+    rules = plan_rules()
+
+    with pytest.raises(RuntimeError):
+        await run_cases(
+            Selection(plans=["a"], meals=[], slice="partial"),
+            {"a": rules},
+            {},
+            model=baseline_model(),
+            nutrition=SpyNutrition(),
+            catalogue=catalogue(),
+            settings=Settings(),
+            log=log,
+            recorder=recorder,
+            say=lambda line: None,
+        )
+
+    # The pipeline's case ran first, with a model that only has the baseline's reply, and was
+    # logged before the recorder was asked to keep its calls.
+    assert [r.case for r in CaseLog(log.path).records] == ["recipes/pipeline/a"]
+    assert not (tmp_path / "smoke.jsonl").exists()
