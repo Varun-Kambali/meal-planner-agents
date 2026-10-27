@@ -2,7 +2,7 @@
 
 Status: agreed at kickoff on 2026-10-21, and brought in line with the code when the recipe pipeline was finished, on 2026-10-24, again when the meal reader and the day and week totals were added, on 2026-10-25, and after their review, on 2026-10-26. What the system must do is in [requirements.md](requirements.md); why it is built this way is in [case-study.md](case-study.md).
 
-Built so far: the week graph, the checks, the meal reader, the day and week totals, the HTTP API for writing and replacing a week, reading a typed meal and summarising a log, and a command line with `week`, `read` and `summary`. Tracing, the frontend, the evals and the deployed demo are still to come, and the sections on them say so.
+Built so far: the week graph, the checks, the meal reader, the day and week totals, the HTTP API for writing and replacing a week, reading a typed meal and summarising a log, and a command line with `week`, `read` and `summary`. The eval runner is built and has not been run with a model yet. Tracing, the frontend and the deployed demo are still to come, and the sections on them say so.
 
 ## Overview
 
@@ -53,7 +53,7 @@ The browser holds everything about the user. Each request sends the plan rules (
 | `rules.py` | Pydantic models for the plan rules (day types, targets, slots, gear, food rules, shopping days) and the JSON Schema export. A day type's extra targets are for nutrients it has no field for: one that repeats calories, protein, carbohydrate, fat, saturated fat or fibre, or names a nutrient twice, is refused with the field named |
 | `catalogue.py` | Loads `data/catalogue.yaml`, the ingredients the writer may use, with allergen groups, pack size, shelf life and grams per household measure. Checks every id against nutrition-mcp at startup and keeps each food's nutrients per 100 g from the same call. `meal_item` settles the unit of a food eaten for the reader and the summary alike (see Reading a typed meal, step 4) |
 | `nutrition.py` | The nutrition-mcp client: one MCP session over stdio, typed wrappers for `search_food`, `get_nutrition` and `compute_meal`, timeouts and error mapping |
-| `llm.py` | The model client: model id from config, timeouts, retries with backoff, structured output into Pydantic models, and a log line with tokens, latency and cost for every call. A reply that cannot be used comes back with an error code, never as an exception. Also the fake, recorder and replayer that tests and the smoke eval use |
+| `llm.py` | The model client: model id from config, timeouts, retries that back off with jitter and follow a provider's Retry-After, structured output into Pydantic models, and a log line with tokens, latency and cost for every call. A reply that cannot be used comes back with an error code, never as an exception. Also the fake, recorder and replayer that tests and the smoke eval use |
 | `log.py` | JSON log lines on stderr that carry only an allowlist of fields (task, model, tokens, latency, cost, error, error type) and the request id, so no rule or typed text can reach a log |
 | `recipes.py` | The models a recipe passes through: what the writer returns (`DraftRecipe`, `SlotDraft`), a recipe with its numbers and failures (`CheckedRecipe`), and a day's totals and failures (`DayReport`) |
 | `checks.py` | Pure functions, one per hard check. Each returns pass or fail and a reason the model can act on ("protein 31 g, slot needs at least 36 g"). A number in a reason is whole when whole units are within 2% of it and has one or two decimals when they are not, so a limit of 2.4 ug is not shown as 3; rounding goes up for a floor and down for a cap. A list of foods with no value for a nutrient names foods only, as a person reads them ("mustard oil"), also for a recipe nutrition-mcp could not work out, which lacks all its ingredients. `add_up_meals` adds up a day's meals for both the day checks and the summaries |
@@ -182,7 +182,7 @@ Everything that can refuse a request is checked before the stream starts, so a r
 | `data/foods/` | This project's food file in nutrition-mcp's custom-dataset format: `sources.yaml` (USDA FoodData Central, public domain) and `ingredients.csv` (16 nutrients per 100 g, with an empty cell for a value USDA doesn't report). Loaded by nutrition-mcp through `NUTRITION_MCP_DATA_DIRS` |
 | `data/catalogue.yaml` | Every ingredient the writer may use, from nutrition-mcp's bundled data and the food file: id, display name, shop category, allergen groups, typical pack size, days it keeps once opened |
 | `scripts/build_foods.py` | Builds `data/foods/ingredients.csv` from a reviewed list of FoodData Central records in `data_build/food_map.csv`, and lists every FDC portion of them in `data_build/portions_review.csv` for checking the catalogue's measures (needs a free `USDA_FDC_API_KEY` for records not cached yet) |
-| `evals/datasets/` | Synthetic plans and labelled typed meals (not added yet) |
+| `evals/datasets/` | The 20 synthetic plans and 53 labelled typed meals, and their version (see its README) |
 
 USDA data has no glycemic index, so a meal with any ingredient from the food file has no glycemic load. The day view says so instead of estimating it. How each record was chosen and mapped is in [data.md](data.md).
 
@@ -226,11 +226,13 @@ Startup problems stop the app with one line that says why. A request that cannot
 
 ## Evaluation design
 
-Not built yet: `make eval` and `make eval-smoke` are placeholders.
+The runner is built. Its first results need a run with the model's key, so there are none yet, and the smoke recording and thresholds come with that run.
 
-- **Recipe eval.** For each of the 20 synthetic plans, the pipeline and the single-call baseline each write a week, and the same check functions score both. Results go to `evals/results/` with the date, model, commit, dataset version and cost, and `summary.md` puts the headline (share of recipes passing every hard check) in its first row.
-- **Reading eval.** About 50 typed meals with labelled foods and grams. Food match is scored per item, and calorie error is computed against the labelled foods' numbers from nutrition-mcp.
-- **Smoke eval.** Recorded model responses for a fixed slice are replayed through the real checks and nutrition-mcp, so CI needs no key and gives the same result on every run.
+`evals/run_evals.py` runs the suites against nutrition-mcp, started as the app starts it, one case at a time: a plan written by the pipeline, the same plan written by the baseline, or a typed meal read by the reader. Each finished case is kept as one line in `evals/results/runs/<name>/cases.jsonl`, so a run cut off by a rate limit or Ctrl-C can be finished with `--resume`. A rate limit, or nutrition-mcp out of reach, stops the run without scoring the case; a reply that cannot be used or a timeout is part of the result. A finished run writes `evals/results/<date>_<model>_<commit>.json` with the dataset version, the pipeline's switches, the check settings, the LiteLLM version, every metric with the counts behind it, and the calls, tokens and cost (LiteLLM's list price; the free tier bills nothing). A full run from a clean tree rebuilds `evals/results/summary.md` from the newest such file for each suite.
+
+- **Recipe eval.** For each of the 20 synthetic plans, the pipeline and the single-call baseline each write a week. The baseline (`evals/baseline.py`) writes it in one call from the lines and ingredient list the writer gets, and its recipes go through `evaluate_week`, the graph's own last check, with no portion fitting and no repair. Shares count over the recipes the plans ask for, so a recipe never written counts as failing: recipes passing every hard check (the headline), passing at their first attempt, and passing the variety checks; days, and whole weeks, passing. A day's checks count on the day, not on the recipe the graph hangs them on to choose what to rewrite. Calls, tokens and cost are given per week, and time as the 95th percentile by nearest rank.
+- **Reading eval.** The 53 labelled meals. A labelled food is found when the reader returns its id or one the label also accepts, each reader item standing for one label at most. Measures: precision, recall, status accuracy, how often a label that needs an amount or a unit was not returned as matched, calorie error (MAPE) against the label's matched items worked out by nutrition-mcp, and the share of foods not in the data reported missing. The meals whose labels the reader cannot reach today (m01, m02, m03, m15, m52) are also given on their own.
+- **Smoke eval.** `make eval-smoke` replays `evals/recordings/smoke.jsonl` for a slice fixed in `evals/cases.py` (three plans, one of them a hard one, and ten meals) through the real checks and nutrition-mcp, and `--check evals/thresholds.toml` fails it when a metric falls below its threshold or a call has no recording. CI needs no key and gets the same result on every run.
 
 ## Deployment
 
