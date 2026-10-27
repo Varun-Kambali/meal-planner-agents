@@ -6,5 +6,6 @@
   "tagline": "LangGraph agents write recipes for the meal plan you already follow, check every number in code through nutrition-mcp over MCP, and track meals against it.",
   "summary": "You enter the rules of your meal plan once: daily targets, what each meal should be, the gear you own, the time you have and the foods you avoid. The agents write a week of recipes that are all different, nutrition-mcp supplies every nutrition number, and plain Python checks each recipe and day against the plan, sending failures back for a bounded repair. Then it tracks the meals you actually eat, including typed swaps, against your targets.",
   "measures": "Share of recipes passing every hard check, single call vs the agent pipeline",
+  "evalRow": "Recipes passing every hard check (share)",
   "skills": ["agents", "langgraph", "mcp", "ci-evals", "evalsets", "structured", "observability", "fastapi", "litellm", "frontend", "python", "docker", "cicd"]
 }
