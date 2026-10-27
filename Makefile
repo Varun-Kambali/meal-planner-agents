@@ -26,8 +26,21 @@ foods:
 run:
 	uv run $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE)) uvicorn --factory meal_planner.api:app_factory --host 127.0.0.1 --port 8000 --no-access-log
 
-eval eval-smoke:
-	@echo "make $@ is added in a later milestone"; exit 1
+# The full eval: every plan through the pipeline and the single-call baseline, and every typed
+# meal through the reader. It calls the model with its key (GEMINI_API_KEY for the default model,
+# from the environment or ENV_FILE). A run that stops keeps what it finished; finish it with
+# make eval EVAL_ARGS="--resume evals/results/runs/<name>".
+EVAL_ARGS ?=
+eval:
+	uv run $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE)) python evals/run_evals.py --suite all $(EVAL_ARGS)
+
+# The smoke slice replayed from its recording and held to the thresholds: no key and no network.
+# Its results go to .eval-smoke/, which each run starts afresh.
+SMOKE_RECORDING ?= evals/recordings/smoke.jsonl
+THRESHOLDS ?= evals/thresholds.toml
+eval-smoke:
+	rm -rf .eval-smoke
+	uv run python evals/run_evals.py --smoke --replay $(SMOKE_RECORDING) --check $(THRESHOLDS) --out .eval-smoke
 
 docker:
 	docker build -t meal-planner-agents .
