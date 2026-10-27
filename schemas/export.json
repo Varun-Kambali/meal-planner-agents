@@ -86,6 +86,13 @@
           "title": "Failures",
           "type": "array"
         },
+        "unsettled": {
+          "items": {
+            "$ref": "#/$defs/Failure"
+          },
+          "title": "Unsettled",
+          "type": "array"
+        },
         "soft": {
           "additionalProperties": {
             "type": "number"
@@ -98,6 +105,7 @@
         "day",
         "totals",
         "failures",
+        "unsettled",
         "soft"
       ],
       "title": "DayReport",

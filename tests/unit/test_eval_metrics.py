@@ -454,7 +454,7 @@ def test_every_check_variety_gives_is_a_variety_check() -> None:
 def test_day_checks_and_only_day_checks_start_with_the_day_prefix() -> None:
     rules = plan_rules()
     nothing_known = Nutrients.model_validate({})
-    day_failures, _ = check_day_totals(nothing_known, {}, rules.day_types[0], Settings())
+    day_failures, _, _ = check_day_totals(nothing_known, {}, rules.day_types[0], Settings())
     recipe = checked("mon", "lunch", title="A 450 kcal bowl", gear=["oven"], active_min=999)
     ghost = DraftRecipe.model_validate(
         recipe.draft.model_dump() | {"ingredients": [{"id": "ghost", "grams": 10}]}

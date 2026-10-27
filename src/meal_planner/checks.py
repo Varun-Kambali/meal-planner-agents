@@ -8,17 +8,23 @@ Two conventions run through the nutrition checks:
 
 - A nutrient that is `None` is not known, and is never read as 0.
 - nutrition-mcp reports a total as a lower bound when some food in it has no value for the
-  nutrient (`total_incomplete`). Below a minimum, a lower bound fails with "part not known":
-  the missing part might have made up the gap, but it cannot be counted. Above a minimum it
-  passes, since adding food only raises it. Against a maximum it cannot pass, because the missing
-  part might push it over: it fails as "not known", or as over the maximum if the known part
-  already is.
+  nutrient (`total_incomplete`). A recipe's own checks read it strictly. Below a minimum, a
+  lower bound fails with "part not known": the missing part might have made up the gap, but it
+  cannot be counted. Above a minimum it passes, since adding food only raises it. Against a
+  maximum it cannot pass, because the missing part might push it over: it fails as "not known",
+  or as over the maximum if the known part already is.
+- A day's checks hold such a total between two bounds: the part known below, and above it a
+  ceiling when one can be worked out from nutrition-mcp's numbers (for saturated fat, the total
+  fat of the foods that lack it, see `sat_fat_ceiling`). The day fails a check the bounds show
+  it misses and passes one they show it meets. Anything else is unsettled, a verdict of its own:
+  the foods with no value might put the day either side of the limit, so it is neither a pass
+  nor a failure, and no rewrite of a recipe can settle it short of dropping the food.
 """
 
 import math
 import re
 from collections import defaultdict
-from collections.abc import Callable, Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import Literal
 
 from nutrition_mcp.models import DIET_SUITABLE_FOR, Nutrients
@@ -32,6 +38,7 @@ from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure
 from meal_planner.rules import DAYS, DayKey, DayType, PlanRules, Slot, SlotSpec
 
 _Direction = Literal["over", "under", "unknown"]
+_Verdict = Literal["fails", "unsettled"]
 
 # Slack for floating point, so a value exactly on a limit passes whatever the last bit of
 # `target * tolerance` is. nutrition-mcp reports two decimals, far coarser than this.
@@ -143,6 +150,63 @@ def _verdict(
     if message is None:
         return None
     return Failure(check=f"{scope}_{key}", message=message + note)
+
+
+# Why a ceiling bounds a nutrient, in the words an unsettled message uses after "at most 31 g".
+_CEILING_REASON = {"sat_fat_g": " if all their fat is saturated"}
+
+
+def _day_verdict(
+    key: str,
+    value: float | None,
+    missing: list[str] | None,
+    *,
+    floor: float | None = None,
+    cap: float | None = None,
+    ceiling: float | None = None,
+    note: str = "",
+) -> tuple[_Verdict, Failure] | None:
+    """Whether a day's total meets its floor and cap, misses them, or cannot be told.
+
+    A complete value (`missing` is None) is judged by `_verdict`. A partial one lies between the
+    part known (`value`, or 0 when it is None, since no nutrient is negative) and `ceiling`, the
+    most it can be, when there is one. It fails when the part known is already over the cap or
+    the ceiling is under the floor, and passes when the part known reaches the floor and the
+    ceiling keeps within the cap. Otherwise it is unsettled. `_EPS` applies at every edge.
+    """
+    if missing is None:
+        failure = _verdict("day", key, value, None, floor=floor, cap=cap, note=note)
+        return None if failure is None else ("fails", failure)
+    name, unit = LABELS[key]
+    lack = f" (no value for {_foods(missing)})" if missing else ""
+    known = 0.0 if value is None else value
+    verdict: _Verdict = "fails"
+    if cap is not None and known > cap + _EPS:
+        message = (
+            f"{name} at least {_up(known)} {unit}, part not known{lack}, "
+            f"day allows at most {_down(cap)} {unit}"
+        )
+    elif floor is not None and ceiling is not None and ceiling < floor - _EPS:
+        message = (
+            f"{name} at most {_down(ceiling)} {unit}, part not known{lack}, "
+            f"day needs at least {_up(floor)} {unit}"
+        )
+    elif (floor is None or known >= floor - _EPS) and (
+        cap is None or (ceiling is not None and ceiling <= cap + _EPS)
+    ):
+        return None
+    else:
+        verdict = "unsettled"
+        bounds = [] if value is None else [f"the part known is {_n(value)} {unit}"]
+        if ceiling is not None:
+            bounds.append(f"at most {_up(ceiling)} {unit}{_CEILING_REASON.get(key, '')}")
+        need = f"day {_need(floor, cap, unit)}"
+        if not bounds:
+            message = f"{name} not known{lack}, {need}"
+        else:
+            joint = "," if ceiling is not None else ""
+            message = f"{name} not known{lack}; {', '.join(bounds)}{joint} and {need}"
+    return verdict, Failure(check=f"day_{key}", message=message + note)
 
 
 def _kcal_note(target: float, tolerance: float) -> str:
@@ -354,52 +418,66 @@ def check_day_totals(
     incomplete: dict[str, list[str]],
     day_type: DayType,
     s: Settings,
-) -> tuple[list[Failure], dict[str, float]]:
+    *,
+    ceilings: Mapping[str, float] | None = None,
+) -> tuple[list[Failure], list[Failure], dict[str, float]]:
     """A day's totals against its day type, and how far carbohydrate and fat are from target.
 
     Calories must be within the tolerance of the target, protein at least the target, saturated
     fat at most its cap, fibre at least its floor, and each extra target met. `incomplete` names,
     for each nutrient, the foods that have no value for it, so its total is a lower bound.
+    `ceilings` holds the most such a total can be, for the nutrients that have one (today only
+    saturated fat, from `sat_fat_ceiling`); it is not read for a total that is complete.
 
-    The second result holds carbohydrate and fat as a fraction of their target over (positive) or
-    under (negative), such as 0.3 for 30% over. They never fail a day. A nutrient whose total is
-    not fully known has no entry.
+    The first result holds the checks the day fails and the second those it can be shown neither
+    to meet nor to miss, because a food lacks a value (see `_day_verdict`). A check is in one of
+    them at most, in the same order. The third holds carbohydrate and fat as a fraction of their
+    target over (positive) or under (negative), such as 0.3 for 30% over. They never fail a day.
+    A nutrient whose total is not fully known has no entry.
     """
     tolerance = s.day_kcal_tolerance
+    bounds = ceilings or {}
+    failures: list[Failure] = []
+    unsettled: list[Failure] = []
 
     def verdict(
         key: str, *, floor: float | None = None, cap: float | None = None, note: str = ""
-    ) -> Failure | None:
-        return _verdict(
-            "day", key, total.get(key), incomplete.get(key), floor=floor, cap=cap, note=note
+    ) -> None:
+        found = _day_verdict(
+            key,
+            total.get(key),
+            incomplete.get(key),
+            floor=floor,
+            cap=cap,
+            ceiling=bounds.get(key),
+            note=note,
         )
+        if found is not None:
+            kind, failure = found
+            (failures if kind == "fails" else unsettled).append(failure)
 
-    found = [
+    verdict(
+        "kcal",
+        floor=day_type.kcal * (1 - tolerance),
+        cap=day_type.kcal * (1 + tolerance),
+        note=_kcal_note(day_type.kcal, tolerance),
+    )
+    verdict("protein_g", floor=day_type.protein_g)
+    verdict("sat_fat_g", cap=day_type.sat_fat_g_max)
+    verdict("fibre_g", floor=day_type.fibre_g_min)
+    for extra in day_type.extra:
         verdict(
-            "kcal",
-            floor=day_type.kcal * (1 - tolerance),
-            cap=day_type.kcal * (1 + tolerance),
-            note=_kcal_note(day_type.kcal, tolerance),
-        ),
-        verdict("protein_g", floor=day_type.protein_g),
-        verdict("sat_fat_g", cap=day_type.sat_fat_g_max),
-        verdict("fibre_g", floor=day_type.fibre_g_min),
-        *(
-            verdict(
-                target.nutrient,
-                floor=target.value if target.kind == "min" else None,
-                cap=target.value if target.kind == "max" else None,
-            )
-            for target in day_type.extra
-        ),
-    ]
+            extra.nutrient,
+            floor=extra.value if extra.kind == "min" else None,
+            cap=extra.value if extra.kind == "max" else None,
+        )
 
     soft: dict[str, float] = {}
     for key, target in (("carbs_available_g", day_type.carbs_g), ("fat_g", day_type.fat_g)):
         value = total.get(key)
         if value is not None and key not in incomplete:
             soft[key] = (value - target) / target
-    return [f for f in found if f is not None], soft
+    return failures, unsettled, soft
 
 
 def add_up_meals(
@@ -470,14 +548,22 @@ def check_day(
     """Add up the day's recipes and hold the sum to the day type.
 
     Recipes of other days in `recipes` are left out. A recipe nutrition-mcp could not compute
-    counts as lacking every nutrient in all its ingredients (see `add_up_meals`).
+    counts as lacking every nutrient in all its ingredients (see `add_up_meals`), and leaves the
+    day's saturated fat with no ceiling.
     """
     todays = [r for r in recipes if r.spec.day == day]
     total, incomplete = add_up_meals(
         [(r.nutrition, [i.id for i in r.draft.ingredients]) for r in todays]
     )
-    failures, soft = check_day_totals(total, incomplete, day_type, s)
-    return DayReport(day=day, totals=dict(total), failures=failures, soft=soft)
+    ceiling = sat_fat_ceiling([r.nutrition for r in todays])
+    failures, unsettled, soft = check_day_totals(
+        total,
+        incomplete,
+        day_type,
+        s,
+        ceilings=None if ceiling is None else {"sat_fat_g": ceiling},
+    )
+    return DayReport(day=day, totals=dict(total), failures=failures, unsettled=unsettled, soft=soft)
 
 
 def _add_names(into: dict[str, list[str]], key: str, names: Iterable[str]) -> None:
