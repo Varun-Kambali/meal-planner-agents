@@ -545,7 +545,7 @@ def test_a_recording_that_cannot_be_replayed_is_refused(
         "".join(
             json.dumps(
                 {
-                    "key": str(i),
+                    "prompt_sha256": str(i),
                     "task": "read_meal",
                     "raw": "{}",
                     "input_tokens": 0,

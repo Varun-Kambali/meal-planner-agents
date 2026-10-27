@@ -359,9 +359,14 @@ class FakeModel:
 
 
 class Recording(BaseModel):
-    """One line of a recording: a model call, minus the prompt, which holds the user's rules."""
+    """One line of a recording: a model call, minus the prompt, which holds the user's rules.
 
-    key: str
+    `prompt_sha256` is the hash of the prompts that ReplayModel finds the reply by. It is not a
+    credential, and its name says so: a field called `key` holding 64 hex characters is flagged
+    as an API key by secret scanners.
+    """
+
+    prompt_sha256: str
     task: str
     raw: str
     input_tokens: int
@@ -371,7 +376,7 @@ class Recording(BaseModel):
 
 
 def recording_key(system: str, user: str) -> str:
-    # A separator, so that moving text from the system prompt to the user prompt is a new key.
+    # A separator, so that moving text from the system prompt to the user prompt is a new hash.
     return hashlib.sha256(f"{system}\0{user}".encode()).hexdigest()
 
 
@@ -396,7 +401,7 @@ class RecordingModel:
         )
         if reply.error not in NO_REPLY:
             line = Recording(
-                key=recording_key(system, user),
+                prompt_sha256=recording_key(system, user),
                 task=task,
                 raw=reply.raw,
                 input_tokens=reply.input_tokens,
@@ -423,7 +428,7 @@ class ReplayModel:
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 entry = Recording.model_validate_json(line)
-                self._recorded.setdefault((entry.task, entry.key), []).append(entry)
+                self._recorded.setdefault((entry.task, entry.prompt_sha256), []).append(entry)
         self._used: dict[tuple[str, str], int] = {}
 
     async def structured[T: BaseModel](
