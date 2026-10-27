@@ -1771,7 +1771,7 @@ def test_a_day_the_checks_cannot_settle_has_nothing_to_blame() -> None:
 
     assert report.failures == []
     assert checks_of(report.unsettled) == ["day_sat_fat_g"]
-    with pytest.raises(ValueError, match="passes every day check"):
+    with pytest.raises(ValueError, match="mon has no failing day check"):
         worst_recipe_for_day(report, dishes, BLAME_DAY)
 
 

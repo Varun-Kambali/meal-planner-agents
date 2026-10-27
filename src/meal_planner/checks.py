@@ -589,9 +589,9 @@ def worst_recipe_for_day(
     does when the day is under.
 
     A tie goes to the earlier slot of the day, then to the first in `recipes`. Raises ValueError
-    when the day has no recipes, passes every check, or fails its first check on a total within
-    its limits. `check_day_totals` gives no such failure: a day that might be within its limits
-    is unsettled, and nothing is blamed for it.
+    when the day has no recipes, has no failing check (it passes, or is only unsettled), or fails
+    its first check on a total within its limits. `check_day_totals` gives no such failure: a day
+    that might be within its limits is unsettled, and nothing is blamed for it.
     """
     todays = sorted(
         (r for r in recipes if r.spec.day == report.day), key=lambda r: r.spec.slot.eat_at
@@ -599,7 +599,7 @@ def worst_recipe_for_day(
     if not todays:
         raise ValueError(f"no recipes for {report.day} to choose from")
     if not report.failures:
-        raise ValueError(f"{report.day} passes every day check, so no recipe is to blame")
+        raise ValueError(f"{report.day} has no failing day check, so no recipe is to blame")
     key = report.failures[0].check.removeprefix("day_")
     direction = _direction(key, report.totals.get(key), day_type)
     if direction is None:
