@@ -5,10 +5,11 @@ baseline; a reading case reads one typed meal (`read_meal`). Every model call a 
 counted (`MeteredModel`), and the case's line goes to the run's cases.jsonl the moment it ends,
 so a run that stops keeps what it finished and `--resume` carries on from there.
 
-A run stops (`RunStopped`) when the model's rate limit is reached, after the model client's own
-tries, or when nutrition-mcp cannot be reached: both say nothing about the pipeline, the
-baseline or the reader, so the case is not scored and is run again on resume. Any other trouble
-(a reply that cannot be used, a timeout) is part of the case's result.
+A run stops (`RunStopped`) when the model's rate limit is reached or its provider keeps
+answering with server errors, after the model client's own tries, or when nutrition-mcp cannot be
+reached: none of them says anything about the pipeline, the baseline or the reader, so the case is
+not scored and is run again on resume. Any other trouble (a reply that cannot be used, a timeout)
+is part of the case's result.
 """
 
 import time
@@ -51,6 +52,7 @@ from meal_planner.week import NUTRITION_UNAVAILABLE, run_week
 from meal_planner.week_events import RecipeChecked, WeekDone, WeekResult
 
 RATE_LIMIT_STOP = "the model's rate limit was reached"
+SERVER_STOP = "the model's provider kept answering with server errors"
 NUTRITION_STOP = "nutrition-mcp could not be reached"
 # What a call that raised instead of replying is counted under.
 RAISED = "raised"
@@ -82,9 +84,12 @@ class MeteredModel:
         return reply
 
 
-def _stop_if_rate_limited(usage: Usage) -> None:
+def _stop_if_cut_off(usage: Usage) -> None:
+    """Stop the run when a call was rate limited or met server errors after all its tries."""
     if usage.errors.get(RATE_LIMITED):
         raise RunStopped(RATE_LIMIT_STOP)
+    if usage.errors.get(SERVER_ERROR):
+        raise RunStopped(SERVER_STOP)
 
 
 # The cases
@@ -113,7 +118,7 @@ async def pipeline_case(
             week = event.week
     seconds = time.perf_counter() - started
     assert week is not None  # run_week always ends with week_done
-    _stop_if_rate_limited(metered.usage)
+    _stop_if_cut_off(metered.usage)
     if any(f.check == NUTRITION_UNAVAILABLE for r in week.recipes for f in r.failures):
         raise RunStopped(NUTRITION_STOP)
     return recipe_case(
@@ -142,7 +147,7 @@ async def baseline_case(
     written = await write_week_single_call(
         rules, model=metered, catalogue=catalogue, settings=settings
     )
-    _stop_if_rate_limited(metered.usage)
+    _stop_if_cut_off(metered.usage)
     try:
         week = await check_baseline_week(
             rules, written, nutrition=nutrition, catalogue=catalogue, settings=settings
@@ -199,9 +204,9 @@ async def reading_case_run(
             label.text, model=metered, nutrition=nutrition, catalogue=catalogue, settings=settings
         )
     except ReadError as exc:
-        _stop_if_rate_limited(metered.usage)
-        model_down = bool(metered.usage.errors.keys() & {TIMEOUT, SERVER_ERROR})
-        if exc.unavailable and not model_down:
+        _stop_if_cut_off(metered.usage)
+        timed_out = bool(metered.usage.errors.get(TIMEOUT))
+        if exc.unavailable and not timed_out:
             # Nothing the model did made it unavailable, so nutrition-mcp was out of reach.
             raise RunStopped(NUTRITION_STOP) from exc
         error = str(exc)

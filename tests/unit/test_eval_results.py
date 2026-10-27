@@ -314,3 +314,14 @@ def test_a_share_with_nothing_to_count_says_so(tmp_path: Path) -> None:
         "none to count",
         "none to count",
     ]
+
+
+def test_the_summary_counts_unwritten_recipes_by_reason_for_each_system(tmp_path: Path) -> None:
+    write_results(tmp_path, results())
+
+    summary = build_summary(tmp_path) or ""
+
+    assert "Recipes not written, by reason:" in summary
+    rows = {row[0]: row[1:] for row in table_rows(summary)}
+    # a4 in the fixed weeks was never written, with reason "timeout", in both systems.
+    assert rows["timeout"] == ["1", "1"]

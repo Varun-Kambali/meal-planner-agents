@@ -14,6 +14,7 @@ from metrics import (
     reading_metrics,
     recipe_metrics,
     share,
+    unwritten_kind,
 )
 from nutrition_mcp.models import Nutrients
 from nutrition_mcp.schemas import MealResult
@@ -185,6 +186,49 @@ def test_a_check_failed_twice_counts_the_recipe_once() -> None:
     metrics = recipe_metrics([week([written("unknown_ingredient", "unknown_ingredient")])])
 
     assert metrics.failing_checks == {"unknown_ingredient": 1}
+
+
+WRONG = "reply had the wrong recipes"
+
+
+@pytest.mark.parametrize(
+    ("reason", "kind"),
+    [
+        ("timeout", "timeout"),
+        ("model_error", "model_error"),
+        ("no_reply", "no_reply"),
+        ("no_recording", "no_recording"),
+        ("not written", "not written"),
+        ("no reply", "no reply"),
+        ("the reply was not valid JSON", "reply not valid JSON"),
+        ("the reply did not fit the format: recipes.0.day: bad", "reply did not fit the format"),
+        ("the recipe for this day and slot did not fit the format", "reply did not fit the format"),
+        (
+            "the reply has 6 recipes but 7 were asked for (missing: sun)",
+            "reply had the wrong recipes",
+        ),
+        (
+            "the reply's recipes are not for the days asked (missing: mon)",
+            "reply had the wrong recipes",
+        ),
+        ("the reply is for slot 'x' but 'lunch' was asked for", "reply had the wrong recipes"),
+        ("no recipe for this day and slot in the reply", "reply had the wrong recipes"),
+        ("something new", "other"),
+    ],
+)
+def test_unwritten_reasons_are_grouped_by_kind(reason: str, kind: str) -> None:
+    assert unwritten_kind(reason) == kind
+
+
+def test_unwritten_recipes_are_counted_by_kind() -> None:
+    def gone(reason: str) -> RecipeOutcome:
+        return RecipeOutcome(day="mon", slot_id="s", written=False, unwritten_reason=reason)
+
+    metrics = recipe_metrics(
+        [week([gone("timeout"), gone("timeout"), gone("the reply was not valid JSON"), written()])]
+    )
+
+    assert metrics.unwritten_by_reason == {"reply not valid JSON": 1, "timeout": 2}
 
 
 def test_cost_is_unknown_when_a_call_that_got_a_reply_had_no_price() -> None:

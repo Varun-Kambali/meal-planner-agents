@@ -8,12 +8,14 @@ from typing import Any
 import pytest
 from baseline import TASK
 from cases import LabelItem, MealLabel, Selection
+from metrics import recipe_metrics
 from pydantic import BaseModel
 from reader_helpers import ReaderNutrition, reader_catalogue, reading, said
 from records import CASE, ReadingCase
 from runner import (
     NUTRITION_STOP,
     RATE_LIMIT_STOP,
+    SERVER_STOP,
     CaseLog,
     CaseRecorder,
     MeteredModel,
@@ -109,9 +111,25 @@ async def test_a_repaired_recipe_keeps_the_checks_it_failed_first() -> None:
     assert line.usage.calls == 5
 
 
-async def test_a_rate_limited_pipeline_week_stops_the_run() -> None:
-    with pytest.raises(RunStopped, match=RATE_LIMIT_STOP):
-        await pipeline(model_for(errors={"snack": "rate_limited"}))
+@pytest.mark.parametrize(
+    ("error", "stop"), [("rate_limited", RATE_LIMIT_STOP), ("server_error", SERVER_STOP)]
+)
+async def test_a_pipeline_week_the_provider_cut_off_stops_the_run(error: str, stop: str) -> None:
+    with pytest.raises(RunStopped, match=stop):
+        await pipeline(model_for(errors={"snack": error}))
+
+
+async def test_an_unwritten_slot_keeps_the_graphs_reason() -> None:
+    six_days = changed("snack", lambda r: r)
+    reply = json.loads(six_days)
+    reply["recipes"] = reply["recipes"][:6]
+    model = model_for(writes={"snack": [json.dumps(reply)] * 4})
+
+    line = await pipeline(model)
+
+    reasons = {r.unwritten_reason for r in line.recipes if r.slot_id == "snack"}
+    assert reasons == {"the reply has 6 recipes but 7 were asked for (missing: sun)"}
+    assert recipe_metrics([line]).unwritten_by_reason == {"reply had the wrong recipes": 7}
 
 
 async def test_a_timed_out_slot_is_part_of_the_result() -> None:
@@ -147,12 +165,15 @@ async def test_a_baseline_recipe_that_fails_fails_first_time_too() -> None:
     assert wednesday.first_failures == ["slot_protein_g"]
 
 
-async def test_a_rate_limited_baseline_stops_the_run() -> None:
+@pytest.mark.parametrize(
+    ("error", "stop"), [("rate_limited", RATE_LIMIT_STOP), ("server_error", SERVER_STOP)]
+)
+async def test_a_baseline_the_provider_cut_off_stops_the_run(error: str, stop: str) -> None:
     class Limited:
         async def structured(self, **kwargs: Any) -> ModelReply[Any]:
-            return ModelReply(value=None, raw="", error="rate_limited")
+            return ModelReply(value=None, raw="", error=error)
 
-    with pytest.raises(RunStopped, match=RATE_LIMIT_STOP):
+    with pytest.raises(RunStopped, match=stop):
         await baseline(Limited())
 
 
@@ -234,12 +255,15 @@ async def test_a_timed_out_read_is_a_failed_read() -> None:
     assert line.error == "the model could not be reached (step: read_meal)"
 
 
-async def test_a_rate_limited_read_stops_the_run() -> None:
+@pytest.mark.parametrize(
+    ("error", "stop"), [("rate_limited", RATE_LIMIT_STOP), ("server_error", SERVER_STOP)]
+)
+async def test_a_read_the_provider_cut_off_stops_the_run(error: str, stop: str) -> None:
     class Limited:
         async def structured(self, **kwargs: Any) -> ModelReply[Any]:
-            return ModelReply(value=None, raw="", error="rate_limited")
+            return ModelReply(value=None, raw="", error=error)
 
-    with pytest.raises(RunStopped, match=RATE_LIMIT_STOP):
+    with pytest.raises(RunStopped, match=stop):
         await read(Limited())
 
 

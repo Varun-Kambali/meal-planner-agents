@@ -18,6 +18,7 @@ Shares are kept with the counts they come from, so a reader can check every one.
 """
 
 import math
+import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 
@@ -112,6 +113,29 @@ def passes_variety(recipe: RecipeOutcome) -> bool:
     return recipe.written and not any(f.check in VARIETY_CHECKS for f in recipe.failures)
 
 
+# How the reason a recipe was not written is grouped in the results. The messages carry details
+# (days, field names) that would give every recipe a row of its own, so each prefix the graph
+# and the baseline write maps to one kind. An error code is its own kind.
+_UNWRITTEN_KINDS = (
+    ("the reply was not valid JSON", "reply not valid JSON"),
+    ("the reply did not fit the format", "reply did not fit the format"),
+    ("the recipe for this day and slot did not fit the format", "reply did not fit the format"),
+    ("the reply has ", "reply had the wrong recipes"),
+    ("the reply's recipes are not for the days asked", "reply had the wrong recipes"),
+    ("the reply is for slot ", "reply had the wrong recipes"),
+    ("no recipe for this day and slot in the reply", "reply had the wrong recipes"),
+)
+_PLAIN_REASONS = frozenset({"not written", "no reply"})
+
+
+def unwritten_kind(reason: str) -> str:
+    """The kind of reason a recipe was not written, for counting: an error code as it is, a
+    known message by its kind, anything else "other"."""
+    if reason in _PLAIN_REASONS or re.fullmatch(r"[a-z_]+", reason):
+        return reason
+    return next((kind for prefix, kind in _UNWRITTEN_KINDS if reason.startswith(prefix)), "other")
+
+
 def week_passes(case: RecipeCase) -> bool:
     return all(recipe_passes(r) for r in case.recipes) and all(not d.failures for d in case.days)
 
@@ -146,6 +170,8 @@ class RecipeMetrics(BaseModel):
     # For each day check, the days that ended failing it.
     failing_day_checks: dict[str, int]
     no_waste_flags: int
+    # Recipes never written, by the kind of reason (see `unwritten_kind`).
+    unwritten_by_reason: dict[str, int]
 
 
 def _usage_totals(usages: Iterable[Usage]) -> Usage:
@@ -214,6 +240,15 @@ def recipe_metrics(cases: Sequence[RecipeCase]) -> RecipeMetrics:
         failing_checks=dict(sorted(failing.items())),
         failing_day_checks=dict(sorted(failing_days.items())),
         no_waste_flags=sum(case.no_waste for case in cases),
+        unwritten_by_reason=dict(
+            sorted(
+                Counter(
+                    unwritten_kind(r.unwritten_reason or "not written")
+                    for r in recipes
+                    if not r.written
+                ).items()
+            )
+        ),
     )
 
 

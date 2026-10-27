@@ -279,6 +279,24 @@ def _recipes_section(name: str, results: Results) -> list[str]:
                 ),
             ),
         ]
+    reasons = sorted({*base.unwritten_by_reason, *pipe.unwritten_by_reason})
+    if reasons:
+        lines += [
+            "",
+            "Recipes not written, by reason:",
+            "",
+            *_table(
+                ["Reason", "Baseline", "This project"],
+                (
+                    [
+                        r,
+                        str(base.unwritten_by_reason.get(r, 0)),
+                        str(pipe.unwritten_by_reason.get(r, 0)),
+                    ]
+                    for r in reasons
+                ),
+            ),
+        ]
     if days:
         lines += [
             "",
