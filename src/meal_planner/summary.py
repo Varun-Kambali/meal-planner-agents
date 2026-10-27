@@ -135,8 +135,9 @@ class DaySummary(_Model):
     targets: dict[str, float]
     failures: list[Failure]
     # Checks the day can be shown neither to meet nor to miss, because a food eaten has no value
-    # for the nutrient; see DayReport. A meal nutrition-mcp cannot work out refuses the log
-    # instead, so here a missing value is the only cause. Never a failure, and never on target.
+    # for the nutrient; see DayReport. A meal nutrition-mcp cannot work out refuses the log or
+    # ends the summary instead, so here a missing value is the only cause. Never a failure, and
+    # never on target.
     unsettled: list[Failure]
     # Carbohydrate and fat as a fraction over (+) or under (-) their target; see DayReport.
     soft: dict[str, float]

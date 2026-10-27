@@ -2,15 +2,14 @@
 `read` reads a meal typed in plain words and `summary` adds up a meal log against the rules.
 
 Progress goes to stderr one line per event. It holds the kind of event, slot ids (the plan's own
-slugs, such as "breakfast"), days, an attempt number and the names of checks, never the plan's
-free text or what the model wrote. The `week_done` line names, for each day, the checks it fails
-and those it leaves unsettled because a food has no value for the nutrient or a recipe has no
-numbers. The week goes to
-`--out`, or to stdout; what `read` finds and the summary go to stdout. A log that does not fit is
-named entry by entry, as the API's 422 names it. Exit codes: 0 a week was written (recipes that
-still fail are in it), a meal was read or a log was added up, 1 the app could not start or the
-run failed, 2 the rules, the text or the log could not be used, 130 the run was stopped with
-Ctrl-C.
+slugs, such as "breakfast"), days, an attempt number and the names of checks, never the plan's free
+text or what the model wrote. The `week_done` line names, for each day, the checks it fails and
+those it leaves unsettled because a food has no value for the nutrient or a recipe has no numbers.
+The week goes to `--out`, or to stdout; what `read` finds and the summary go to stdout. A log that
+does not fit is named entry by entry, as the API's 422 names it. Exit codes: 0 a week was written
+(recipes that still fail are in it), a meal was read or a log was added up, 1 the app could not
+start or the run failed, 2 the rules, the text or the log could not be used, 130 the run was stopped
+with Ctrl-C.
 
 Settings come from the environment only; the command does not read a .env file, so run it with
 `uv run --env-file .env meal-planner ...` to use one.

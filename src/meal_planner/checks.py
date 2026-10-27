@@ -24,8 +24,9 @@ These conventions run through the nutrition checks:
   with no ceiling, cannot be settled by a rewrite short of dropping the food, since nothing bounds
   the missing part from above. The rest can: less of a food with no value lowers the
   saturated-fat ceiling, and more of what is known raises a floor's known part. Repair is not
-  asked to, because the missing value usually settles the check by itself (a dal with no fibre
-  value has fibre, and rohu's fat is not all saturated), and chasing it would spend model calls.
+  asked to: the missing value may settle the check by itself (a dal with no fibre value still has
+  fibre, and rohu's fat is not all saturated), and chasing what the data cannot show would spend
+  model calls.
   A day a rewrite could have settled is left as it is.
 """
 
