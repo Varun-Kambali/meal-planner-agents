@@ -79,13 +79,13 @@ The first full run (2026-10-27, gemini-3.1-flash-lite, commit b593c44) covered 2
 | Calorie error against the label (MAPE) | 4.0% over 42 meals |
 | Foods not in the data reported missing (share) | 100.0% (19 of 19) |
 
-The single call guesses grams and misses slot calories on most recipes. Portion fitting gets the pipeline to 260 at the first attempt, and repair to 451. Days are the weak point (see Limits). The reader's calorie error comes mostly from the five meals it cannot reach today. This is one run of one free model on synthetic data, so the spread between runs is unknown.
+The single call guesses grams and misses slot calories on most recipes. Portion fitting gets the pipeline to 260 at the first attempt, and repair to 451. Days are the weak point (see Limits). The reader's calorie error comes mostly from the five meals it cannot reach today. One run of one free model on synthetic data, so the spread between runs is unknown.
 
 ## Limits, and what better inputs would change
 
 - **Time is the model's claim.** Minutes are what the recipe states, checked against the slot's limits, never measured.
 - **A style like "no-cook" is free text** that no code checks, though the prompts call it binding.
-- **Saturated fat is the main reason days fail.** In the first full run it put 50 of the pipeline's 140 days over the cap, though the writer sees each ingredient's saturated fat. Fibre left 44 under the floor.
+- **Missing values fail days.** The food data has no saturated fat for curry leaves or rohu and no fibre for several dals, so a day using one cannot be shown within its limit. Most days failing those checks fail this way.
 - **Scaling is uniform,** so a piece-counted ingredient such as an egg can land on a fraction of a piece.
 - **A household measure with no sourced weight is not converted.** For a bowl or a pav the reader asks for a unit nutrition-mcp or the catalogue knows, such as a katori or grams.
 - **Which dish a general name means is the model's pick** among nutrition-mcp's options. In the reading eval, 83 of the reader's 85 foods were the labelled ones.

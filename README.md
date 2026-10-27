@@ -54,7 +54,7 @@ The first full run of `make eval`: model gemini/gemini-3.1-flash-lite, commit b5
 | Cost per meal at list price (mean) | $0.000319 | $0.000333 | $0.000318 |
 | Seconds per meal (p95) | 8.5 | 4.4 | 8.5 |
 
-What this shows: the single call misses slot calories on most recipes, because it guesses grams. Portion fitting in code gets the pipeline to 260 recipes at the first attempt, and repair takes it to 451. Days are the weak point: 52 of 140 pass, and the pipeline's failing days are most often over the saturated-fat cap (50) or under the fibre floor (44). The pipeline spends 14.2 model calls a week to the baseline's one. Cost is LiteLLM's list price for the paid tier; the free tier billed nothing.
+What this shows: the single call misses slot calories on most recipes, because it guesses grams. Portion fitting in code gets the pipeline to 260 recipes at the first attempt, and repair takes it to 451. Days are the weak point: 52 of 140 pass. The saturated-fat and fibre checks fail the most days (50 and 44), mostly because a food in the day, such as curry leaves, rohu or a dal, has no value for that nutrient in the food data. The check cannot then show the day is within its limit, so it fails it. The pipeline spends 14.2 model calls a week to the baseline's one. Cost is LiteLLM's list price for the paid tier; the free tier billed nothing.
 
 What it does not show: this is one run of one free-tier model on synthetic plans and meals, so the spread between runs is unknown.
 
