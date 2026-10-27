@@ -9,7 +9,8 @@ from typing import Any
 import pytest
 from nutrition_mcp.models import Diet, Nutrients
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
-from nutrition_mcp.schemas import MealResult
+from nutrition_mcp.nutrition import sum_nutrients
+from nutrition_mcp.schemas import FoodSummary, MealResult, NutritionResult
 
 from meal_planner.catalogue import Catalogue, CatalogueItem
 from meal_planner.checks import (
@@ -23,6 +24,7 @@ from meal_planner.checks import (
     check_no_waste,
     check_slot_targets,
     check_variety,
+    sat_fat_ceiling,
     worst_recipe_for_day,
 )
 from meal_planner.config import Settings
@@ -1325,6 +1327,110 @@ def test_check_day_with_no_recipes_knows_nothing() -> None:
         "day_fibre_g",
     ]
     assert report.soft == {}
+
+
+# The most saturated fat a day can hold, from nutrition-mcp's numbers for each food
+
+
+def portion(
+    food_id: str,
+    grams: float,
+    incomplete: Mapping[str, list[str]] | None = None,
+    **per_100g: float | None,
+) -> NutritionResult:
+    """nutrition-mcp's answer for `grams` of a food with the nutrients per 100 g a test sets."""
+    return NutritionResult(
+        food=FoodSummary(
+            id=food_id,
+            kind="ingredient",
+            name=food_id.replace("_", " ").capitalize(),
+            aliases=[],
+            regions=[],
+            diet="veg",
+            source_ids=["fake"],
+            units={"g": 1.0},
+        ),
+        amount=grams,
+        unit="g",
+        grams=grams,
+        measure_assumption=f"{grams:g} g",
+        nutrients=Nutrients.model_validate(
+            {
+                key: None if value is None else round(value * grams / 100, 2)
+                for key, value in per_100g.items()
+            }
+        ),
+        incomplete=dict(incomplete or {}),
+        raw_ingredient_totals=[],
+        gi=None,
+        gi_ref=None,
+        glycemic_load=None,
+        oil_assumption=None,
+        sources=["fake"],
+    )
+
+
+def plate(*items: NutritionResult) -> MealResult:
+    """A meal of `items` with the totals nutrition-mcp gives: each nutrient summed over the items
+    that have it, and the foods that lack it (or a dish's ingredients that do) named."""
+    total, _ = sum_nutrients([(i.food.id, i.nutrients) for i in items])
+    lacking: dict[str, list[str]] = {}
+    for key in NUTRIENT_KEYS:
+        for i in items:
+            names = i.incomplete.get(key) or ([i.food.id] if i.nutrients.get(key) is None else [])
+            lacking.setdefault(key, []).extend(names)
+    return MealResult(
+        items=list(items),
+        total=Nutrients.model_validate(
+            {key: None if value is None else round(value, 2) for key, value in total}
+        ),
+        total_incomplete={key: names for key, names in lacking.items() if names},
+        glycemic_load=None,
+        glycemic_load_missing=[],
+    )
+
+
+# CoFID 2021 gives these foods a total fat and no saturated fat, as nutrition-mcp reports them.
+CURRY_LEAVES = {"fat_g": 1.3}
+ROHU = {"fat_g": 1.4}
+
+
+def test_the_ceiling_counts_saturated_fat_where_it_is_known() -> None:
+    assert sat_fat_ceiling([plate(portion("paneer", 100, fat_g=24.5, sat_fat_g=15.43))]) == 15.43
+
+
+def test_the_ceiling_counts_total_fat_for_a_food_with_no_saturated_fat() -> None:
+    assert sat_fat_ceiling([plate(portion("rohu", 150, **ROHU))]) == 2.1
+
+
+def test_the_ceiling_adds_up_every_food_of_every_meal_to_two_decimals() -> None:
+    lunch = plate(portion("paneer", 100, fat_g=24.5, sat_fat_g=15.43), portion("rohu", 150, **ROHU))
+    dinner = plate(portion("curry_leaves", 5, **CURRY_LEAVES), portion("oil", 0.1, sat_fat_g=20))
+
+    # 15.43 + 2.1 + 0.07 + 0.02, with no float noise.
+    assert sat_fat_ceiling([lunch, dinner]) == 17.62
+
+
+def test_a_food_with_neither_value_leaves_no_ceiling() -> None:
+    lunch = plate(portion("paneer", 100, fat_g=24.5, sat_fat_g=15.43), portion("mystery", 50))
+
+    assert sat_fat_ceiling([lunch]) is None
+
+
+def test_a_meal_with_no_numbers_leaves_no_ceiling() -> None:
+    assert sat_fat_ceiling([plate(portion("rohu", 150, **ROHU)), None]) is None
+
+
+def test_saturated_fat_that_is_only_part_known_falls_back_to_a_complete_total_fat() -> None:
+    thali = portion("thali", 200, {"sat_fat_g": ["ghee"]}, fat_g=10, sat_fat_g=3)
+
+    assert sat_fat_ceiling([plate(thali)]) == 20
+
+
+def test_total_fat_that_is_only_part_known_leaves_no_ceiling() -> None:
+    thali = portion("thali", 200, {"sat_fat_g": ["ghee"], "fat_g": ["ghee"]}, fat_g=10, sat_fat_g=3)
+
+    assert sat_fat_ceiling([plate(thali)]) is None
 
 
 # Which recipe to blame for a day

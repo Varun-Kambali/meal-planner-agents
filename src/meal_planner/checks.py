@@ -24,7 +24,7 @@ from typing import Literal
 from nutrition_mcp.models import DIET_SUITABLE_FOR, Nutrients
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.nutrition import sum_nutrients
-from nutrition_mcp.schemas import DECIMALS, MealResult
+from nutrition_mcp.schemas import DECIMALS, MealResult, NutritionResult
 
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
@@ -434,6 +434,34 @@ def add_up_meals(
         {key: None if value is None else round(value, DECIMALS) for key, value in summed}
     )
     return total, incomplete
+
+
+def sat_fat_ceiling(meals: Sequence[MealResult | None]) -> float | None:
+    """The most saturated fat the meals can hold, or None when nothing bounds it.
+
+    Each food counts its saturated fat when nutrition-mcp has all of it, and otherwise its total
+    fat: saturated fat is part of the fat, so it can never be more. A food with neither, or a
+    meal nutrition-mcp could not work out (None), leaves no bound. Every number is
+    nutrition-mcp's. The sum is rounded to two decimals, as `add_up_meals` rounds.
+    """
+    ceiling = 0.0
+    for meal in meals:
+        if meal is None:
+            return None
+        for item in meal.items:
+            bound = _all_of(item, "sat_fat_g")
+            if bound is None:
+                bound = _all_of(item, "fat_g")
+            if bound is None:
+                return None
+            ceiling += bound
+    return round(ceiling, DECIMALS)
+
+
+def _all_of(item: NutritionResult, key: str) -> float | None:
+    """The item's value for `key`, or None when it has none or only part of one."""
+    value = item.nutrients.get(key)
+    return None if value is None or key in item.incomplete else value
 
 
 def check_day(
