@@ -462,7 +462,8 @@ def _evaluate(
     changed; when both or neither are, to the later day. A day that misses its targets is blamed
     on a recipe in `repairable`, once per failed check, only when every slot of the day is there
     and none of them fails on its own: those are rewritten first, and the day is then worked out
-    again.
+    again. A check the day leaves unsettled, because a food has no value for the nutrient, is
+    never blamed, so it never reaches a repair prompt.
     """
     found: dict[_RecipeKey, list[Failure]] = {}
     for key, recipe in recipes.items():
@@ -516,8 +517,9 @@ def evaluate_week(
     when they have none. Each gets the failures the graph's check would give it when every recipe
     is new and may be rewritten: a clash between two recipes goes to the later day, and a day
     that misses a target, with all its slots there and none failing on its own, is blamed on its
-    worst recipe. Returns the recipes in week order, the days and the no-waste warnings. The eval
-    scores its single-call baseline with this, so it is held to exactly the pipeline's checks.
+    worst recipe. A check the day leaves unsettled stays on the day. Returns the recipes in week
+    order, the days and the no-waste warnings. The eval scores its single-call baseline with
+    this, so it is held to exactly the pipeline's checks.
     """
     keyed = {(r.spec.day, r.spec.slot.id): r for r in recipes}
     everything = frozenset(keyed)
