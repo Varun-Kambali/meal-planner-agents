@@ -1,6 +1,7 @@
 """The eval runner: metrics on fixed results, the slices, the results file, summary.md, --check,
 --resume and a replay that needs no model key."""
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,8 @@ from cases import (
     load_plans,
     select,
 )
-from eval_helpers import FIXED_LABELS, FIXED_READS, FIXED_WEEKS
+from dataset_version import dataset_version
+from eval_helpers import FIXED_LABELS, FIXED_READS, FIXED_WEEKS, ScriptedModel
 from metrics import reading_metrics, recipe_metrics
 from records import FailureRecord
 from results import (
@@ -27,6 +29,9 @@ from results import (
     load_thresholds,
     write_results,
 )
+from run_evals import main
+
+from meal_planner.config import Settings
 
 
 def test_metrics_on_fixed_results() -> None:
@@ -243,3 +248,242 @@ def test_check_fails_below_threshold(tmp_path: Path) -> None:
         "reading.all.food_recall is 0.5, below its minimum 0.75",
         "reading.all.kcal_mape is 0.75, above its maximum 0.5",
     ]
+
+
+# The command
+
+
+def run(*argv: str, model: Any = None) -> int:
+    return main(list(argv), model=model)
+
+
+def results_in(folder: Path) -> dict[str, Any]:
+    (path,) = folder.glob("*.json")
+    data: dict[str, Any] = json.loads(path.read_text())
+    return data
+
+
+def without_timing(data: Any) -> Any:
+    """The results with what changes from run to run taken out: when it ran, seconds, whether it
+    was a replay and the state of the working tree."""
+    if isinstance(data, dict):
+        return {
+            key: without_timing(value)
+            for key, value in data.items()
+            if key not in ("finished_at", "seconds_p95", "replayed", "dirty", "date")
+        }
+    return data
+
+
+def test_replay_needs_no_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    recording = tmp_path / "recordings" / "smoke.jsonl"
+    live = tmp_path / "live"
+    assert (
+        run("--smoke", "--record", str(recording), "--out", str(live), model=ScriptedModel()) == 0
+    )
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+    replayed = tmp_path / "replayed"
+    code = run("--smoke", "--replay", str(recording), "--out", str(replayed))
+
+    assert code == 0
+    recorded, again = results_in(live), results_in(replayed)
+    assert again["replayed"] is True
+    assert again["slice"] == "smoke"
+    assert again["plans"] == list(SMOKE_PLANS)
+    assert again["meals"] == list(SMOKE_MEALS)
+    assert again["recipes"]["pipeline"]["calls"] > again["recipes"]["baseline"]["calls"] == 3
+    assert "no_recording" not in again["recipes"]["pipeline"]["call_errors"]
+    assert without_timing(again) == without_timing(recorded)
+    # A smoke run never writes summary.md.
+    assert not (replayed / "summary.md").exists()
+
+
+def test_a_missing_recording_is_named_without_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing = tmp_path / "evals" / "recordings" / "smoke.jsonl"
+
+    code = run("--smoke", "--replay", str(missing), "--out", str(tmp_path))
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert f"{missing} does not exist" in err
+    assert "Traceback" not in err
+
+
+def test_a_missing_thresholds_file_is_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing = tmp_path / "thresholds.toml"
+
+    code = run("--smoke", "--check", str(missing), "--out", str(tmp_path), model=ScriptedModel())
+
+    assert code == 2
+    assert f"{missing} does not exist" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["--record", "a.jsonl", "--replay", "b.jsonl"], "cannot be used together"),
+        (["--smoke", "--only", "m01"], "cannot be used together"),
+        (["--only", "m99"], "m99"),
+        (["--limit", "0"], "at least 1"),
+    ],
+)
+def test_arguments_that_cannot_be_used_exit_2(
+    tmp_path: Path, argv: list[str], message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run(*argv, "--out", str(tmp_path), model=ScriptedModel()) == 2
+    assert message in capsys.readouterr().err
+
+
+def test_a_recording_is_not_added_to_without_resume(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recording = tmp_path / "smoke.jsonl"
+    recording.write_text("")
+
+    code = run("--only", "m28", "--record", str(recording), "--out", str(tmp_path))
+
+    assert code == 2
+    assert "delete it to record afresh" in capsys.readouterr().err
+
+
+def test_the_check_fails_the_run_naming_the_metric(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    thresholds = tmp_path / "thresholds.toml"
+    thresholds.write_text('[min]\n"reading.all.food_recall" = 1.0\n')
+
+    code = run(
+        "--suite",
+        "reading",
+        "--only",
+        "m28",
+        "--check",
+        str(thresholds),
+        "--out",
+        str(tmp_path / "out"),
+        model=ScriptedModel(),
+    )
+
+    assert code == 1
+    assert "reading.all.food_recall is 0.5, below its minimum 1.0" in capsys.readouterr().err
+
+
+def test_a_stopped_run_resumes_to_the_same_results(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = ["--suite", "reading", "--only", "m01,m04,m28"]
+    whole = tmp_path / "whole"
+    assert run(*argv, "--out", str(whole), model=ScriptedModel()) == 0
+
+    parts = tmp_path / "parts"
+    stopped = run(*argv, "--out", str(parts), model=ScriptedModel(limit=2))
+    err = capsys.readouterr().err
+    (folder,) = (parts / "runs").iterdir()
+    kept = [json.loads(line)["case"] for line in (folder / "cases.jsonl").read_text().splitlines()]
+    assert stopped == 3
+    assert "the model's rate limit was reached" in err
+    assert f"--resume {folder}" in err
+    assert kept == ["reading/m01", "reading/m04"]
+    assert not list(parts.glob("*.json"))
+
+    model = ScriptedModel()
+    resumed = run(*argv, "--out", str(parts), "--resume", str(folder), model=model)
+
+    assert resumed == 0
+    assert model.calls == ["read_meal"]
+    assert without_timing(results_in(parts)) == without_timing(results_in(whole))
+
+
+def test_a_run_folder_is_not_reused_without_resume(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = ["--suite", "reading", "--only", "m28", "--out", str(tmp_path)]
+    assert run(*argv, model=ScriptedModel()) == 0
+
+    assert run(*argv, model=ScriptedModel()) == 2
+    assert "--resume" in capsys.readouterr().err
+
+
+def test_resuming_with_different_settings_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = ["--suite", "reading", "--only", "m28", "--out", str(tmp_path)]
+    assert run(*argv, model=ScriptedModel(limit=0)) == 3
+    (folder,) = (tmp_path / "runs").iterdir()
+
+    code = run(*argv, "--no-fit-portions", "--resume", str(folder), model=ScriptedModel())
+
+    assert code == 2
+    assert "these differ now: switches" in capsys.readouterr().err
+
+
+def test_the_switches_and_settings_are_recorded(tmp_path: Path) -> None:
+    argv = ["--suite", "reading", "--only", "m28", "--out", str(tmp_path)]
+
+    assert run(*argv, "--no-writer-nutrient-hints", model=ScriptedModel()) == 0
+
+    data = results_in(tmp_path)
+    assert data["switches"] == {"fit_portions": True, "writer_nutrient_hints": False}
+    assert data["settings"]["max_repair_attempts"] == 3
+    assert data["dataset_version"] == dataset_version()
+    assert data["litellm_version"]
+    assert len(data["commit"]) == 7
+
+
+def test_a_full_run_rebuilds_the_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import run_evals
+
+    monkeypatch.setattr(run_evals, "git_dirty", lambda: False)
+
+    assert run("--suite", "reading", "--out", str(tmp_path), model=ScriptedModel()) == 0
+
+    summary = (tmp_path / "summary.md").read_text()
+    assert "## Reading" in summary
+    assert "No full run of the recipe suite yet." in summary
+    assert "53 typed meals" in summary
+
+
+def test_a_missing_key_is_named_before_any_case_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+    code = run("--suite", "reading", "--only", "m28", "--out", str(tmp_path))
+
+    assert code == 1
+    assert "GEMINI_API_KEY" in capsys.readouterr().err
+    assert not (tmp_path / "runs").exists()
+
+
+def test_a_catalogue_that_cannot_be_loaded_is_a_startup_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    broken = tmp_path / "catalogue.yaml"
+    broken.write_text(
+        "- id: not_a_food\n  name: Nothing\n  category: other\n  allergens: []\n"
+        "  pack_g: null\n  keeps_days_opened: null\n"
+    )
+
+    code = main(
+        ["--suite", "reading", "--only", "m28", "--out", str(tmp_path / "out")],
+        settings=Settings(catalogue_path=broken),
+        model=ScriptedModel(),
+    )
+
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "the ingredient catalogue cannot be used" in err
+    assert "not_a_food" in err
+    # With nothing finished, the same command can simply be run again.
+    again = main(
+        ["--suite", "reading", "--only", "m28", "--out", str(tmp_path / "out")],
+        model=ScriptedModel(),
+    )
+    assert again == 0
