@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from eval_helpers import FIXED_LABELS, FIXED_READS, FIXED_WEEKS
-from records import ReadingCase, RecipeCase
+from records import DayOutcome, FailureRecord, ReadingCase, RecipeCase
 from results import (
     Results,
     RunInfo,
@@ -170,6 +170,81 @@ def test_the_summary_shows_shares_with_their_counts(tmp_path: Path) -> None:
     assert rows["Asked when it should (share)"][0] == "0.0% (0 of 1)"
     assert rows["Labels that ask, food not returned by the reader"][0] == "0 of 1"
     assert rows["Calorie error against the label (MAPE)"][0] == "75.0% over 2 meals"
+
+
+def test_the_recipe_rows_keep_their_order_with_the_headline_first(tmp_path: Path) -> None:
+    write_results(tmp_path, results())
+
+    rows = table_rows(build_summary(tmp_path) or "")
+
+    assert [row[0] for row in rows[:8]] == [
+        "Measure",
+        "Recipes passing every hard check (share)",
+        "Recipes passing every hard check at their first attempt (share)",
+        "Recipes passing the variety checks (share)",
+        "Days passing every check (share)",
+        "Days the checks could not settle (share)",
+        "Weeks where every recipe and day passes (share)",
+        "Weeks with no failing recipe or day (share)",
+    ]
+    by_name = {row[0]: row[1:] for row in rows}
+    assert by_name["Days the checks could not settle (share)"] == ["0.0% (0 of 4)"] * 2
+    assert by_name["Weeks with no failing recipe or day (share)"] == ["33.3% (1 of 3)"] * 2
+
+
+def test_the_summary_counts_the_days_left_unsettled_on_each_check(tmp_path: Path) -> None:
+    unsettled = FailureRecord(check="day_sat_fat_g", message="saturated fat not known")
+    b = FIXED_WEEKS[1].model_copy(
+        update={"days": [DayOutcome(day="mon", failures=[], unsettled=[unsettled])]}
+    )
+    cases: list[RecipeCase | ReadingCase] = [
+        FIXED_WEEKS[0],
+        b,
+        FIXED_WEEKS[2],
+        *(baseline_of(c) for c in FIXED_WEEKS),
+        *FIXED_READS,
+    ]
+    write_results(
+        tmp_path, build_results(info(), cases, FIXED_LABELS, finished_at="2026-10-27T10:00")
+    )
+
+    summary = build_summary(tmp_path) or ""
+
+    rows = {row[0]: row[1:] for row in table_rows(summary)}
+    assert rows["Days the checks could not settle (share)"] == ["0.0% (0 of 4)", "25.0% (1 of 4)"]
+    assert rows["`day_sat_fat_g`"] == ["0", "1"]
+    failing = summary.index("Days that ended failing each check:")
+    left = summary.index("Days that ended unsettled on each check:")
+    assert failing < left
+    after = summary[left:]
+    assert "no value for the nutrient" in after
+    assert "no recipe is rewritten" in after
+
+
+def test_a_results_file_from_before_unsettled_days_still_loads_and_says_not_measured(
+    tmp_path: Path,
+) -> None:
+    path = write_results(tmp_path, results())
+    data = json.loads(path.read_text())
+    new = (
+        "days_unsettled",
+        "day_unsettled_share",
+        "weeks_without_failure",
+        "week_without_failure_share",
+        "unsettled_day_checks",
+    )
+    for system in ("baseline", "pipeline"):
+        for key in new:
+            del data["recipes"][system][key]
+    path.write_text(json.dumps(data))
+
+    summary = build_summary(tmp_path) or ""
+
+    rows = {row[0]: row[1:] for row in table_rows(summary)}
+    assert rows["Days the checks could not settle (share)"] == ["not measured"] * 2
+    assert rows["Weeks with no failing recipe or day (share)"] == ["not measured"] * 2
+    assert rows["Days passing every check (share)"] == ["75.0% (3 of 4)"] * 2
+    assert "Days that ended unsettled on each check: not measured in this run." in summary
 
 
 def test_the_summary_uses_the_newest_full_clean_live_run_for_each_suite(tmp_path: Path) -> None:

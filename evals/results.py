@@ -153,6 +153,11 @@ def _counted(part: int, whole: int) -> str:
     return f"{part / whole * 100:.1f}% ({part} of {whole})"
 
 
+def _measured(part: int | None, whole: int) -> str:
+    """`_counted`, or "not measured" for a count a results file from an older run lacks."""
+    return "not measured" if part is None else _counted(part, whole)
+
+
 def _number(value: float | None, places: int = 1) -> str:
     return "not known" if value is None else f"{value:,.{places}f}"
 
@@ -193,9 +198,14 @@ RECIPE_ROWS: list[Row] = [
         lambda m: _counted(m.variety_passing, m.recipes_asked),
     ),
     ("Days passing every check (share)", lambda m: _counted(m.days_passing, m.days)),
+    ("Days the checks could not settle (share)", lambda m: _measured(m.days_unsettled, m.days)),
     (
         "Weeks where every recipe and day passes (share)",
         lambda m: _counted(m.weeks_passing, m.weeks),
+    ),
+    (
+        "Weeks with no failing recipe or day (share)",
+        lambda m: _measured(m.weeks_without_failure, m.weeks),
     ),
     ("Recipes written (share)", lambda m: _counted(m.recipes_written, m.recipes_asked)),
     ("Model calls per week (mean)", lambda m: _number(m.calls_per_week)),
@@ -239,6 +249,41 @@ def _cost_note(results: Results) -> str:
         f"Cost is LiteLLM {results.litellm_version}'s list price for these calls: what they "
         "would cost on the paid tier. Gemini's free tier bills nothing for them."
     )
+
+
+UNSETTLED_NOTE = (
+    "A day check is unsettled when a food in the day has no value for the nutrient in "
+    "nutrition-mcp's data, so the day can be shown neither to meet the target nor to miss it: "
+    "the day does not pass, and no recipe is rewritten for it."
+)
+
+
+def _unsettled_cell(m: RecipeMetrics, check: str) -> str:
+    return (
+        "not measured"
+        if m.unsettled_day_checks is None
+        else str(m.unsettled_day_checks.get(check, 0))
+    )
+
+
+def _unsettled_lines(base: RecipeMetrics, pipe: RecipeMetrics) -> list[str]:
+    """The table of days left unsettled on each check, after the one of days failing them."""
+    if base.unsettled_day_checks is None and pipe.unsettled_day_checks is None:
+        return ["", "Days that ended unsettled on each check: not measured in this run."]
+    checks = sorted({*(base.unsettled_day_checks or {}), *(pipe.unsettled_day_checks or {})})
+    if not checks:
+        return []
+    return [
+        "",
+        "Days that ended unsettled on each check:",
+        "",
+        *_table(
+            ["Check", "Baseline", "This project"],
+            ([f"`{c}`", _unsettled_cell(base, c), _unsettled_cell(pipe, c)] for c in checks),
+        ),
+        "",
+        UNSETTLED_NOTE,
+    ]
 
 
 def _recipes_section(name: str, results: Results) -> list[str]:
@@ -314,7 +359,7 @@ def _recipes_section(name: str, results: Results) -> list[str]:
                 ),
             ),
         ]
-    return lines
+    return lines + _unsettled_lines(base, pipe)
 
 
 def _reading_section(name: str, results: Results) -> list[str]:
