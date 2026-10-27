@@ -910,16 +910,15 @@ async def test_a_day_that_stays_over_names_its_recipe() -> None:
 FISH = {key: value for key, value in PROFILE.items() if key not in ("fat_g", "sat_fat_g")}
 
 
+def with_fish(recipe: dict[str, Any]) -> dict[str, Any]:
+    """The recipe with its curd swapped for the same grams of fish."""
+    ingredients = [{**i, "id": "fish"} if i["id"] == "curd" else i for i in recipe["ingredients"]]
+    return recipe | {"ingredients": ingredients}
+
+
 def fish_on_monday() -> SlotModel:
     """Monday's breakfast with its curd swapped for the same grams of fish."""
-
-    def swap(recipe: dict[str, Any]) -> dict[str, Any]:
-        ingredients = [
-            {**i, "id": "fish"} if i["id"] == "curd" else i for i in recipe["ingredients"]
-        ]
-        return recipe | {"ingredients": ingredients}
-
-    return model_for(writes={"breakfast": [changed("breakfast", swap, "mon")]})
+    return model_for(writes={"breakfast": [changed("breakfast", with_fish, "mon")]})
 
 
 async def test_a_day_the_checks_cannot_settle_is_never_blamed_on_a_recipe() -> None:
@@ -941,6 +940,28 @@ async def test_a_day_the_checks_cannot_settle_is_never_blamed_on_a_recipe() -> N
 
     assert days == week.days
     assert all(r.failures == [] for r in recipes)
+
+
+async def test_a_day_failing_one_check_and_unsettled_on_another_is_blamed_for_the_failure() -> None:
+    """Monday is over its calories, as in overshoot_monday, and has the fish in its breakfast."""
+    cat = catalogue(item("fish", per_100g=FISH))
+    nutrition = FakeNutrition(foods() | {"fish": FISH})
+    model = model_for(
+        writes={
+            "breakfast": [changed("breakfast", lambda r: with_fish(scaled(r, 1.05)), "mon")],
+            "lunch": [changed("lunch", lambda r: scaled(r, 1.05), "mon")],
+            "snack": [changed("snack", lambda r: scaled(r, 1.05), "mon")],
+            "dinner": [changed("dinner", lambda r: scaled(r, 1.09), "mon")],
+        }
+    )
+
+    _, week = await run(model, nutrition=nutrition, cat=cat, max_repair_attempts=0)
+
+    monday = week.days[0]
+    assert [f.check for f in monday.failures] == ["day_kcal"]
+    assert [f.check for f in monday.unsettled] == ["day_sat_fat_g"]
+    blamed = {key: [f.check for f in r.failures] for key, r in by_key(week).items() if r.failures}
+    assert blamed == {("mon", "dinner"): ["day_kcal"]}
 
 
 # Fitting portions

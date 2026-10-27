@@ -1005,6 +1005,36 @@ def test_a_ceiling_within_the_cap_settles_an_incomplete_total(
     assert checks_of(unsettled) == unsettled_checks
 
 
+@pytest.mark.parametrize("known", [20, 20 + 1e-10])
+def test_a_known_part_at_the_cap_with_a_ceiling_over_it_is_unsettled(known: float) -> None:
+    """At the cap is not over it, so the day does not fail; the ceiling leaves room above."""
+    failures, unsettled, _ = check_day_totals(
+        day_total(sat_fat_g=known),
+        {"sat_fat_g": ["rohu"]},
+        day_type(),
+        settings(),
+        ceilings={"sat_fat_g": 25},
+    )
+
+    assert failures == []
+    assert checks_of(unsettled) == ["day_sat_fat_g"]
+
+
+@pytest.mark.parametrize("ceiling", [35, 35 - 1e-10])
+def test_a_ceiling_at_the_floor_with_the_known_part_under_it_is_unsettled(ceiling: float) -> None:
+    """The day reaches the floor only if the missing part is as large as it can be."""
+    failures, unsettled, _ = check_day_totals(
+        day_total(fibre_g=20),
+        {"fibre_g": ["moong_dal"]},
+        day_type(),
+        settings(),
+        ceilings={"fibre_g": ceiling},
+    )
+
+    assert failures == []
+    assert checks_of(unsettled) == ["day_fibre_g"]
+
+
 def test_an_unsettled_cap_names_the_ceiling() -> None:
     _, unsettled, _ = check_day_totals(
         day_total(sat_fat_g=6),
