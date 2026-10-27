@@ -37,7 +37,7 @@ from meal_planner.config import Settings
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure
 from meal_planner.rules import DAYS, DayKey, DayType, PlanRules, Slot, SlotSpec
 
-_Direction = Literal["over", "under", "unknown"]
+_Direction = Literal["over", "under"]
 _Verdict = Literal["fails", "unsettled"]
 
 # Slack for floating point, so a value exactly on a limit passes whatever the last bit of
@@ -586,10 +586,12 @@ def worst_recipe_for_day(
 
     An amount that is not known (a recipe with no numbers, or no value for the nutrient) never
     ranks first when the day is over, because it cannot be shown to cause the excess, and always
-    does when the day is under. A day that is within its limits as far as is known but cannot be
-    confirmed, because a recipe lacks a value, blames a recipe that lacks it.
+    does when the day is under.
 
-    A tie goes to the earlier slot of the day, then to the first in `recipes`.
+    A tie goes to the earlier slot of the day, then to the first in `recipes`. Raises ValueError
+    when the day has no recipes, passes every check, or its first failing check is on a total
+    within its limits, which no failure `check_day_totals` gives is: a day that might be within
+    them is unsettled, and nothing is blamed for it.
     """
     todays = sorted(
         (r for r in recipes if r.spec.day == report.day), key=lambda r: r.spec.slot.eat_at
@@ -600,17 +602,21 @@ def worst_recipe_for_day(
         raise ValueError(f"{report.day} passes every day check, so no recipe is to blame")
     key = report.failures[0].check.removeprefix("day_")
     direction = _direction(key, report.totals.get(key), day_type)
+    if direction is None:
+        raise ValueError(
+            f"{report.day}'s {key} total is within its limits, so no recipe is to blame for it"
+        )
     return max(todays, key=lambda r: _blame(r, key, direction))
 
 
-def _direction(key: str, total: float | None, day_type: DayType) -> _Direction:
-    """Whether a day's total is over a maximum, under a minimum, or neither (or not known).
+def _direction(key: str, total: float | None, day_type: DayType) -> _Direction | None:
+    """Whether a day's total is over a maximum or under a minimum, or None when it is neither.
 
+    A total that is not known counts as 0, the least it can be, as the day checks count it.
     Calories are held to their target here, not to the tolerance around it: a day that failed on
     calories is outside the band, so the side of the target it is on is the side it missed on.
     """
-    if total is None:
-        return "unknown"
+    known = 0.0 if total is None else total
     limits: list[tuple[str, float]] = []
     match key:
         case "kcal":
@@ -622,20 +628,17 @@ def _direction(key: str, total: float | None, day_type: DayType) -> _Direction:
         case "fibre_g":
             limits = [("min", day_type.fibre_g_min)]
     limits += [(t.kind, t.value) for t in day_type.extra if t.nutrient == key]
-    if any(kind == "max" and total > value for kind, value in limits):
+    if any(kind == "max" and known > value for kind, value in limits):
         return "over"
-    if any(kind == "min" and total < value for kind, value in limits):
+    if any(kind == "min" and known < value for kind, value in limits):
         return "under"
-    return "unknown"
+    return None
 
 
 def _blame(recipe: CheckedRecipe, key: str, direction: _Direction) -> float:
     """How much of the miss in `key` the recipe is, larger meaning more to blame."""
     meal = recipe.nutrition
     held = None if meal is None else meal.total.get(key)
-    if direction == "unknown":
-        lacks = meal is None or held is None or key in meal.total_incomplete
-        return 1.0 if lacks else 0.0
     if held is None:
         return -math.inf if direction == "over" else math.inf
     share = {"kcal": recipe.spec.kcal, "protein_g": recipe.spec.protein_g}.get(key, 0.0)

@@ -1775,6 +1775,37 @@ def test_a_day_the_checks_cannot_settle_has_nothing_to_blame() -> None:
         worst_recipe_for_day(report, dishes, BLAME_DAY)
 
 
+def test_a_failure_whose_total_is_within_its_limits_is_blamed_on_no_recipe() -> None:
+    """No failure check_day gives is like this: a total within its limits either passes or, when
+    a food lacks a value, is unsettled."""
+    dishes = [dish("breakfast"), dish("lunch", sat_fat_g=None), dish("dinner")]
+    report = DayReport(
+        day="mon",
+        totals={"sat_fat_g": 2},
+        failures=[Failure(check="day_sat_fat_g", message="saturated fat not known")],
+        unsettled=[],
+        soft={},
+    )
+
+    with pytest.raises(ValueError, match="mon's sat_fat_g total is within its limits"):
+        worst_recipe_for_day(report, dishes, BLAME_DAY)
+
+
+def test_a_day_short_whatever_its_missing_amount_holds_blames_a_recipe_that_lacks_it() -> None:
+    """A total with no value for any food counts as 0, as the day checks count it, so a ceiling
+    under the floor makes the day under it."""
+    dishes = [dish("breakfast", fibre_g=None), dish("lunch", fibre_g=None), dish("dinner")]
+    report = DayReport(
+        day="mon",
+        totals={"fibre_g": None},
+        failures=[Failure(check="day_fibre_g", message="fibre at most 30 g, part not known")],
+        unsettled=[],
+        soft={},
+    )
+
+    assert worst_recipe_for_day(report, list(reversed(dishes)), BLAME_DAY) is dishes[0]
+
+
 def test_a_tie_goes_to_the_earlier_slot_whatever_the_list_order() -> None:
     breakfast = dish("breakfast", sat_fat_g=15)
     lunch = dish("lunch", sat_fat_g=1)
