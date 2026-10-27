@@ -179,7 +179,7 @@ def _thresholds(path: Path | None) -> Thresholds | None:
     if path is None:
         return None
     if not path.exists():
-        raise UsageError(f"{path} does not exist: the thresholds are set from the first full run")
+        raise UsageError(f"{path} does not exist")
     try:
         return load_thresholds(path)
     except ThresholdsError as exc:
