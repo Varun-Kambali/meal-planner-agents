@@ -1,8 +1,10 @@
-"""What the tracing tests share: a tracer that sends to memory, and its spans read back as data.
+"""What the tracing tests share: a tracer that sends to memory, its spans read back as data, and
+a tracer whose every call into the SDK raises.
 
 The tracer is the one `setup_tracing` builds, with an in-memory exporter in place of the one
 that would send to Langfuse, so nothing leaves the process. Each tracer gets a public key of its
-own, because the SDK keeps one set of resources per key for the life of the process.
+own, because the SDK keeps one set of resources per key for the life of the process. The `sent`
+fixture is made available to every test by tests/conftest.py.
 """
 
 import json
@@ -12,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
@@ -113,3 +116,31 @@ def sending() -> Iterator[Sent]:
     finally:
         tracer.shutdown()
         tracer.provider.shutdown()
+
+
+@pytest.fixture
+def sent() -> Iterator[Sent]:
+    """A tracer that sends to memory, for one test."""
+    with sending() as found:
+        yield found
+
+
+class BrokenClient:
+    """A Langfuse client whose every call raises, with `text` in the error: text no log may hold."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def start_observation(self, **_: object) -> None:
+        raise RuntimeError(f"sdk broke on {self.text}")
+
+    def flush(self) -> None:
+        raise RuntimeError(f"flush broke on {self.text}")
+
+    def shutdown(self) -> None:
+        raise RuntimeError(f"shutdown broke on {self.text}")
+
+
+def broken_tracer(text: str) -> Tracer:
+    """A tracer whose client raises on every call, with `text` in the error."""
+    return Tracer(BrokenClient(text), provider=None)  # type: ignore[arg-type]

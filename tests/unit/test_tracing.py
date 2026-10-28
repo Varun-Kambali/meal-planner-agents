@@ -5,14 +5,13 @@ Every tracer here sends to an in-memory exporter (tracing_helpers), so no test r
 
 import contextvars
 import json
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pydantic import BaseModel, field_serializer
-from tracing_helpers import Sent, sending, tracing_settings
+from tracing_helpers import Sent, broken_tracer, tracing_settings
 from week_helpers import canned, plan_rules
 
 from meal_planner import tracing
@@ -24,12 +23,6 @@ from meal_planner.tracing import MASKED, TracedModel, mask, setup_tracing
 pytestmark = pytest.mark.anyio
 
 MARK = "ZXQ-TRACE-4417"
-
-
-@pytest.fixture
-def sent() -> Iterator[Sent]:
-    with sending() as found:
-        yield found
 
 
 class Reply(BaseModel):
@@ -416,23 +409,10 @@ def test_tracing_is_off_when_no_tracer_is_given() -> None:
 # Tracing never fails a request
 
 
-class BrokenClient:
-    """A Langfuse client whose every call raises, with text that must not reach a log."""
-
-    def start_observation(self, **_: object) -> None:
-        raise RuntimeError(f"sdk broke on {MARK}")
-
-    def flush(self) -> None:
-        raise RuntimeError(f"flush broke on {MARK}")
-
-    def shutdown(self) -> None:
-        raise RuntimeError(f"shutdown broke on {MARK}")
-
-
 async def test_an_sdk_that_raises_does_not_fail_the_call(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    broken = tracing.Tracer(BrokenClient(), provider=None)  # type: ignore[arg-type]
+    broken = broken_tracer(MARK)
     model = TracedModel(StubModel(costed_reply()))
 
     with tracing.trace(broken, "read") as root:

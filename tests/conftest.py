@@ -3,6 +3,7 @@ import os
 from collections.abc import Iterator
 
 import pytest
+from tracing_helpers import sent  # noqa: F401 (a fixture, which pytest finds by its name)
 
 from meal_planner.config import TRACING_VARIABLES, get_settings
 

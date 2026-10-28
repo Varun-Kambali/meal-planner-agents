@@ -6,7 +6,6 @@ chance into the plan, the replies and the typed text, and look for it in every s
 
 import asyncio
 import json
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +21,7 @@ from reader_helpers import (
     said,
     write_reader_catalogue,
 )
-from tracing_helpers import Observation, Sent, sending
+from tracing_helpers import Observation, Sent, broken_tracer
 from week_helpers import (
     SLOTS,
     SlotModel,
@@ -54,12 +53,6 @@ from meal_planner.week_events import WeekDone, WeekResult
 pytestmark = pytest.mark.anyio
 
 STEPS = ("expand", "write_slot", "repair_slot", "compute", "check", "report")
-
-
-@pytest.fixture
-def sent() -> Iterator[Sent]:
-    with sending() as found:
-        yield found
 
 
 async def week(
@@ -529,21 +522,10 @@ async def test_a_read_untraced_is_unchanged() -> None:
 # Tracing never fails a request
 
 
-class BrokenClient:
-    def start_observation(self, **_: object) -> None:
-        raise RuntimeError(MARK)
-
-    def flush(self) -> None:
-        raise RuntimeError(MARK)
-
-    def shutdown(self) -> None:
-        raise RuntimeError(MARK)
-
-
 async def test_a_broken_tracer_does_not_change_a_week_or_a_read(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    broken = Tracer(BrokenClient(), provider=None)  # type: ignore[arg-type]
+    broken = broken_tracer(MARK)
 
     assert await week(broken) == await week(None)
     result = await read_meal(
