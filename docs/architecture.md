@@ -197,7 +197,7 @@ USDA data has no glycemic index, so a meal with any ingredient from the food fil
 
 ## Tracing
 
-Tracing is off unless `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are both set; then no Langfuse client is made and nothing is sent. Why it is built this way is in [0010](decisions/0010-masked-langfuse-tracing.md). To turn it on, create a project in Langfuse (the Cloud Hobby tier is free: 50k units a month and 30 days of history), put its two keys in `.env`, and set `LANGFUSE_BASE_URL` only for the US region or a server of your own. The CLI and the API then trace each run:
+Tracing is off unless `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are both set; without them no Langfuse client is made and nothing is sent. Why it is built this way is in [0010](decisions/0010-masked-langfuse-tracing.md). To turn it on, create a project in Langfuse (the Cloud Hobby tier is free: 50k units a month and 30 days of history) and put its two keys in `.env`. Langfuse Cloud has an EU, a US and a Japan region, and the SDK sends to the EU one by default, so set `LANGFUSE_BASE_URL` only for the US region (`https://us.cloud.langfuse.com`), the Japan region (`https://jp.cloud.langfuse.com`) or a server of your own. The CLI and the API then trace each run:
 
 - **A week** (`POST /v1/week`, `meal-planner week`) is a trace named `week`, and a replacement (`POST /v1/week/replace`) one named `replace`, with the day and slot. The first span holds the masked rules and, when the run ends, the recipes, the failing recipes, the recipes not written, calls, tokens, cost and the checks the week fails or leaves unsettled. A run that is cancelled or fails ends its trace with a warning or an error and the exception's class. Under it is a span for each node the graph runs:
   - `expand`.
