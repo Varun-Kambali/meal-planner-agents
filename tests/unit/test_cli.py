@@ -21,13 +21,15 @@ from week_helpers import (
     write_catalogue_file,
 )
 
-from meal_planner.cli import main
+from meal_planner.cli import main, progress_line
 from meal_planner.config import Settings
 from meal_planner.llm import RATE_LIMITED, FakeModel, ModelReply
 from meal_planner.nutrition import NutritionError
 from meal_planner.reader import ReadResult
+from meal_planner.recipes import DayReport, Failure
+from meal_planner.rules import DayKey
 from meal_planner.summary import WeekSummary
-from meal_planner.week_events import WeekResult
+from meal_planner.week_events import WeekDone, WeekResult
 
 EXTRA_FOODS = ("brinjal",)
 
@@ -74,6 +76,7 @@ def test_the_week_is_written_to_the_out_file_with_progress_on_stderr(
     assert progress[0].startswith("slot_started ")
     assert sum(line.startswith("recipe_checked ") for line in progress) == 28
     assert progress[-2].startswith("week_done ")
+    assert progress[-2].endswith(" day_failures=none day_unsettled=none")
     assert progress[-1] == f"wrote {out}"
 
 
@@ -108,6 +111,37 @@ def test_progress_lines_name_the_slot_the_days_the_attempt_and_the_failing_check
     assert failing[0].startswith("recipe_checked mon breakfast attempt=1 failures=")
     assert failing[0] != "recipe_checked mon breakfast attempt=1 failures=none"
     assert failing[-1] == "recipe_checked mon breakfast attempt=2 failures=none"
+
+
+def test_the_last_line_names_the_checks_each_day_fails_and_those_it_leaves_unsettled() -> None:
+    def day(key: DayKey, failures: list[str], unsettled: list[str]) -> DayReport:
+        return DayReport(
+            day=key,
+            totals={},
+            failures=[Failure(check=c, message="no value for curry leaves") for c in failures],
+            unsettled=[Failure(check=c, message="no value for rohu") for c in unsettled],
+            soft={},
+        )
+
+    week = WeekResult(
+        recipes=[],
+        days=[
+            day("mon", ["day_kcal", "day_fibre_g"], []),
+            day("tue", [], []),
+            day("wed", [], ["day_sat_fat_g"]),
+        ],
+        no_waste={},
+        unwritten=[],
+        calls=5,
+        input_tokens=0,
+        output_tokens=0,
+        cost_usd=None,
+    )
+
+    assert progress_line(WeekDone(week=week)) == (
+        "week_done recipes=0 unwritten=0 calls=5 day_failures=mon:day_kcal,mon:day_fibre_g "
+        "day_unsettled=wed:day_sat_fat_g"
+    )
 
 
 def test_a_slot_that_could_not_be_written_is_reported_and_the_week_still_comes_out(

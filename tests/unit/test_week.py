@@ -639,7 +639,9 @@ async def test_nutrition_mcp_going_away_is_not_repaired_and_still_ends_the_week(
             "numbers not known: nutrition-mcp could not be reached"
         )
         assert recipe.attempts == 1
-    assert all(day.failures for day in week.days)
+    # With no numbers a day can be shown neither to meet a target nor to miss one, so no day
+    # passes and none is blamed on a recipe.
+    assert all(not day.failures and day.unsettled for day in week.days)
     assert week.calls == 4
     assert "repair_started" not in kinds(events)
     # Each recipe was asked about twice: once, and once more after the first failed.
@@ -899,6 +901,67 @@ async def test_a_day_that_stays_over_names_its_recipe() -> None:
     assert [f.check for f in monday.failures] == ["day_kcal"]
     assert [f.check for f in by_key(week)[("mon", "dinner")].failures] == ["day_kcal"]
     assert all(r.failures == [] for k, r in by_key(week).items() if k != ("mon", "dinner"))
+
+
+# A day the checks cannot settle
+
+# A fish with the fixture profile but no fat or saturated fat, so a day that has it can be shown
+# neither to keep to its saturated-fat cap nor to break it, and nothing bounds what it holds.
+FISH = {key: value for key, value in PROFILE.items() if key not in ("fat_g", "sat_fat_g")}
+
+
+def with_fish(recipe: dict[str, Any]) -> dict[str, Any]:
+    """The recipe with its curd swapped for the same grams of fish."""
+    ingredients = [{**i, "id": "fish"} if i["id"] == "curd" else i for i in recipe["ingredients"]]
+    return recipe | {"ingredients": ingredients}
+
+
+def fish_on_monday() -> SlotModel:
+    """Monday's breakfast with its curd swapped for the same grams of fish."""
+    return model_for(writes={"breakfast": [changed("breakfast", with_fish, "mon")]})
+
+
+async def test_a_day_the_checks_cannot_settle_is_never_blamed_on_a_recipe() -> None:
+    cat = catalogue(item("fish", per_100g=FISH))
+    nutrition = FakeNutrition(foods() | {"fish": FISH})
+
+    events, week = await run(fish_on_monday(), nutrition=nutrition, cat=cat)
+
+    monday = week.days[0]
+    assert monday.failures == []
+    assert [f.check for f in monday.unsettled] == ["day_sat_fat_g"]
+    assert all(r.failures == [] for r in week.recipes)
+    assert not any(isinstance(e, RepairStarted) for e in events)
+    assert week.calls == 4
+
+    recipes, days, _ = evaluate_week(
+        unchecked(week), plan_rules(), catalogue=cat, settings=Settings()
+    )
+
+    assert days == week.days
+    assert all(r.failures == [] for r in recipes)
+
+
+async def test_a_day_failing_one_check_and_unsettled_on_another_is_blamed_for_the_failure() -> None:
+    """Monday is over its calories, as in overshoot_monday, and has the fish in its breakfast."""
+    cat = catalogue(item("fish", per_100g=FISH))
+    nutrition = FakeNutrition(foods() | {"fish": FISH})
+    model = model_for(
+        writes={
+            "breakfast": [changed("breakfast", lambda r: with_fish(scaled(r, 1.05)), "mon")],
+            "lunch": [changed("lunch", lambda r: scaled(r, 1.05), "mon")],
+            "snack": [changed("snack", lambda r: scaled(r, 1.05), "mon")],
+            "dinner": [changed("dinner", lambda r: scaled(r, 1.09), "mon")],
+        }
+    )
+
+    _, week = await run(model, nutrition=nutrition, cat=cat, max_repair_attempts=0)
+
+    monday = week.days[0]
+    assert [f.check for f in monday.failures] == ["day_kcal"]
+    assert [f.check for f in monday.unsettled] == ["day_sat_fat_g"]
+    blamed = {key: [f.check for f in r.failures] for key, r in by_key(week).items() if r.failures}
+    assert blamed == {("mon", "dinner"): ["day_kcal"]}
 
 
 # Fitting portions

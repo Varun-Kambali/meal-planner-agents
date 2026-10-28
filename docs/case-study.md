@@ -53,45 +53,45 @@ A stateless FastAPI service runs a LangGraph graph: it expands the rules into sl
 The decisions that mattered:
 
 1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The first idea also covered shopping, prep and rotation: several products. Starting from the user's plan keeps v1 to the part that took longest.
-2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost, because its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost too, with no variety. One call per slot sits between one call per recipe (28 for a four-slot plan), where no call sees the others, and the single call that is the eval's baseline.
+2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost, because its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost too, with no variety. One call per slot sits between one call per recipe, where no call sees the others, and the single call that is the eval's baseline.
 3. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)). They come from USDA FoodData Central as a custom dataset. Editing nutrition-mcp would tie this project to its releases, and a second source would split where numbers come from.
 4. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would mean login and food logs on a public demo; browser storage with a file export leaves nothing to leak.
-5. **Code fits portions, and the writer is shown nutrition** ([0005](decisions/0005-code-fits-portions.md)). The writer knows no ingredient's energy, so it guesses grams, and repair guesses again. Now code scales an off-target recipe's grams by one factor and nutrition-mcp works the result out again, so code never multiplies a nutrient. The writer also sees each ingredient's nutrition per 100 g. More repair rounds lost, since they spend model calls on arithmetic. A solver that picks grams lost, since it would replace the writer's proportions.
-6. **The model reads the meal and picks among nutrition-mcp's options; code checks amounts and units** ([0006](decisions/0006-reading-a-typed-meal.md)). The model lists the foods, amounts and units in the typed text. nutrition-mcp's search finds each food, and one model call chooses among its options for names the search leaves open. Code settles the unit, and a vague amount or a range asks the person. The model returning food ids and grams lost, since it would invent the numbers this project exists to avoid. Matching without a model lost, since it cannot split "2 rotis, a bowl of dal and 2 eggs" into foods and amounts.
-7. **The log holds foods and amounts, never numbers** ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)). The server works out every meal that was eaten again with nutrition-mcp and holds each day to its own day type, so a number in an edited or old file is never trusted.
+5. **Code fits portions, and the writer is shown nutrition** ([0005](decisions/0005-code-fits-portions.md)). The writer guessed grams, and repair guessed again. Now code scales an off-target recipe's grams by one factor and nutrition-mcp works it out again, so code never multiplies a nutrient, and the writer sees each ingredient's nutrition per 100 g. More repair rounds lost: they spend calls on arithmetic. A gram solver lost: it would replace the writer's proportions.
+6. **The model reads the meal; code checks amounts and units** ([0006](decisions/0006-reading-a-typed-meal.md)). The model lists the typed foods, amounts and units, nutrition-mcp's search finds each food, and one model call picks among its options where the search leaves a name open. Code settles the unit, and a vague amount or a range asks the person. The model returning ids and grams lost: it would invent the numbers this project avoids. Matching without a model lost: it cannot split "2 rotis, a bowl of dal and 2 eggs".
+7. **The log holds foods and amounts, never numbers** ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)). The server works out every eaten meal again with nutrition-mcp and holds each day to its own day type, so a number in an edited or old file is never trusted.
+8. **A day check that cannot tell says so** ([0009](decisions/0009-unsettled-day-checks.md)). It passes, fails or is unsettled, and only a failure goes to repair, since no rewrite supplies a missing value. A food's total fat bounds its saturated fat. Counting a missing value as 0 lost: days would pass on numbers nobody measured.
 
 ## Results
 
-The first full run (2026-10-27, gemini-3.1-flash-lite, commit b593c44) covered 20 synthetic plans and 53 typed meals. Rows copied from [`evals/results/summary.md`](../evals/results/summary.md), which has every measure.
+The newest full run (gemini-3.1-flash-lite, commit 50aab53) covered 20 synthetic plans and 53 typed meals. Rows copied from [`evals/results/summary.md`](../evals/results/summary.md), which has every measure.
 
 | Measure | Baseline | This project |
 |---|---|---|
-| Recipes passing every hard check (share) | 8.7% (48 of 553) | 81.6% (451 of 553) |
-| Recipes passing every hard check at their first attempt (share) | 8.7% (48 of 553) | 47.0% (260 of 553) |
-| Days passing every check (share) | 0.7% (1 of 140) | 37.1% (52 of 140) |
+| Recipes passing every hard check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
+| Recipes passing every hard check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
+| Days passing every check (share) | 2.1% (3 of 140) | 51.4% (72 of 140) |
 | Weeks where every recipe and day passes (share) | 0.0% (0 of 20) | 5.0% (1 of 20) |
-| Model calls per week (mean) | 1.0 | 14.2 |
+| Model calls per week (mean) | 1.0 | 12.6 |
 
 | Measure | All meals |
 |---|---|
-| Food recall | 95.4% (83 of 87) |
+| Food recall | 92.0% (80 of 87) |
 | Asked when it should (share) | 93.8% (15 of 16) |
-| Calorie error against the label (MAPE) | 4.0% over 42 meals |
-| Foods not in the data reported missing (share) | 100.0% (19 of 19) |
+| Calorie error against the label (MAPE) | 6.4% over 42 meals |
 
-The single call guesses grams and misses slot calories on most recipes. Portion fitting gets the pipeline to 260 at the first attempt, and repair to 451. Days are the weak point (see Limits). The reader's calorie error comes mostly from the five meals it cannot reach today. One run of one free model on synthetic data, so the spread between runs is unknown.
+The single call guesses grams and misses slot calories on most recipes. Portion fitting gets the pipeline to 258 at the first attempt, and repair to 479. Days are the weak point (see Limits). An earlier run, before checks could be unsettled, passed 52 days on 14.2 calls a week. One read timed out at the API; it and the five meals the reader cannot reach today make most of the calorie error. One run of one free model on synthetic data, so the spread between runs is unknown.
 
 ## Limits, and what better inputs would change
 
-- **Time is the model's claim.** Minutes are what the recipe states, checked against the slot's limits, never measured.
+- **Time is the model's claim.** Minutes are the recipe's own, checked against the slot's limits, never measured.
 - **A style like "no-cook" is free text** that no code checks, though the prompts call it binding.
-- **Missing values fail days.** The food data has no saturated fat for curry leaves or rohu and no fibre for several dals, so a day using one cannot be shown within its limit. Most days failing those checks fail this way.
-- **Scaling is uniform,** so a piece-counted ingredient such as an egg can land on a fraction of a piece.
-- **A household measure with no sourced weight is not converted.** For a bowl or a pav the reader asks for a unit nutrition-mcp or the catalogue knows, such as a katori or grams.
-- **Which dish a general name means is the model's pick** among nutrition-mcp's options. In the reading eval, 83 of the reader's 85 foods were the labelled ones.
+- **Missing values leave days unsettled.** With no fibre value for several dals or curry leaves, 28 of the 140 days can be shown neither to meet their fibre target nor to miss it.
+- **Scaling is uniform,** so an egg can land on a fraction of a piece.
+- **A household measure with no sourced weight is not converted:** for a bowl or a pav the reader asks for a katori or grams.
+- **Which dish a general name means is the model's pick** among nutrition-mcp's options. In the reading eval, 80 of the reader's 82 foods were the labelled ones.
 - **An amount counts only if its words are in what was typed,** so one the model rewrites asks the person.
 - **The as-planned share counts a meal with no entry as not as planned.**
-- **Glycemic load is often unknown.** USDA foods carry none; a licensed table loaded through nutrition-mcp would fill it in.
+- **Glycemic load is often unknown.** USDA foods carry none; a licensed table would fill it in.
 - **The catalogue limits variety.** A larger licensed table widens it without code changes.
 - **Free-tier models.** A stronger model is a config change, and the eval measures what it buys.
 - **Browser storage.** Clearing the browser loses the data unless it was exported.

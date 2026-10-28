@@ -19,50 +19,52 @@ Every feature, with what it must do, is in [docs/requirements.md](docs/requireme
 
 ## Results
 
-The first full run of `make eval`: model gemini/gemini-3.1-flash-lite, commit b593c44, dataset 4a35ea1576a9, 2026-10-27. Every number below is in [`evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_b593c44.json`](evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_b593c44.json), and [`evals/results/summary.md`](evals/results/summary.md) has these tables with the checks that failed.
+The newest full run of `make eval`: model gemini/gemini-3.1-flash-lite, commit 50aab53, dataset 4a35ea1576a9, started 2026-10-27. Every number below is in [`evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_50aab53.json`](evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_50aab53.json), and [`evals/results/summary.md`](evals/results/summary.md) has these tables with the checks that failed or could not be settled.
 
 **Recipes.** Each of 20 synthetic plans gets a week from the agent pipeline and from a baseline that writes the whole week in one model call, with the same plan lines and ingredient list and no portion fitting or repair. The same code checks both.
 
 | Measure | Baseline | This project |
 |---|---|---|
-| Recipes passing every hard check (share) | 8.7% (48 of 553) | 81.6% (451 of 553) |
-| Recipes passing every hard check at their first attempt (share) | 8.7% (48 of 553) | 47.0% (260 of 553) |
-| Recipes passing the variety checks (share) | 63.3% (350 of 553) | 91.7% (507 of 553) |
-| Days passing every check (share) | 0.7% (1 of 140) | 37.1% (52 of 140) |
+| Recipes passing every hard check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
+| Recipes passing every hard check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
+| Recipes passing the variety checks (share) | 65.1% (360 of 553) | 94.4% (522 of 553) |
+| Days passing every check (share) | 2.1% (3 of 140) | 51.4% (72 of 140) |
+| Days the checks could not settle (share) | 1.4% (2 of 140) | 20.0% (28 of 140) |
 | Weeks where every recipe and day passes (share) | 0.0% (0 of 20) | 5.0% (1 of 20) |
-| Recipes written (share) | 100.0% (553 of 553) | 100.0% (553 of 553) |
-| Model calls per week (mean) | 1.0 | 14.2 |
-| Tokens per week (mean) | 11,645.5 | 96,752.2 |
-| Cost per week at list price (mean) | $0.009104 | $0.043386 |
-| Seconds per week (p95) | 19.0 | 65.9 |
+| Weeks with no failing recipe or day (share) | 0.0% (0 of 20) | 30.0% (6 of 20) |
+| Recipes written (share) | 98.7% (546 of 553) | 100.0% (553 of 553) |
+| Model calls per week (mean) | 1.0 | 12.6 |
+| Tokens per week (mean) | 11,654.2 | 85,323.7 |
+| Cost per week at list price (mean) | $0.009117 | $0.040083 |
+| Seconds per week (p95) | 58.3 | 143.6 |
 
 **Reading.** 53 typed meals, each labelled with its foods and amounts, every label checked against nutrition-mcp. Five name a food the reader cannot reach today, and are shown on their own.
 
 | Measure | All meals | Expected misses (m01, m02, m03, m15, m52) | Other meals |
 |---|---|---|---|
 | Meals | 53 | 5 | 48 |
-| Food precision | 97.6% (83 of 85) | 75.0% (6 of 8) | 100.0% (77 of 77) |
-| Food recall | 95.4% (83 of 87) | 66.7% (6 of 9) | 98.7% (77 of 78) |
-| Status accuracy | 94.3% (82 of 87) | 66.7% (6 of 9) | 97.4% (76 of 78) |
+| Food precision | 97.6% (80 of 82) | 75.0% (6 of 8) | 100.0% (74 of 74) |
+| Food recall | 92.0% (80 of 87) | 66.7% (6 of 9) | 94.9% (74 of 78) |
+| Status accuracy | 90.8% (79 of 87) | 66.7% (6 of 9) | 93.6% (73 of 78) |
 | Asked when it should (share) | 93.8% (15 of 16) | 50.0% (1 of 2) | 100.0% (14 of 14) |
 | Labels that ask, food not returned by the reader | 1 of 16 | 1 of 2 | 0 of 14 |
-| Calorie error against the label (MAPE) | 4.0% over 42 meals | 29.3% over 5 meals | 0.6% over 37 meals |
+| Calorie error against the label (MAPE) | 6.4% over 42 meals | 29.3% over 5 meals | 3.3% over 37 meals |
 | Foods not in the data reported missing (share) | 100.0% (19 of 19) | 100.0% (1 of 1) | 100.0% (18 of 18) |
-| Reads that failed | 0 of 53 | 0 of 5 | 0 of 48 |
-| Model calls per meal (mean) | 1.13 | 1.20 | 1.12 |
-| Tokens per meal (mean) | 832.6 | 866.2 | 829.1 |
-| Cost per meal at list price (mean) | $0.000319 | $0.000333 | $0.000318 |
-| Seconds per meal (p95) | 8.5 | 4.4 | 8.5 |
+| Reads that failed | 1 of 53 | 0 of 5 | 1 of 48 |
+| Model calls per meal (mean) | 1.15 | 1.20 | 1.15 |
+| Tokens per meal (mean) | 817.8 | 856.6 | 813.8 |
+| Cost per meal at list price (mean) | $0.000304 | $0.000318 | $0.000303 |
+| Seconds per meal (p95) | 43.7 | 16.7 | 43.7 |
 
-What this shows: the single call misses slot calories on most recipes, because it guesses grams. Portion fitting in code gets the pipeline to 260 recipes at the first attempt, and repair takes it to 451. Days are the weak point: 52 of 140 pass. The saturated-fat and fibre checks fail the most days (50 and 44), mostly because a food in the day, such as curry leaves, rohu or a dal, has no value for that nutrient in the food data. The check cannot then show the day is within its limit, so it fails it. The pipeline spends 14.2 model calls a week to the baseline's one. Cost is LiteLLM's list price for the paid tier; the free tier billed nothing.
+What this shows: the single call misses slot calories on most recipes, because it guesses grams. Portion fitting in code gets the pipeline to 258 recipes at the first attempt, and repair takes it to 479. Days are the weak point: 72 of 140 pass. 28 more cannot be settled, all on fibre: a food in the day, most often moong dal, curry leaves or moth beans, has no fibre value in the food data, so the check can show the day neither meeting its target nor missing it, and no recipe is rewritten for it ([0009](docs/decisions/0009-unsettled-day-checks.md)). Saturated fat fails the most days (21), each over the cap on the values the data has. The pipeline spends 12.6 model calls a week to the baseline's one. One meal read timed out at the model's API and counts as failed: its three foods count as not found and its calories as a full miss. Cost is LiteLLM's list price for the paid tier; the free tier billed nothing.
 
-What it does not show: this is one run of one free-tier model on synthetic plans and meals, so the spread between runs is unknown.
+What it does not show: this is one run of one free-tier model on synthetic plans and meals, so the spread between runs is unknown. An earlier full run, from before a day check could be unsettled, is in [`evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_b593c44.json`](evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_b593c44.json); the [case study](docs/case-study.md) says what changed between the two.
 
 CI replays a recorded slice of three plans and ten meals on every PR, with no key, and fails when a number drops ([0008](docs/decisions/0008-smoke-replay-gates-every-pr.md)).
 
 ## Status
 
-Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. Milestone 4 is under way: the evals are built and their first results are above, and tracing is next. The browser app and a deployed demo come with milestone 5.
+Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. Milestone 4 is under way: the evals are built and their results are above, and tracing is next. The browser app and a deployed demo come with milestone 5.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
@@ -91,6 +93,7 @@ make run   # the API on 127.0.0.1:8000
 - [0006](docs/decisions/0006-reading-a-typed-meal.md) The model reads a typed meal and picks among nutrition-mcp's options; code checks amounts and units, and nutrition-mcp gives the numbers.
 - [0007](docs/decisions/0007-the-log-holds-foods-and-amounts.md) The meal log holds foods and amounts, and the server works out the numbers.
 - [0008](docs/decisions/0008-smoke-replay-gates-every-pr.md) A replay of the smoke slice gates every PR, held to its own numbers.
+- [0009](docs/decisions/0009-unsettled-day-checks.md) A day check that cannot tell is unsettled, and saturated fat is bounded by total fat.
 
 ## License
 

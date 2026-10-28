@@ -17,6 +17,7 @@ from metrics import (
     unwritten_kind,
 )
 from nutrition_mcp.models import Nutrients
+from nutrition_mcp.nutrients import NUTRIENT_KEYS
 from nutrition_mcp.schemas import MealResult
 from records import (
     DayOutcome,
@@ -40,7 +41,7 @@ from meal_planner.checks import (
     check_variety,
 )
 from meal_planner.config import Settings
-from meal_planner.recipes import CheckedRecipe, DraftRecipe, Failure
+from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure
 from meal_planner.rules import DayKey, expand
 from meal_planner.week_events import RecipeChecked, WeekResult
 
@@ -67,9 +68,12 @@ def week(
     recipes: list[RecipeOutcome],
     days: list[list[str]] | None = None,
     *,
+    unsettled: list[list[str]] | None = None,
     usage: Usage | None = None,
     seconds: float = 1.0,
 ) -> RecipeCase:
+    failing = days or [[]]
+    left = unsettled or [[] for _ in failing]
     return RecipeCase(
         case="recipes/pipeline/p",
         system="pipeline",
@@ -77,7 +81,10 @@ def week(
         seconds=seconds,
         usage=usage or Usage(),
         recipes=recipes,
-        days=[DayOutcome(day="mon", failures=fail(*checks)) for checks in (days or [[]])],
+        days=[
+            DayOutcome(day="mon", failures=fail(*checks), unsettled=fail(*left[i]))
+            for i, checks in enumerate(failing)
+        ],
         no_waste=0,
     )
 
@@ -149,6 +156,44 @@ def test_a_day_failure_on_a_recipe_does_not_fail_the_recipe_but_fails_the_day() 
     assert (metrics.recipes_passing, metrics.days_passing, metrics.weeks_passing) == (1, 0, 0)
     assert metrics.failing_checks == {}
     assert metrics.failing_day_checks == {"day_kcal": 1}
+
+
+def test_a_day_with_something_unsettled_does_not_pass_and_is_counted_apart() -> None:
+    case = week(
+        [written("day_kcal")],
+        days=[[], ["day_kcal"], [], ["day_protein_g"]],
+        unsettled=[[], [], ["day_sat_fat_g", "day_fibre_g"], ["day_sat_fat_g"]],
+    )
+
+    metrics = recipe_metrics([case])
+
+    assert (metrics.days, metrics.days_passing, metrics.day_pass_share) == (4, 1, 0.25)
+    # Only the third day: the fourth fails, and a failing day is counted as failing.
+    assert (metrics.days_unsettled, metrics.day_unsettled_share) == (1, 0.25)
+    assert metrics.failing_day_checks == {"day_kcal": 1, "day_protein_g": 1}
+    # Every day that ended on an unsettled check, failing or not, as failing_day_checks counts.
+    assert metrics.unsettled_day_checks == {"day_fibre_g": 1, "day_sat_fat_g": 2}
+
+
+def test_a_week_with_only_unsettled_days_has_no_failure_but_does_not_pass() -> None:
+    settled = week([written()], days=[[]])
+    unsettled = week([written("day_sat_fat_g")], days=[[]], unsettled=[["day_sat_fat_g"]])
+    failing_day = week([written()], days=[["day_kcal"]])
+    failing_recipe = week([written("gear")], days=[[]])
+
+    metrics = recipe_metrics([settled, unsettled, failing_day, failing_recipe])
+
+    assert (metrics.weeks_passing, metrics.week_pass_share) == (1, 0.25)
+    assert (metrics.weeks_without_failure, metrics.week_without_failure_share) == (2, 0.5)
+
+
+def test_a_case_line_written_before_days_could_be_unsettled_still_loads() -> None:
+    old = {"day": "mon", "failures": [{"check": "day_sat_fat_g", "message": "not known"}]}
+
+    day = DayOutcome.model_validate(old)
+
+    assert day.unsettled == []
+    assert [f.check for f in day.failures] == ["day_sat_fat_g"]
 
 
 def test_an_unwritten_recipe_counts_against_every_recipe_share() -> None:
@@ -258,6 +303,8 @@ def test_no_weeks_gives_no_shares() -> None:
     assert metrics.recipe_pass_share is None
     assert metrics.seconds_p95 is None
     assert metrics.calls_per_week is None
+    assert (metrics.days_unsettled, metrics.day_unsettled_share) == (0, None)
+    assert (metrics.weeks_without_failure, metrics.week_without_failure_share) == (0, None)
 
 
 # Reading metrics
@@ -454,7 +501,9 @@ def test_every_check_variety_gives_is_a_variety_check() -> None:
 def test_day_checks_and_only_day_checks_start_with_the_day_prefix() -> None:
     rules = plan_rules()
     nothing_known = Nutrients.model_validate({})
-    day_failures, _ = check_day_totals(nothing_known, {}, rules.day_types[0], Settings())
+    day_failures, _, _ = check_day_totals(nothing_known, {}, rules.day_types[0], Settings())
+    lacking = {key: ["rohu"] for key in NUTRIENT_KEYS}
+    _, day_unsettled, _ = check_day_totals(nothing_known, lacking, rules.day_types[0], Settings())
     recipe = checked("mon", "lunch", title="A 450 kcal bowl", gear=["oven"], active_min=999)
     ghost = DraftRecipe.model_validate(
         recipe.draft.model_dump() | {"ingredients": [{"id": "ghost", "grams": 10}]}
@@ -476,7 +525,8 @@ def test_day_checks_and_only_day_checks_start_with_the_day_prefix() -> None:
     ]
 
     assert day_failures
-    assert all(f.check.startswith(DAY_CHECK_PREFIX) for f in day_failures)
+    assert day_unsettled
+    assert all(f.check.startswith(DAY_CHECK_PREFIX) for f in [*day_failures, *day_unsettled])
     assert {f.check for f in recipe_failures} >= {
         "unknown_ingredient",
         "slot_kcal",
@@ -541,3 +591,39 @@ def test_a_week_line_lists_every_recipe_asked_for_in_week_order() -> None:
     assert line.recipes[0].first_failures == []
     assert line.seconds == 1.235
     assert line.case == "recipes/baseline/p"
+
+
+def test_a_week_line_keeps_each_days_failing_and_unsettled_checks() -> None:
+    report = DayReport(
+        day="mon",
+        totals={},
+        failures=[Failure(check="day_kcal", message="calories 1500 kcal")],
+        unsettled=[Failure(check="day_sat_fat_g", message="saturated fat not known")],
+        soft={},
+    )
+    result = WeekResult(
+        recipes=[],
+        days=[report],
+        no_waste={},
+        unwritten=[],
+        calls=0,
+        input_tokens=0,
+        output_tokens=0,
+        cost_usd=None,
+    )
+
+    line = recipe_case(
+        system="pipeline",
+        plan="p",
+        rules=plan_rules(),
+        week=result,
+        first={},
+        usage=Usage(),
+        seconds=1.0,
+    )
+
+    (day,) = line.days
+    assert [f.check for f in day.failures] == ["day_kcal"]
+    assert [(f.check, f.message) for f in day.unsettled] == [
+        ("day_sat_fat_g", "saturated fat not known")
+    ]

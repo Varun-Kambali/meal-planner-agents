@@ -9,7 +9,8 @@ from typing import Any
 import pytest
 from nutrition_mcp.models import Diet, Nutrients
 from nutrition_mcp.nutrients import NUTRIENT_KEYS
-from nutrition_mcp.schemas import MealResult
+from nutrition_mcp.nutrition import sum_nutrients
+from nutrition_mcp.schemas import FoodSummary, MealResult, NutritionResult
 
 from meal_planner.catalogue import Catalogue, CatalogueItem
 from meal_planner.checks import (
@@ -23,6 +24,7 @@ from meal_planner.checks import (
     check_no_waste,
     check_slot_targets,
     check_variety,
+    sat_fat_ceiling,
     worst_recipe_for_day,
 )
 from meal_planner.config import Settings
@@ -240,7 +242,7 @@ def test_every_nutrient_key_can_be_a_day_target() -> None:
     # The day type's own targets are fields of it, and the rules refuse them as extras.
     for key in (k for k in NUTRIENT_KEYS if k not in CORE_TARGET_FIELDS):
         target = NutrientTarget(nutrient=key, kind="min", value=10)
-        failures, _ = check_day_totals(
+        failures, _, _ = check_day_totals(
             day_total(**{key: 1}), {}, day_type(extra=[target]), settings()
         )
 
@@ -793,7 +795,7 @@ def test_a_day_that_meets_every_target_passes() -> None:
     [(1900, True), (1899, False), (2000, True), (2100, True), (2101, False), (2100.4, False)],
 )
 def test_day_kcal_5_percent(kcal: float, passes: bool) -> None:
-    failures, _ = check_day_totals(day_total(kcal=kcal), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(kcal=kcal), {}, day_type(), settings())
 
     assert (failures == []) is passes
     if not passes:
@@ -816,7 +818,7 @@ def test_day_kcal_tolerance_comes_from_settings() -> None:
 
 @pytest.mark.parametrize(("protein", "passes"), [(100, True), (120, True), (99.9, False)])
 def test_day_protein_is_a_floor_at_the_target(protein: float, passes: bool) -> None:
-    failures, _ = check_day_totals(day_total(protein_g=protein), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(protein_g=protein), {}, day_type(), settings())
 
     assert (failures == []) is passes
     if not passes:
@@ -825,7 +827,7 @@ def test_day_protein_is_a_floor_at_the_target(protein: float, passes: bool) -> N
 
 @pytest.mark.parametrize(("sat_fat", "passes"), [(0, True), (20, True), (20.5, False)])
 def test_day_sat_fat_cap(sat_fat: float, passes: bool) -> None:
-    failures, _ = check_day_totals(day_total(sat_fat_g=sat_fat), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(sat_fat_g=sat_fat), {}, day_type(), settings())
 
     assert (failures == []) is passes
     if not passes:
@@ -836,7 +838,7 @@ def test_day_sat_fat_cap(sat_fat: float, passes: bool) -> None:
 
 @pytest.mark.parametrize(("fibre", "passes"), [(35, True), (60, True), (34.5, False)])
 def test_day_fibre_floor(fibre: float, passes: bool) -> None:
-    failures, _ = check_day_totals(day_total(fibre_g=fibre), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(fibre_g=fibre), {}, day_type(), settings())
 
     assert (failures == []) is passes
     if not passes:
@@ -852,9 +854,9 @@ def test_extra_target_min_and_max() -> None:
     ]
     day = day_type(extra=extra)
 
-    on_the_line, _ = check_day_totals(day_total(iron_mg=18, sodium_mg=2000), {}, day, settings())
-    iron, _ = check_day_totals(day_total(iron_mg=17.9, sodium_mg=1500), {}, day, settings())
-    sodium, _ = check_day_totals(day_total(iron_mg=30, sodium_mg=2001), {}, day, settings())
+    on_the_line, _, _ = check_day_totals(day_total(iron_mg=18, sodium_mg=2000), {}, day, settings())
+    iron, _, _ = check_day_totals(day_total(iron_mg=17.9, sodium_mg=1500), {}, day, settings())
+    sodium, _, _ = check_day_totals(day_total(iron_mg=30, sodium_mg=2001), {}, day, settings())
 
     assert on_the_line == []
     assert only(iron).check == "day_iron_mg"
@@ -866,7 +868,7 @@ def test_extra_target_min_and_max() -> None:
 def test_an_extra_target_with_no_value_is_not_read_as_zero() -> None:
     extra = [NutrientTarget(nutrient="iron_mg", kind="min", value=18)]
 
-    failures, _ = check_day_totals(day_total(), {}, day_type(extra=extra), settings())
+    failures, _, _ = check_day_totals(day_total(), {}, day_type(extra=extra), settings())
 
     assert only(failures).message.startswith("iron not known")
 
@@ -874,7 +876,7 @@ def test_an_extra_target_with_no_value_is_not_read_as_zero() -> None:
 def test_a_cap_on_a_nutrient_with_no_value_is_not_read_as_zero() -> None:
     extra = [NutrientTarget(nutrient="sodium_mg", kind="max", value=2000)]
 
-    failures, _ = check_day_totals(day_total(), {}, day_type(extra=extra), settings())
+    failures, _, _ = check_day_totals(day_total(), {}, day_type(extra=extra), settings())
 
     assert only(failures).message.startswith("sodium not known")
 
@@ -883,7 +885,7 @@ def test_every_miss_on_a_day_is_reported_in_order() -> None:
     extra = [NutrientTarget(nutrient="iron_mg", kind="min", value=18)]
     total = day_total(kcal=1500, protein_g=50, sat_fat_g=30, fibre_g=10, iron_mg=5)
 
-    failures, _ = check_day_totals(total, {}, day_type(extra=extra), settings())
+    failures, _, _ = check_day_totals(total, {}, day_type(extra=extra), settings())
 
     assert checks_of(failures) == [
         "day_kcal",
@@ -895,7 +897,7 @@ def test_every_miss_on_a_day_is_reported_in_order() -> None:
 
 
 def test_carbs_and_fat_are_soft() -> None:
-    failures, soft = check_day_totals(day_total(fat_g=78), {}, day_type(), settings())
+    failures, _, soft = check_day_totals(day_total(fat_g=78), {}, day_type(), settings())
 
     assert failures == []
     assert soft["fat_g"] == 0.3
@@ -903,7 +905,7 @@ def test_carbs_and_fat_are_soft() -> None:
 
 
 def test_soft_deviation_is_negative_under_target() -> None:
-    _, soft = check_day_totals(
+    _, _, soft = check_day_totals(
         day_total(carbs_available_g=200, fat_g=30), {}, day_type(), settings()
     )
 
@@ -911,8 +913,8 @@ def test_soft_deviation_is_negative_under_target() -> None:
 
 
 def test_soft_leaves_out_what_is_not_fully_known() -> None:
-    unknown, soft_unknown = check_day_totals(day_total(fat_g=None), {}, day_type(), settings())
-    partial, soft_partial = check_day_totals(
+    unknown, _, soft_unknown = check_day_totals(day_total(fat_g=None), {}, day_type(), settings())
+    partial, _, soft_partial = check_day_totals(
         day_total(fat_g=30), {"fat_g": ["mystery_flour"]}, day_type(), settings()
     )
 
@@ -924,97 +926,267 @@ def test_soft_leaves_out_what_is_not_fully_known() -> None:
 
 @pytest.mark.parametrize("key", ["kcal", "protein_g", "sat_fat_g", "fibre_g"])
 def test_a_day_nutrient_that_is_none_is_never_zero(key: str) -> None:
-    failures, _ = check_day_totals(day_total(**{key: None}), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(**{key: None}), {}, day_type(), settings())
 
     failure = only(failures)
     assert "not known" in failure.message
     assert "part not known" not in failure.message
 
 
-def test_incomplete_total_below_floor_fails_part_not_known() -> None:
-    failures, _ = check_day_totals(
+def test_incomplete_total_below_floor_is_unsettled() -> None:
+    """The foods with no value might make up the gap, and nothing says how much they hold."""
+    failures, unsettled, _ = check_day_totals(
         day_total(fibre_g=20), {"fibre_g": ["mystery_flour", "odd_seed"]}, day_type(), settings()
     )
 
-    failure = only(failures)
-    assert failure.check == "day_fibre_g"
-    assert failure.message.startswith("fibre at least 20 g, part not known")
-    assert "mystery flour, odd seed" in failure.message
-    assert "day needs at least 35 g" in failure.message
-
-
-def test_incomplete_total_above_floor_passes() -> None:
-    failures, _ = check_day_totals(
-        day_total(fibre_g=40), {"fibre_g": ["mystery_flour"]}, day_type(), settings()
+    assert failures == []
+    assert only(unsettled) == Failure(
+        check="day_fibre_g",
+        message="fibre not known (no value for mystery flour, odd seed); the part known is 20 g "
+        "and day needs at least 35 g",
     )
 
-    assert failures == []
+
+@pytest.mark.parametrize("fibre", [35, 40])
+def test_incomplete_total_at_or_above_floor_passes(fibre: float) -> None:
+    failures, unsettled, _ = check_day_totals(
+        day_total(fibre_g=fibre), {"fibre_g": ["mystery_flour"]}, day_type(), settings()
+    )
+
+    assert (failures, unsettled) == ([], [])
 
 
-def test_incomplete_total_against_cap_fails_not_known() -> None:
-    failures, _ = check_day_totals(
+def test_incomplete_total_under_a_cap_with_no_ceiling_is_unsettled() -> None:
+    failures, unsettled, _ = check_day_totals(
         day_total(sat_fat_g=12), {"sat_fat_g": ["mystery_flour"]}, day_type(), settings()
     )
 
-    failure = only(failures)
-    assert failure.check == "day_sat_fat_g"
-    assert failure.message.startswith("saturated fat not known")
-    assert "mystery flour" in failure.message
-    assert "12 g" in failure.message
-    assert "at most 20 g" in failure.message
+    assert failures == []
+    assert only(unsettled) == Failure(
+        check="day_sat_fat_g",
+        message="saturated fat not known (no value for mystery flour); the part known is 12 g "
+        "and day allows at most 20 g",
+    )
 
 
 def test_incomplete_total_already_over_a_cap_fails_as_over() -> None:
-    failures, _ = check_day_totals(
-        day_total(sat_fat_g=25), {"sat_fat_g": ["mystery_flour"]}, day_type(), settings()
+    failures, unsettled, _ = check_day_totals(
+        day_total(sat_fat_g=25),
+        {"sat_fat_g": ["mystery_flour"]},
+        day_type(),
+        settings(),
+        ceilings={"sat_fat_g": 30},
     )
 
-    failure = only(failures)
-    assert failure.message.startswith("saturated fat at least 25 g, part not known")
-    assert "day allows at most 20 g" in failure.message
+    assert unsettled == []
+    assert only(failures) == Failure(
+        check="day_sat_fat_g",
+        message="saturated fat at least 25 g, part not known (no value for mystery flour), "
+        "day allows at most 20 g",
+    )
 
 
-def test_incomplete_kcal_inside_the_band_cannot_be_confirmed() -> None:
-    failures, _ = check_day_totals(
+@pytest.mark.parametrize(
+    ("ceiling", "unsettled_checks"),
+    [(12, []), (19.9, []), (20, []), (20 + 1e-10, []), (20.01, ["day_sat_fat_g"])],
+)
+def test_a_ceiling_within_the_cap_settles_an_incomplete_total(
+    ceiling: float, unsettled_checks: list[str]
+) -> None:
+    failures, unsettled, _ = check_day_totals(
+        day_total(sat_fat_g=12),
+        {"sat_fat_g": ["rohu"]},
+        day_type(),
+        settings(),
+        ceilings={"sat_fat_g": ceiling},
+    )
+
+    assert failures == []
+    assert checks_of(unsettled) == unsettled_checks
+
+
+@pytest.mark.parametrize("known", [20, 20 + 1e-10])
+def test_a_known_part_at_the_cap_with_a_ceiling_over_it_is_unsettled(known: float) -> None:
+    """At the cap is not over it, so the day does not fail; the ceiling leaves room above."""
+    failures, unsettled, _ = check_day_totals(
+        day_total(sat_fat_g=known),
+        {"sat_fat_g": ["rohu"]},
+        day_type(),
+        settings(),
+        ceilings={"sat_fat_g": 25},
+    )
+
+    assert failures == []
+    assert checks_of(unsettled) == ["day_sat_fat_g"]
+
+
+@pytest.mark.parametrize("ceiling", [35, 35 - 1e-10])
+def test_a_ceiling_at_the_floor_with_the_known_part_under_it_is_unsettled(ceiling: float) -> None:
+    """The day reaches the floor only if the missing part is as large as it can be."""
+    failures, unsettled, _ = check_day_totals(
+        day_total(fibre_g=20),
+        {"fibre_g": ["moong_dal"]},
+        day_type(),
+        settings(),
+        ceilings={"fibre_g": ceiling},
+    )
+
+    assert failures == []
+    assert checks_of(unsettled) == ["day_fibre_g"]
+
+
+def test_an_unsettled_cap_names_the_ceiling() -> None:
+    _, unsettled, _ = check_day_totals(
+        day_total(sat_fat_g=6),
+        {"sat_fat_g": ["rohu", "curry_leaves"]},
+        day_type(sat_fat_g_max=24),
+        settings(),
+        ceilings={"sat_fat_g": 30.7},
+    )
+
+    assert only(unsettled).message == (
+        "saturated fat not known (no value for rohu, curry leaves); the part known is 6 g, "
+        "at most 31 g if all their fat is saturated, and day allows at most 24 g"
+    )
+
+
+def test_a_total_with_no_value_for_any_food_is_unsettled_and_counts_as_zero() -> None:
+    lacking = {"sat_fat_g": ["rohu"], "fibre_g": ["moong_dal"]}
+    total = day_total(sat_fat_g=None, fibre_g=None)
+
+    failures, unsettled, _ = check_day_totals(total, lacking, day_type(), settings())
+    _, bounded, _ = check_day_totals(
+        total, lacking, day_type(), settings(), ceilings={"sat_fat_g": 2.1}
+    )
+    _, too_high, _ = check_day_totals(
+        total, lacking, day_type(), settings(), ceilings={"sat_fat_g": 25}
+    )
+
+    assert failures == []
+    assert [f.message for f in unsettled] == [
+        "saturated fat not known (no value for rohu), day allows at most 20 g",
+        "fibre not known (no value for moong dal), day needs at least 35 g",
+    ]
+    assert checks_of(bounded) == ["day_fibre_g"]
+    assert too_high[0].message == (
+        "saturated fat not known (no value for rohu); at most 25 g if all their fat is "
+        "saturated, and day allows at most 20 g"
+    )
+
+
+def test_a_ceiling_under_a_floor_fails_it() -> None:
+    failures, unsettled, _ = check_day_totals(
+        day_total(fibre_g=20),
+        {"fibre_g": ["moong_dal"]},
+        day_type(),
+        settings(),
+        ceilings={"fibre_g": 30},
+    )
+
+    assert unsettled == []
+    assert only(failures) == Failure(
+        check="day_fibre_g",
+        message="fibre at most 30 g, part not known (no value for moong dal), "
+        "day needs at least 35 g",
+    )
+
+
+def test_a_ceiling_never_changes_the_verdict_on_a_complete_total() -> None:
+    over, _, _ = check_day_totals(
+        day_total(sat_fat_g=21), {}, day_type(), settings(), ceilings={"sat_fat_g": 5}
+    )
+    under, _, _ = check_day_totals(
+        day_total(sat_fat_g=19), {}, day_type(), settings(), ceilings={"sat_fat_g": 50}
+    )
+
+    assert checks_of(over) == ["day_sat_fat_g"]
+    assert under == []
+
+
+def test_incomplete_kcal_inside_the_band_is_unsettled() -> None:
+    failures, unsettled, _ = check_day_totals(
         day_total(kcal=2050), {"kcal": ["mystery_flour"]}, day_type(), settings()
     )
 
-    assert only(failures).message.startswith("calories not known")
+    assert failures == []
+    assert only(unsettled).message == (
+        "calories not known (no value for mystery flour); the part known is 2050 kcal "
+        "and day needs 1900 to 2100 kcal (2000 kcal target, within 5%)"
+    )
 
 
-def test_incomplete_kcal_below_the_band_fails_part_not_known() -> None:
-    failures, _ = check_day_totals(
+def test_incomplete_kcal_below_the_band_is_unsettled() -> None:
+    failures, unsettled, _ = check_day_totals(
         day_total(kcal=1500), {"kcal": ["mystery_flour"]}, day_type(), settings()
     )
 
-    assert only(failures).message.startswith("calories at least 1500 kcal, part not known")
+    assert failures == []
+    assert only(unsettled).message.startswith(
+        "calories not known (no value for mystery flour); the part known is 1500 kcal"
+    )
+
+
+def test_incomplete_kcal_over_the_band_fails() -> None:
+    failures, unsettled, _ = check_day_totals(
+        day_total(kcal=2200), {"kcal": ["mystery_flour"]}, day_type(), settings()
+    )
+
+    assert unsettled == []
+    assert only(failures).message.startswith("calories at least 2200 kcal, part not known")
+
+
+@pytest.mark.parametrize(
+    ("kcal", "ceiling", "verdict"),
+    [
+        (1950, 2050, "passes"),
+        (1900, 2100, "passes"),
+        (1850, 2050, "unsettled"),
+        (1950, 2150, "unsettled"),
+        (1500, 1800, "fails"),
+        (2150, 2300, "fails"),
+    ],
+)
+def test_incomplete_kcal_with_a_ceiling_is_held_to_both_ends_of_the_band(
+    kcal: float, ceiling: float, verdict: str
+) -> None:
+    failures, unsettled, _ = check_day_totals(
+        day_total(kcal=kcal),
+        {"kcal": ["mystery_flour"]},
+        day_type(),
+        settings(),
+        ceilings={"kcal": ceiling},
+    )
+
+    found = "fails" if failures else "unsettled" if unsettled else "passes"
+    assert found == verdict
 
 
 def test_incomplete_extra_min_is_read_like_a_floor() -> None:
     extra = [NutrientTarget(nutrient="iron_mg", kind="min", value=18)]
     day = day_type(extra=extra)
 
-    short, _ = check_day_totals(day_total(iron_mg=10), {"iron_mg": ["x"]}, day, settings())
-    enough, _ = check_day_totals(day_total(iron_mg=19), {"iron_mg": ["x"]}, day, settings())
+    short = check_day_totals(day_total(iron_mg=10), {"iron_mg": ["x"]}, day, settings())
+    enough = check_day_totals(day_total(iron_mg=19), {"iron_mg": ["x"]}, day, settings())
 
-    assert only(short).message.startswith("iron at least 10 mg, part not known")
-    assert enough == []
+    assert short[0] == []
+    assert only(short[1]).message.startswith("iron not known (no value for x); the part known")
+    assert enough[:2] == ([], [])
 
 
 def test_a_nutrient_with_no_value_and_no_named_source_still_fails() -> None:
-    failures, _ = check_day_totals(day_total(fibre_g=None), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(fibre_g=None), {}, day_type(), settings())
 
     assert only(failures).message == "fibre not known, day needs at least 35 g"
 
 
 def test_a_cap_alone_reads_at_most_when_not_known() -> None:
-    failures, _ = check_day_totals(day_total(sat_fat_g=None), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(sat_fat_g=None), {}, day_type(), settings())
 
     assert only(failures).message == "saturated fat not known, day allows at most 20 g"
 
 
 def test_a_band_reads_as_a_range_when_not_known() -> None:
-    failures, _ = check_day_totals(day_total(kcal=None), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(kcal=None), {}, day_type(), settings())
 
     assert only(failures).message.startswith("calories not known, day needs 1900 to 2100 kcal")
 
@@ -1027,7 +1199,7 @@ B12_CAP = [NutrientTarget(nutrient="vit_b12_ug", kind="max", value=2.4)]
 
 
 def test_a_small_floor_and_total_keep_their_decimals() -> None:
-    failures, _ = check_day_totals(
+    failures, _, _ = check_day_totals(
         day_total(vit_b12_ug=1.2), {}, day_type(extra=B12_FLOOR), settings()
     )
 
@@ -1035,7 +1207,7 @@ def test_a_small_floor_and_total_keep_their_decimals() -> None:
 
 
 def test_a_small_total_just_under_its_floor_is_not_rounded_up_to_it() -> None:
-    failures, _ = check_day_totals(
+    failures, _, _ = check_day_totals(
         day_total(vit_b12_ug=2.39), {}, day_type(extra=B12_FLOOR), settings()
     )
 
@@ -1043,7 +1215,7 @@ def test_a_small_total_just_under_its_floor_is_not_rounded_up_to_it() -> None:
 
 
 def test_a_small_cap_and_total_keep_their_decimals() -> None:
-    failures, _ = check_day_totals(
+    failures, _, _ = check_day_totals(
         day_total(vit_b12_ug=2.6), {}, day_type(extra=B12_CAP), settings()
     )
 
@@ -1051,18 +1223,18 @@ def test_a_small_cap_and_total_keep_their_decimals() -> None:
 
 
 def test_a_small_cap_with_a_part_known_keeps_its_decimals() -> None:
-    failures, _ = check_day_totals(
+    _, unsettled, _ = check_day_totals(
         day_total(vit_b12_ug=2.2), {"vit_b12_ug": ["curd"]}, day_type(extra=B12_CAP), settings()
     )
 
-    assert only(failures).message == (
+    assert only(unsettled).message == (
         "vitamin B12 not known (no value for curd); the part known is 2.2 ug "
         "and day allows at most 2.4 ug"
     )
 
 
 def test_a_small_floor_that_is_not_known_keeps_its_decimals() -> None:
-    failures, _ = check_day_totals(day_total(), {}, day_type(extra=B12_FLOOR), settings())
+    failures, _, _ = check_day_totals(day_total(), {}, day_type(extra=B12_FLOOR), settings())
 
     assert only(failures).message == "vitamin B12 not known, day needs at least 2.4 ug"
 
@@ -1084,13 +1256,15 @@ def test_a_small_slot_share_keeps_its_decimals() -> None:
 def test_a_total_is_shown_to_the_decimals_it_needs(iron: float, shown: str) -> None:
     extra = [NutrientTarget(nutrient="iron_mg", kind="min", value=18)]
 
-    failures, _ = check_day_totals(day_total(iron_mg=iron), {}, day_type(extra=extra), settings())
+    failures, _, _ = check_day_totals(
+        day_total(iron_mg=iron), {}, day_type(extra=extra), settings()
+    )
 
     assert only(failures).message == f"{shown}, day needs at least 18 mg"
 
 
 def test_large_numbers_stay_whole() -> None:
-    failures, _ = check_day_totals(day_total(kcal=1850.4), {}, day_type(), settings())
+    failures, _, _ = check_day_totals(day_total(kcal=1850.4), {}, day_type(), settings())
 
     assert only(failures).message == (
         "calories 1850 kcal, day needs at least 1900 kcal (2000 kcal target, within 5%)"
@@ -1103,7 +1277,7 @@ def test_a_limit_that_is_not_whole_is_rounded_the_way_that_keeps_a_miss_a_miss()
         meal({"kcal": 500, "protein_g": 20}), spec(protein_g=41), settings()
     )
     sodium = [NutrientTarget(nutrient="sodium_mg", kind="max", value=2000.4)]
-    over, _ = check_day_totals(day_total(sodium_mg=2001), {}, day_type(extra=sodium), settings())
+    over, _, _ = check_day_totals(day_total(sodium_mg=2001), {}, day_type(extra=sodium), settings())
 
     assert only(protein).message.startswith("protein 20 g, slot needs at least 37 g")
     assert only(over).message == "sodium 2001 mg, day allows at most 2000 mg"
@@ -1193,10 +1367,10 @@ def test_check_day_treats_a_recipe_total_with_no_value_as_part_not_known() -> No
     report = check_day("mon", parts, day_type(), settings())
 
     assert report.totals["fibre_g"] == 22
-    fibre = [f for f in report.failures if f.check == "day_fibre_g"]
-    assert only(fibre).message.startswith("fibre at least 22 g, part not known")
-    assert "(no value for food 1)" in only(fibre).message
-    assert "Dish mon 1" not in only(fibre).message
+    assert "day_fibre_g" not in checks_of(report.failures)
+    fibre = only([f for f in report.unsettled if f.check == "day_fibre_g"])
+    assert fibre.message.startswith("fibre not known (no value for food 1); the part known is 22 g")
+    assert "Dish mon 1" not in fibre.message
 
 
 def test_check_day_carries_what_nutrition_mcp_says_is_incomplete() -> None:
@@ -1205,9 +1379,8 @@ def test_check_day_carries_what_nutrition_mcp_says_is_incomplete() -> None:
 
     report = check_day("mon", parts, day_type(), settings())
 
-    fibre = [f for f in report.failures if f.check == "day_fibre_g"]
-    assert "part not known" in only(fibre).message
-    assert "mystery flour" in only(fibre).message
+    fibre = only([f for f in report.unsettled if f.check == "day_fibre_g"])
+    assert "(no value for mystery flour)" in fibre.message
 
 
 def test_check_day_without_the_numbers_of_a_recipe_is_not_a_clean_day() -> None:
@@ -1217,9 +1390,12 @@ def test_check_day_without_the_numbers_of_a_recipe_is_not_a_clean_day() -> None:
     report = check_day("mon", parts, day_type(), settings())
 
     assert report.totals["kcal"] == 2000
-    assert checks_of(report.failures) == ["day_kcal", "day_sat_fat_g"]
-    assert "Ghost curry" not in report.failures[0].message
-    assert "(no value for ghost)" in report.failures[0].message
+    # The known part already meets the protein and fibre floors; the ghost curry could still
+    # push calories and saturated fat over, and nothing bounds what it holds.
+    assert report.failures == []
+    assert checks_of(report.unsettled) == ["day_kcal", "day_sat_fat_g"]
+    assert "Ghost curry" not in report.unsettled[0].message
+    assert "(no value for ghost)" in report.unsettled[0].message
     assert report.soft == {}
 
 
@@ -1237,13 +1413,14 @@ def test_a_list_of_foods_with_no_value_holds_foods_and_never_recipe_titles() -> 
 
     report = check_day("mon", parts, day_type(), settings())
 
-    fibre = only([f for f in report.failures if f.check == "day_fibre_g"])
+    fibre = only([f for f in report.unsettled if f.check == "day_fibre_g"])
     assert fibre.message == (
-        "fibre at least 10 g, part not known (no value for mystery flour, ghost curd, ghost rice), "
-        "day needs at least 35 g"
+        "fibre not known (no value for mystery flour, ghost curd, ghost rice); the part known is "
+        "10 g and day needs at least 35 g"
     )
     assert all(
-        "Seed bread" not in f.message and "Ghost curry" not in f.message for f in report.failures
+        "Seed bread" not in f.message and "Ghost curry" not in f.message
+        for f in [*report.failures, *report.unsettled]
     )
 
 
@@ -1255,8 +1432,37 @@ def test_a_total_with_no_value_and_no_named_source_names_the_foods_of_the_meal()
 
     report = check_day("mon", parts, day_type(), settings())
 
-    fibre = only([f for f in report.failures if f.check == "day_fibre_g"])
+    fibre = only([f for f in report.unsettled if f.check == "day_fibre_g"])
     assert fibre.message == "fibre not known (no value for oats, dates), day needs at least 35 g"
+
+
+def test_check_day_settles_saturated_fat_through_the_total_fat_of_the_foods_that_lack_it() -> None:
+    """A day shaped like the eval's: 6 g of saturated fat known, and curry leaves and rohu with
+    a total fat and no saturated fat, as CoFID 2021 gives them. At most 8.17 g, under 24 g."""
+    lunch = plate(
+        portion("paneer_ish", 100, fat_g=10, sat_fat_g=6),
+        portion("curry_leaves", 5, **CURRY_LEAVES),
+        portion("rohu", 150, **ROHU),
+    )
+    day = day_type(sat_fat_g_max=24)
+    fishy = checked(["paneer_ish", "curry_leaves", "rohu"], slot_id="lunch", nutrition=lunch)
+    no_fat = lunch.model_copy(
+        update={
+            "items": [
+                i.model_copy(update={"nutrients": i.nutrients.model_copy(update={"fat_g": None})})
+                if i.food.id == "rohu"
+                else i
+                for i in lunch.items
+            ]
+        }
+    )
+
+    report = check_day("mon", [fishy], day, settings())
+    unbounded = check_day("mon", [fishy.model_copy(update={"nutrition": no_fat})], day, settings())
+
+    assert report.totals["sat_fat_g"] == 6
+    assert "day_sat_fat_g" not in checks_of([*report.failures, *report.unsettled])
+    assert "day_sat_fat_g" in checks_of(unbounded.unsettled)
 
 
 # Adding meals up, for a day of recipes and for a day of meals eaten
@@ -1327,6 +1533,110 @@ def test_check_day_with_no_recipes_knows_nothing() -> None:
     assert report.soft == {}
 
 
+# The most saturated fat a day can hold, from nutrition-mcp's numbers for each food
+
+
+def portion(
+    food_id: str,
+    grams: float,
+    incomplete: Mapping[str, list[str]] | None = None,
+    **per_100g: float | None,
+) -> NutritionResult:
+    """nutrition-mcp's answer for `grams` of a food with the nutrients per 100 g a test sets."""
+    return NutritionResult(
+        food=FoodSummary(
+            id=food_id,
+            kind="ingredient",
+            name=food_id.replace("_", " ").capitalize(),
+            aliases=[],
+            regions=[],
+            diet="veg",
+            source_ids=["fake"],
+            units={"g": 1.0},
+        ),
+        amount=grams,
+        unit="g",
+        grams=grams,
+        measure_assumption=f"{grams:g} g",
+        nutrients=Nutrients.model_validate(
+            {
+                key: None if value is None else round(value * grams / 100, 2)
+                for key, value in per_100g.items()
+            }
+        ),
+        incomplete=dict(incomplete or {}),
+        raw_ingredient_totals=[],
+        gi=None,
+        gi_ref=None,
+        glycemic_load=None,
+        oil_assumption=None,
+        sources=["fake"],
+    )
+
+
+def plate(*items: NutritionResult) -> MealResult:
+    """A meal of `items` with the totals nutrition-mcp gives: each nutrient summed over the items
+    that have it, and the foods that lack it (or a dish's ingredients that do) named."""
+    total, _ = sum_nutrients([(i.food.id, i.nutrients) for i in items])
+    lacking: dict[str, list[str]] = {}
+    for key in NUTRIENT_KEYS:
+        for i in items:
+            names = i.incomplete.get(key) or ([i.food.id] if i.nutrients.get(key) is None else [])
+            lacking.setdefault(key, []).extend(names)
+    return MealResult(
+        items=list(items),
+        total=Nutrients.model_validate(
+            {key: None if value is None else round(value, 2) for key, value in total}
+        ),
+        total_incomplete={key: names for key, names in lacking.items() if names},
+        glycemic_load=None,
+        glycemic_load_missing=[],
+    )
+
+
+# CoFID 2021 gives these foods a total fat and no saturated fat, as nutrition-mcp reports them.
+CURRY_LEAVES = {"fat_g": 1.3}
+ROHU = {"fat_g": 1.4}
+
+
+def test_the_ceiling_counts_saturated_fat_where_it_is_known() -> None:
+    assert sat_fat_ceiling([plate(portion("paneer", 100, fat_g=24.5, sat_fat_g=15.43))]) == 15.43
+
+
+def test_the_ceiling_counts_total_fat_for_a_food_with_no_saturated_fat() -> None:
+    assert sat_fat_ceiling([plate(portion("rohu", 150, **ROHU))]) == 2.1
+
+
+def test_the_ceiling_adds_up_every_food_of_every_meal_to_two_decimals() -> None:
+    lunch = plate(portion("paneer", 100, fat_g=24.5, sat_fat_g=15.43), portion("rohu", 150, **ROHU))
+    dinner = plate(portion("curry_leaves", 5, **CURRY_LEAVES), portion("oil", 0.1, sat_fat_g=20))
+
+    # 15.43 + 2.1 + 0.07 + 0.02, with no float noise.
+    assert sat_fat_ceiling([lunch, dinner]) == 17.62
+
+
+def test_a_food_with_neither_value_leaves_no_ceiling() -> None:
+    lunch = plate(portion("paneer", 100, fat_g=24.5, sat_fat_g=15.43), portion("mystery", 50))
+
+    assert sat_fat_ceiling([lunch]) is None
+
+
+def test_a_meal_with_no_numbers_leaves_no_ceiling() -> None:
+    assert sat_fat_ceiling([plate(portion("rohu", 150, **ROHU)), None]) is None
+
+
+def test_saturated_fat_that_is_only_part_known_falls_back_to_a_complete_total_fat() -> None:
+    thali = portion("thali", 200, {"sat_fat_g": ["ghee"]}, fat_g=10, sat_fat_g=3)
+
+    assert sat_fat_ceiling([plate(thali)]) == 20
+
+
+def test_total_fat_that_is_only_part_known_leaves_no_ceiling() -> None:
+    thali = portion("thali", 200, {"sat_fat_g": ["ghee"], "fat_g": ["ghee"]}, fat_g=10, sat_fat_g=3)
+
+    assert sat_fat_ceiling([plate(thali)]) is None
+
+
 # Which recipe to blame for a day
 
 # Breakfast, lunch and dinner share a 1000 kcal day. Each dish has a share of the day's calories
@@ -1345,7 +1655,8 @@ def dish(
     incomplete: Mapping[str, list[str]] | None = None,
     **nutrients: float | None,
 ) -> CheckedRecipe:
-    """A recipe of `slot_id` on Monday whose numbers are on target unless changed."""
+    """A recipe of `slot_id` on Monday whose numbers are on target unless changed. It is one food
+    of 100 g, so nutrition-mcp's numbers for the food are the recipe's."""
     planned = SHARE[slot_id] if share is None else share
     totals: dict[str, float | None] = {
         "kcal": planned if kcal is None else kcal,
@@ -1360,7 +1671,7 @@ def dish(
         kcal=planned,
         protein_g=protein_share,
         eat_at=HOURS.get(slot_id, 17),
-        nutrition=meal(totals, incomplete),
+        nutrition=plate(portion(f"{slot_id}_food", 100, incomplete, **totals)),
     )
 
 
@@ -1452,12 +1763,21 @@ def test_an_extra_target_blames_by_its_own_direction(
     assert blamed(dishes, f"day_{key}", day).spec.slot.id == expected
 
 
-def test_a_recipe_with_no_numbers_is_blamed_when_the_day_is_short() -> None:
+def test_a_recipe_with_no_numbers_is_blamed_first_when_the_day_is_short() -> None:
+    """Its missing amount might be the gap. check_day leaves a partial total under a floor
+    unsettled unless a ceiling shows it short, so the report is built by hand."""
     breakfast = dish("breakfast")
     lunch = dish("lunch")
     dinner = checked(["ghost"], slot_id="dinner", kcal=500, eat_at=20)
+    report = DayReport(
+        day="mon",
+        totals={"kcal": 500},
+        failures=[Failure(check="day_kcal", message="calories at most 900 kcal")],
+        unsettled=[],
+        soft={},
+    )
 
-    assert blamed([breakfast, lunch, dinner], "day_kcal") is dinner
+    assert worst_recipe_for_day(report, [breakfast, lunch, dinner], BLAME_DAY) is dinner
 
 
 def test_a_recipe_with_an_unknown_amount_is_not_blamed_when_the_day_is_over() -> None:
@@ -1468,37 +1788,52 @@ def test_a_recipe_with_an_unknown_amount_is_not_blamed_when_the_day_is_over() ->
     assert blamed([breakfast, lunch, dinner], "day_sat_fat_g") is dinner
 
 
-def test_a_day_that_cannot_be_confirmed_blames_the_recipe_with_no_value() -> None:
-    """11 g of saturated fat is known, under the 20 g cap, but the lunch has no value."""
-    breakfast = dish("breakfast", sat_fat_g=5)
-    lunch = dish("lunch", sat_fat_g=None)
-    dinner = dish("dinner", sat_fat_g=6)
+def test_a_day_the_checks_cannot_settle_has_nothing_to_blame() -> None:
+    """11 g of saturated fat is known, under the 20 g cap, but the lunch has no value and no fat
+    to bound it by: the day is unsettled, and no recipe is rewritten for it."""
+    dishes = [
+        dish("breakfast", sat_fat_g=5),
+        dish("lunch", sat_fat_g=None),
+        dish("dinner", sat_fat_g=6),
+    ]
 
-    assert blamed([breakfast, lunch, dinner], "day_sat_fat_g") is lunch
+    report = check_day("mon", dishes, BLAME_DAY, settings())
 
-
-def test_a_day_that_cannot_be_confirmed_blames_the_recipe_nutrition_mcp_marks_incomplete() -> None:
-    breakfast = dish("breakfast", sat_fat_g=5)
-    lunch = dish("lunch", sat_fat_g=4, incomplete={"sat_fat_g": ["mystery_flour"]})
-    dinner = dish("dinner", sat_fat_g=6)
-
-    assert blamed([breakfast, lunch, dinner], "day_sat_fat_g") is lunch
-
-
-def test_a_day_with_no_value_for_a_nutrient_blames_the_earliest_slot() -> None:
-    breakfast = dish("breakfast", share=500, protein_g=60, fibre_g=None)
-    lunch = dish("lunch", share=500, protein_g=60, fibre_g=None)
-
-    assert blamed([lunch, breakfast], "day_fibre_g") is breakfast
+    assert report.failures == []
+    assert checks_of(report.unsettled) == ["day_sat_fat_g"]
+    with pytest.raises(ValueError, match="mon has no failing day check"):
+        worst_recipe_for_day(report, dishes, BLAME_DAY)
 
 
-def test_calories_on_the_target_but_not_confirmed_still_get_a_recipe() -> None:
-    """Exactly 1000 kcal known with a recipe missing: neither over nor under, so the one with no
-    numbers is blamed."""
-    breakfast = dish("breakfast", share=200, kcal=1000)
-    dinner = checked(["ghost"], slot_id="dinner", kcal=500, eat_at=20)
+def test_a_failure_whose_total_is_within_its_limits_is_blamed_on_no_recipe() -> None:
+    """No failure check_day gives is like this: a total within its limits either passes or, when
+    a food lacks a value, is unsettled."""
+    dishes = [dish("breakfast"), dish("lunch", sat_fat_g=None), dish("dinner")]
+    report = DayReport(
+        day="mon",
+        totals={"sat_fat_g": 2},
+        failures=[Failure(check="day_sat_fat_g", message="saturated fat not known")],
+        unsettled=[],
+        soft={},
+    )
 
-    assert blamed([breakfast, dinner], "day_kcal") is dinner
+    with pytest.raises(ValueError, match="mon's sat_fat_g total is within its limits"):
+        worst_recipe_for_day(report, dishes, BLAME_DAY)
+
+
+def test_a_day_short_whatever_its_missing_amount_holds_blames_a_recipe_that_lacks_it() -> None:
+    """A total with no value for any food counts as 0, as the day checks count it, so a ceiling
+    under the floor makes the day under it."""
+    dishes = [dish("breakfast", fibre_g=None), dish("lunch", fibre_g=None), dish("dinner")]
+    report = DayReport(
+        day="mon",
+        totals={"fibre_g": None},
+        failures=[Failure(check="day_fibre_g", message="fibre at most 30 g, part not known")],
+        unsettled=[],
+        soft={},
+    )
+
+    assert worst_recipe_for_day(report, list(reversed(dishes)), BLAME_DAY) is dishes[0]
 
 
 def test_a_tie_goes_to_the_earlier_slot_whatever_the_list_order() -> None:
@@ -1537,6 +1872,7 @@ def test_worst_recipe_is_chosen_from_the_reports_day_only() -> None:
         day="mon",
         totals={"kcal": 1500},
         failures=[Failure(check="day_kcal", message="calories 1500 kcal")],
+        unsettled=[],
         soft={},
     )
 
@@ -1544,7 +1880,7 @@ def test_worst_recipe_is_chosen_from_the_reports_day_only() -> None:
 
 
 def test_worst_recipe_needs_a_recipe_on_that_day() -> None:
-    report = DayReport(day="wed", totals={}, failures=[], soft={})
+    report = DayReport(day="wed", totals={}, failures=[], unsettled=[], soft={})
 
     with pytest.raises(ValueError, match="wed"):
         worst_recipe_for_day(report, [dish("lunch")], BLAME_DAY)

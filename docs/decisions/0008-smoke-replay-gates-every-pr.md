@@ -1,5 +1,5 @@
 # 0008. A replay of the smoke slice gates every PR, held to its own numbers
-Date: 2026-10-27 · Status: accepted
+Date: 2026-10-27 · Status: accepted; the slice was recorded again and its thresholds set anew under [0009](0009-unsettled-day-checks.md), with days and weeks now held (`evals/thresholds.toml`)
 
 ## Context
 The full eval writes a week for each of the 20 plans with both systems and reads all 53 typed meals, calling the model with a key. Running it on every PR would spend the free tier's daily quota, put a key in CI, and give different numbers each time, because the model does not answer the same way twice. Thresholds on a live run would need margins wide enough to hide a real regression.

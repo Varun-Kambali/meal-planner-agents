@@ -20,7 +20,7 @@ from nutrition_mcp.schemas import MAX_NAME_LENGTH, MealItemIn, MealResult
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from meal_planner.catalogue import Catalogue
-from meal_planner.checks import add_up_meals, check_day_totals
+from meal_planner.checks import add_up_meals, check_day_totals, sat_fat_ceiling
 from meal_planner.config import Settings
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.problems import Problem
@@ -122,9 +122,9 @@ class Export(_Model):
 class DaySummary(_Model):
     """One date of the log against the targets of its day type.
 
-    `totals` and `failures` come from the functions the day checks use, so the failures read the
-    same. A total is None when no food eaten has a value for the nutrient. The two dicts by slot
-    cover the meals of the day that were eaten.
+    `totals`, `failures` and `unsettled` come from the functions the day checks use, so they read
+    the same. A total is None when no food eaten has a value for the nutrient. The two dicts by
+    slot cover the meals of the day that were eaten.
     """
 
     date: datetime.date
@@ -134,6 +134,11 @@ class DaySummary(_Model):
     totals: dict[str, float | None]
     targets: dict[str, float]
     failures: list[Failure]
+    # Checks the day can be shown neither to meet nor to miss, because a food eaten has no value
+    # for the nutrient; see DayReport. A meal nutrition-mcp cannot work out refuses the log or
+    # ends the summary instead, so here a missing value is the only cause. Never a failure, and
+    # never on target.
+    unsettled: list[Failure]
     # Carbohydrate and fat as a fraction over (+) or under (-) their target; see DayReport.
     soft: dict[str, float]
     # A meal's glycemic load, or None when an item in it has none, and then how many do not.
@@ -148,7 +153,10 @@ class WeekSummary(_Model):
     # Meals eaten as planned over the meals the plan has on every date from the log's first to its
     # last. A slot with no entry, also on a date with none, was not eaten as planned.
     as_planned_share: float
+    # Days with no failure and nothing unsettled: shown to meet every target.
     days_on_target: int
+    # Days with no failure and at least one check that could not be settled.
+    days_unsettled: int
     planned_meals: int
 
 
@@ -250,7 +258,8 @@ async def summarise(
     return WeekSummary(
         days=days,
         as_planned_share=as_planned / planned_meals if planned_meals else 0.0,
-        days_on_target=sum(1 for day in days if not day.failures),
+        days_on_target=sum(1 for day in days if not day.failures and not day.unsettled),
+        days_unsettled=sum(1 for day in days if not day.failures and day.unsettled),
         planned_meals=planned_meals,
     )
 
@@ -261,7 +270,10 @@ def _summarise_day(
     day_type: DayType,
     settings: Settings,
 ) -> DaySummary:
-    """One date. `entries` are in the order of the plan's slots, and a skipped entry has no meal."""
+    """One date. `entries` are in the order of the plan's slots, and a skipped entry has no meal.
+
+    Saturated fat is bounded by `sat_fat_ceiling` over the meals eaten, as a day of recipes is.
+    """
     eaten = [(entry, meal) for entry, meal in entries if meal is not None]
     if eaten:
         total, incomplete = add_up_meals(
@@ -270,13 +282,21 @@ def _summarise_day(
     else:
         # A day of skipped meals is a day on which nothing was eaten, which is known: 0, not None.
         total, incomplete = Nutrients.model_validate(dict.fromkeys(NUTRIENT_KEYS, 0.0)), {}
-    failures, soft = check_day_totals(total, incomplete, day_type, settings)
+    ceiling = sat_fat_ceiling([meal for _, meal in eaten])
+    failures, unsettled, soft = check_day_totals(
+        total,
+        incomplete,
+        day_type,
+        settings,
+        ceilings=None if ceiling is None else {"sat_fat_g": ceiling},
+    )
     return DaySummary(
         date=date,
         day_type=day_type.id,
         totals=dict(total),
         targets=_targets(day_type),
         failures=failures,
+        unsettled=unsettled,
         soft=soft,
         glycemic_load={
             entry.slot_id: None if meal.glycemic_load_missing else meal.glycemic_load

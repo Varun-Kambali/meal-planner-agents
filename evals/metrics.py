@@ -4,8 +4,11 @@ Recipe metrics count over the recipes a plan asks for (seven a slot), so a recip
 written counts as one that did not pass. A recipe passes when it was written and ended with no
 failure other than a day's: a day check (`day_kcal`, `day_sat_fat_g` ...) is about the day's
 total, and the graph only hangs it on a recipe to choose one to rewrite, so it is counted on the
-day instead. A day passes when it ended with no failure, and a week when every recipe it asks
-for and every day passes. No-waste flags are warnings, as in the app, and pass or fail nothing.
+day instead. A day passes when it ended with no failure and nothing unsettled (a check a food
+with no value leaves undecided), and a week when every recipe it asks for and every day passes.
+A day with no failure and something unsettled is counted apart, and a week with no failing
+recipe or day, unsettled days allowed, is counted too. No-waste flags are warnings, as in the
+app, and pass or fail nothing.
 
 Reading metrics compare the reader's items with the labels in evals/datasets/meals.jsonl. A
 labelled item is found when the reader returns its food id or one in its `also_accept`, each
@@ -25,7 +28,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from cases import MealLabel
 from nutrition_mcp.search import PLURAL_MIN_LETTERS, normalise
 from pydantic import BaseModel
-from records import ReadingCase, ReadItemRecord, RecipeCase, RecipeOutcome, Usage
+from records import DayOutcome, ReadingCase, ReadItemRecord, RecipeCase, RecipeOutcome, Usage
 
 # Every day check's name starts with this ("day_" and the nutrient), and no recipe check's does.
 DAY_CHECK_PREFIX = "day_"
@@ -136,8 +139,23 @@ def unwritten_kind(reason: str) -> str:
     return next((kind for prefix, kind in _UNWRITTEN_KINDS if reason.startswith(prefix)), "other")
 
 
+def day_passes(day: DayOutcome) -> bool:
+    """No failure and nothing unsettled."""
+    return not day.failures and not day.unsettled
+
+
+def day_unsettled(day: DayOutcome) -> bool:
+    """No failure, and at least one check a food with no value left unsettled."""
+    return not day.failures and bool(day.unsettled)
+
+
 def week_passes(case: RecipeCase) -> bool:
-    return all(recipe_passes(r) for r in case.recipes) and all(not d.failures for d in case.days)
+    return all(map(recipe_passes, case.recipes)) and all(map(day_passes, case.days))
+
+
+def week_without_failure(case: RecipeCase) -> bool:
+    """Every recipe passes and no day fails; a day may be unsettled."""
+    return all(map(recipe_passes, case.recipes)) and all(not d.failures for d in case.days)
 
 
 class RecipeMetrics(BaseModel):
@@ -153,8 +171,15 @@ class RecipeMetrics(BaseModel):
     days: int
     days_passing: int
     day_pass_share: float | None
+    # Days with no failure and something unsettled. The new fields are None in a results file
+    # written before days could be unsettled, which still loads.
+    days_unsettled: int | None = None
+    day_unsettled_share: float | None = None
     weeks_passing: int
     week_pass_share: float | None
+    # Weeks where every recipe passes and no day fails, unsettled days allowed.
+    weeks_without_failure: int | None = None
+    week_without_failure_share: float | None = None
     calls: int
     calls_per_week: float | None
     input_tokens: int
@@ -169,6 +194,8 @@ class RecipeMetrics(BaseModel):
     failing_checks: dict[str, int]
     # For each day check, the days that ended failing it.
     failing_day_checks: dict[str, int]
+    # For each day check, the days that ended with it unsettled, failing on another check or not.
+    unsettled_day_checks: dict[str, int] | None = None
     no_waste_flags: int
     # Recipes never written, by the kind of reason (see `unwritten_kind`).
     unwritten_by_reason: dict[str, int]
@@ -202,8 +229,10 @@ def recipe_metrics(cases: Sequence[RecipeCase]) -> RecipeMetrics:
     passing = sum(map(recipe_passes, recipes))
     first = sum(map(passes_first_time, recipes))
     variety = sum(map(passes_variety, recipes))
-    days_passing = sum(1 for d in days if not d.failures)
+    days_passing = sum(map(day_passes, days))
+    unsettled = sum(map(day_unsettled, days))
     weeks_passing = sum(map(week_passes, cases))
+    without_failure = sum(map(week_without_failure, cases))
     failing = Counter(
         check
         for r in recipes
@@ -212,6 +241,9 @@ def recipe_metrics(cases: Sequence[RecipeCase]) -> RecipeMetrics:
     )
     failing_days = Counter(
         check for d in days for check in dict.fromkeys(f.check for f in d.failures)
+    )
+    unsettled_days = Counter(
+        check for d in days for check in dict.fromkeys(f.check for f in d.unsettled)
     )
     return RecipeMetrics(
         weeks=weeks,
@@ -226,8 +258,12 @@ def recipe_metrics(cases: Sequence[RecipeCase]) -> RecipeMetrics:
         days=len(days),
         days_passing=days_passing,
         day_pass_share=share(days_passing, len(days)),
+        days_unsettled=unsettled,
+        day_unsettled_share=share(unsettled, len(days)),
         weeks_passing=weeks_passing,
         week_pass_share=share(weeks_passing, weeks),
+        weeks_without_failure=without_failure,
+        week_without_failure_share=share(without_failure, weeks),
         calls=usage.calls,
         calls_per_week=mean(usage.calls, weeks, 2),
         input_tokens=usage.input_tokens,
@@ -239,6 +275,7 @@ def recipe_metrics(cases: Sequence[RecipeCase]) -> RecipeMetrics:
         call_errors=dict(sorted(usage.errors.items())),
         failing_checks=dict(sorted(failing.items())),
         failing_day_checks=dict(sorted(failing_days.items())),
+        unsettled_day_checks=dict(sorted(unsettled_days.items())),
         no_waste_flags=sum(case.no_waste for case in cases),
         unwritten_by_reason=dict(
             sorted(

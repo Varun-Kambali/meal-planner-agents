@@ -116,6 +116,7 @@ def test_an_empty_log_is_an_empty_summary(tmp_path: Path) -> None:
         "days": [],
         "as_planned_share": 0.0,
         "days_on_target": 0,
+        "days_unsettled": 0,
         "planned_meals": 0,
     }
 

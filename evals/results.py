@@ -153,6 +153,11 @@ def _counted(part: int, whole: int) -> str:
     return f"{part / whole * 100:.1f}% ({part} of {whole})"
 
 
+def _measured(part: int | None, whole: int) -> str:
+    """`_counted`, or "not measured" for a count a results file from an older run lacks."""
+    return "not measured" if part is None else _counted(part, whole)
+
+
 def _number(value: float | None, places: int = 1) -> str:
     return "not known" if value is None else f"{value:,.{places}f}"
 
@@ -193,9 +198,14 @@ RECIPE_ROWS: list[Row] = [
         lambda m: _counted(m.variety_passing, m.recipes_asked),
     ),
     ("Days passing every check (share)", lambda m: _counted(m.days_passing, m.days)),
+    ("Days the checks could not settle (share)", lambda m: _measured(m.days_unsettled, m.days)),
     (
         "Weeks where every recipe and day passes (share)",
         lambda m: _counted(m.weeks_passing, m.weeks),
+    ),
+    (
+        "Weeks with no failing recipe or day (share)",
+        lambda m: _measured(m.weeks_without_failure, m.weeks),
     ),
     ("Recipes written (share)", lambda m: _counted(m.recipes_written, m.recipes_asked)),
     ("Model calls per week (mean)", lambda m: _number(m.calls_per_week)),
@@ -241,6 +251,53 @@ def _cost_note(results: Results) -> str:
     )
 
 
+# What unsettled means, given under the recipe table whenever the run measured unsettled days.
+UNSETTLED_NOTE = (
+    "A day check is unsettled when a food in the day has no value for the nutrient in "
+    "nutrition-mcp's data, or a recipe in it has no numbers from nutrition-mcp, so the day can be "
+    "shown neither to meet the target nor to miss it: the day does not pass, and no recipe is "
+    "rewritten for it."
+)
+# Under the table of unsettled checks, which counts days the row of unsettled days leaves out.
+UNSETTLED_BY_CHECK = (
+    "A day is counted on each check it left unsettled, also when it fails another check, so "
+    "these counts can be larger than the days the checks could not settle."
+)
+
+
+def _unsettled_cell(m: RecipeMetrics, check: str) -> str:
+    return (
+        "not measured"
+        if m.unsettled_day_checks is None
+        else str(m.unsettled_day_checks.get(check, 0))
+    )
+
+
+def _measures_unsettled(base: RecipeMetrics, pipe: RecipeMetrics) -> bool:
+    """Whether the results file counts unsettled days; one written before it could does not."""
+    return base.days_unsettled is not None or pipe.days_unsettled is not None
+
+
+def _unsettled_lines(base: RecipeMetrics, pipe: RecipeMetrics) -> list[str]:
+    """The table of days left unsettled on each check, after the one of days failing them."""
+    if base.unsettled_day_checks is None and pipe.unsettled_day_checks is None:
+        return ["", "Days that ended unsettled on each check: not measured in this run."]
+    checks = sorted({*(base.unsettled_day_checks or {}), *(pipe.unsettled_day_checks or {})})
+    if not checks:
+        return []
+    return [
+        "",
+        "Days that ended unsettled on each check:",
+        "",
+        *_table(
+            ["Check", "Baseline", "This project"],
+            ([f"`{c}`", _unsettled_cell(base, c), _unsettled_cell(pipe, c)] for c in checks),
+        ),
+        "",
+        UNSETTLED_BY_CHECK,
+    ]
+
+
 def _recipes_section(name: str, results: Results) -> list[str]:
     assert results.recipes is not None
     base, pipe = results.recipes.baseline, results.recipes.pipeline
@@ -260,7 +317,9 @@ def _recipes_section(name: str, results: Results) -> list[str]:
         "ingredient list the pipeline's writer gets, and its recipes go through the same checks "
         "with no portion fitting and no repair. Every share counts over the recipes the plans "
         "ask for, so a recipe that was never written counts as failing. A day's own checks are "
-        "counted on the day. " + _cost_note(results),
+        "counted on the day. "
+        + (UNSETTLED_NOTE + " " if _measures_unsettled(base, pipe) else "")
+        + _cost_note(results),
     ]
     if checks:
         lines += [
@@ -314,7 +373,7 @@ def _recipes_section(name: str, results: Results) -> list[str]:
                 ),
             ),
         ]
-    return lines
+    return lines + _unsettled_lines(base, pipe)
 
 
 def _reading_section(name: str, results: Results) -> list[str]:

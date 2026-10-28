@@ -77,6 +77,11 @@ class DayReport(_Model):
     day: DayKey
     totals: dict[str, float | None]
     failures: list[Failure]
+    # Checks the day can be shown neither to meet nor to miss, because a food in it has no value
+    # for the nutrient or a recipe in it has no numbers from nutrition-mcp (see
+    # checks.check_day_totals). They are not failures: no recipe is blamed or rewritten for them,
+    # and a day with one does not pass either.
+    unsettled: list[Failure]
     # Carbohydrate and fat as a fraction of their target over (+) or under (-), such as 0.3 for 30%
     # over. They are reported and never fail a day. A nutrient whose total is not fully known has
     # no entry, because a deviation worked out from part of a total would be wrong.

@@ -189,7 +189,9 @@ async def test_a_day_with_no_entries_between_two_logged_days_was_not_eaten_as_pl
 async def test_a_log_with_no_entries_plans_nothing() -> None:
     summary = await summary_of(log_of())
 
-    assert summary == WeekSummary(days=[], as_planned_share=0.0, days_on_target=0, planned_meals=0)
+    assert summary == WeekSummary(
+        days=[], as_planned_share=0.0, days_on_target=0, days_unsettled=0, planned_meals=0
+    )
 
 
 # Totals
@@ -357,7 +359,8 @@ async def test_a_nutrient_no_food_has_a_value_for_is_unknown_not_zero() -> None:
 
     assert day.totals["fibre_g"] is None
     assert day.totals["kcal"] == 300
-    fibre = [f for f in day.failures if f.check == "day_fibre_g"]
+    assert "day_fibre_g" not in [f.check for f in day.failures]
+    fibre = [f for f in day.unsettled if f.check == "day_fibre_g"]
     assert [f.message for f in fibre] == [
         "fibre not known (no value for mystery flour), day needs at least 35 g"
     ]
@@ -376,11 +379,12 @@ async def test_failures_name_foods_as_a_person_reads_them() -> None:
 
     (day,) = (await summary_of(log)).days
 
-    fibre = [f.message for f in day.failures if f.check == "day_fibre_g"]
+    fibre = [f.message for f in day.unsettled if f.check == "day_fibre_g"]
     assert fibre == [
-        "fibre at least 0.4 g, part not known (no value for mystery flour), day needs at least 35 g"
+        "fibre not known (no value for mystery flour); the part known is 0.4 g "
+        "and day needs at least 35 g"
     ]
-    assert "mystery_flour" not in " ".join(f.message for f in day.failures)
+    assert "mystery_flour" not in " ".join(f.message for f in [*day.failures, *day.unsettled])
 
 
 async def test_the_day_is_held_to_the_tolerance_in_the_settings() -> None:
@@ -422,6 +426,49 @@ async def test_days_on_target_counts_the_days_that_meet_every_target() -> None:
     assert tuesday.soft == {"carbs_available_g": 0.0, "fat_g": 0.0}
     assert monday.failures != []
     assert summary.days_on_target == 1
+
+
+def perfect(grams: float = 1000) -> dict[str, Any]:
+    return {"food_id": "perfect", "amount": grams, "unit": "g"}
+
+
+def fish(grams: float = 10) -> dict[str, Any]:
+    return {"food_id": "fish", "amount": grams, "unit": "g"}
+
+
+async def test_a_day_the_checks_cannot_settle_is_neither_on_target_nor_failing() -> None:
+    """Thursday is Tuesday's perfect day and 10 g of a fish with no fat values, which might
+    hold any amount of saturated fat."""
+    nutrition = FakeNutrition(FOODS | {"fish": {"kcal": 100, "protein_g": 20}})
+    log = log_of(
+        entry(WEEK[1], "dinner", "as_planned", perfect()),
+        entry(WEEK[3], "dinner", "as_planned", perfect(), fish()),
+        entry(MON, "breakfast", "as_planned", rice(100)),
+    )
+
+    summary = await summary_of(log, nutrition=nutrition)
+
+    monday, tuesday, thursday = summary.days
+    assert (tuesday.failures, tuesday.unsettled) == ([], [])
+    assert thursday.failures == []
+    assert [f.message for f in thursday.unsettled] == [
+        "saturated fat not known (no value for fish); the part known is 20 g "
+        "and day allows at most 25 g"
+    ]
+    assert monday.failures != []
+    assert (summary.days_on_target, summary.days_unsettled) == (1, 1)
+
+
+async def test_the_summary_bounds_saturated_fat_by_the_fat_of_a_food_that_lacks_it() -> None:
+    nutrition = FakeNutrition(FOODS | {"fish": {"kcal": 100, "protein_g": 20, "fat_g": 1}})
+    log = log_of(entry(WEEK[3], "dinner", "as_planned", perfect(), fish()))
+
+    summary = await summary_of(log, nutrition=nutrition)
+
+    (thursday,) = summary.days
+    assert thursday.totals["sat_fat_g"] == 20
+    assert (thursday.failures, thursday.unsettled) == ([], [])
+    assert (summary.days_on_target, summary.days_unsettled) == (1, 0)
 
 
 # Glycemic load

@@ -39,8 +39,12 @@ def week(
     days: list[list[str]],
     usage: Usage,
     seconds: float,
+    unsettled: list[list[str]] | None = None,
 ) -> RecipeCase:
+    """A week whose days fail the checks in `days`, and leave unsettled those in `unsettled`
+    (none unless it says so)."""
     names: list[DayKey] = ["mon", "tue", "wed"]
+    left = unsettled or [[] for _ in days]
     return RecipeCase(
         case=f"recipes/pipeline/{plan}",
         system="pipeline",
@@ -49,7 +53,11 @@ def week(
         usage=usage,
         recipes=recipes,
         days=[
-            DayOutcome(day=names[i], failures=[FailureRecord(check=c, message=c) for c in checks])
+            DayOutcome(
+                day=names[i],
+                failures=[FailureRecord(check=c, message=c) for c in checks],
+                unsettled=[FailureRecord(check=c, message=c) for c in left[i]],
+            )
             for i, checks in enumerate(days)
         ],
         no_waste=1,
