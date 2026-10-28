@@ -10,14 +10,12 @@ from fakes import FakeNutrition
 from mcp import MCPError
 from week_helpers import SpyNutrition, model_for, write_catalogue_file
 
-from meal_planner.config import Settings
+from meal_planner.config import TRACING_VARIABLES, Settings
 from meal_planner.llm import FakeModel
 from meal_planner.nutrition import NutritionClient, NutritionError
 from meal_planner.startup import StartupError, check_tracing_off, start_services
 
 pytestmark = pytest.mark.anyio
-
-TRACING = ("LANGSMITH_TRACING", "LANGSMITH_TRACING_V2", "LANGCHAIN_TRACING", "LANGCHAIN_TRACING_V2")
 
 
 def settings_for(folder: Path) -> Settings:
@@ -27,7 +25,7 @@ def settings_for(folder: Path) -> Settings:
 # Tracing
 
 
-@pytest.mark.parametrize("name", TRACING)
+@pytest.mark.parametrize("name", TRACING_VARIABLES)
 @pytest.mark.parametrize("value", ["true", "True", "1", "yes", " on "])
 def test_tracing_switched_on_stops_the_start(
     monkeypatch: pytest.MonkeyPatch, name: str, value: str
@@ -45,7 +43,7 @@ def test_tracing_switched_on_stops_the_start(
 def test_tracing_switched_off_does_not_stop_the_start(
     monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
-    for name in TRACING:
+    for name in TRACING_VARIABLES:
         monkeypatch.setenv(name, value)
 
     check_tracing_off()

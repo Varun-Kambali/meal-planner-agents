@@ -15,6 +15,9 @@ dependencies = [
     # Exact: FastAPI is pre-1.0 and the streaming routes use its server-sent events support, so a
     # bump is a deliberate change.
     "fastapi==0.161.1",
+    # Exact: tracing passes its own tracer provider, span filter and mask hook to the Langfuse
+    # client, and the client's options have changed between major releases.
+    "langfuse==5.0.4",
     # Exact: LangGraph's streaming and runtime APIs change between minor releases.
     "langgraph==1.2.16",
     # Exact: LiteLLM ships several releases a week, so a bump is a deliberate change.

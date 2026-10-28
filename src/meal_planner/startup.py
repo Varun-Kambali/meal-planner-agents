@@ -13,19 +13,10 @@ from dataclasses import dataclass
 from mcp import MCPError
 
 from meal_planner.catalogue import Catalogue, CatalogueError, load_catalogue
-from meal_planner.config import Settings
+from meal_planner.config import TRACING_VARIABLES, Settings
 from meal_planner.llm import LiteLLMModel, ModelPort, missing_api_key
 from meal_planner.nutrition import NutritionClient, NutritionError, NutritionPort
 
-# LangGraph sends a trace of every run to LangSmith when one of these is on, and a trace holds
-# the user's rules. The first two are the names the current LangSmith client reads, the others the
-# older LangChain ones.
-TRACING_VARIABLES = (
-    "LANGSMITH_TRACING",
-    "LANGSMITH_TRACING_V2",
-    "LANGCHAIN_TRACING",
-    "LANGCHAIN_TRACING_V2",
-)
 _TRUE = frozenset({"1", "true", "yes", "on"})
 
 
