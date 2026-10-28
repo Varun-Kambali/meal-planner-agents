@@ -1,16 +1,14 @@
 """What the model is told when it writes a slot's recipes and when it repairs them."""
 
-import json
 import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import cache
-from importlib import resources
 
 from meal_planner.catalogue import CatalogueItem
 from meal_planner.checks import LABELS, spreads_cuisines
 from meal_planner.config import Settings
+from meal_planner.data_block import quote, template
 from meal_planner.recipes import CheckedRecipe
 from meal_planner.rules import DayType, PlanRules, Slot, SlotSpec, expand
 
@@ -32,12 +30,6 @@ class Job:
     fix: list[CheckedRecipe]
     # The slot's recipes this call leaves alone, which the new ones must stay different from.
     others: list[CheckedRecipe]
-
-
-@cache
-def template(name: str) -> str:
-    """The text of a file in `prompts/`."""
-    return resources.files("meal_planner").joinpath("prompts", name).read_text(encoding="utf-8")
 
 
 # The nutrients shown beside each ingredient when the writer gets hints: nutrition-mcp's key, how
@@ -92,11 +84,6 @@ def _system(name: str, rules: PlanRules, allowed: list[CatalogueItem], hints: bo
         lambda m: values[m[1]],
         template(name),
     )
-
-
-def quote(text: str) -> str:
-    """The text as a JSON string with angle brackets escaped, so it cannot close the data block."""
-    return json.dumps(text, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
 
 
 def _ident(text: str) -> str:

@@ -41,11 +41,11 @@ from pydantic import BaseModel, Field
 
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
+from meal_planner.data_block import quote, template
 from meal_planner.llm import MODEL_ERROR, RATE_LIMITED, SERVER_ERROR, TIMEOUT, ModelPort, ModelReply
 from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.tracing import Tracer, current, trace
-from meal_planner.week_prompts import quote, template
 
 logger = get_logger(__name__)
 
