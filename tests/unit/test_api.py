@@ -39,7 +39,7 @@ from week_helpers import (
 )
 
 from meal_planner.api import MAX_ATTEMPTS, app_factory, create_app
-from meal_planner.config import Settings, get_settings
+from meal_planner.config import Settings
 from meal_planner.llm import RATE_LIMITED, SCHEMA_MISMATCH, FakeModel, ModelPort, ModelReply
 from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
@@ -58,15 +58,6 @@ def test_healthz_says_ok(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok"}
 
 
-@pytest.fixture
-def fresh_settings() -> Iterator[None]:
-    """get_settings caches, so a test that reads it starts and ends with the cache empty."""
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
-
-
-@pytest.mark.usefixtures("fresh_settings")
 def test_the_app_factory_reads_the_settings_from_the_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

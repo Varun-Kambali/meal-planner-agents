@@ -1,20 +1,9 @@
-import os
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from meal_planner.config import Settings, get_settings
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
-        monkeypatch.delenv(name)
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
 
 
 def test_defaults() -> None:

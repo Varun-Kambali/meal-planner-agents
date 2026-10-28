@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from meal_planner.config import TRACING_VARIABLES
+from meal_planner.config import TRACING_VARIABLES, get_settings
 
 # LiteLLM fetches its price list from GitHub when it is imported, unless told to use the copy
 # that ships with it. This runs before any test module imports litellm, so no test needs the
@@ -27,10 +27,14 @@ def tracing_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A MEAL_PLANNER_ variable in a developer's shell must not change a test's settings."""
+def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """A MEAL_PLANNER_ variable in a developer's shell must not change a test's settings, and
+    get_settings, which caches, starts and ends each test empty."""
     for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
         monkeypatch.delenv(name)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 class _Collector(logging.Handler):
