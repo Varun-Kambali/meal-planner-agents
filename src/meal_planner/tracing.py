@@ -19,6 +19,7 @@ Tracing never fails a request. Each call into the SDK goes through `_quietly`, w
 error by its class only and goes on.
 """
 
+import re
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -43,12 +44,15 @@ MASKED = "[masked]"
 # read item's status, and error codes and exception class names. A string anywhere else is masked,
 # however much it looks like an id: a cuisine such as "south_indian" would pass for one.
 ID_FIELDS = frozenset({"id", "food_id", "slot_id", "day", "days", "status", "error", "error_type"})
+# What an id looks like. A string under an id field that does not is masked too: a reply's slot_id
+# and ingredient ids are written by the model, which can put a sentence there.
+_ID_SHAPE = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 
 Level = Literal["DEBUG", "DEFAULT", "WARNING", "ERROR"]
 
 
 def mask(value: object) -> object:
-    """`value` with every string replaced by MASKED, except those under a field in ID_FIELDS.
+    """`value` with every string replaced by MASKED, except an id under a field in ID_FIELDS.
 
     Numbers, booleans and None are kept. Lists, tuples, sets, mappings and pydantic models are
     walked; a list under an id field keeps its strings, a mapping is judged by its own fields.
@@ -63,7 +67,7 @@ def _masked(value: object, keep: bool) -> object:
     if value is None or isinstance(value, bool | int | float):
         return value
     if isinstance(value, str):
-        return value if keep else MASKED
+        return value if keep and _ID_SHAPE.fullmatch(value) else MASKED
     if isinstance(value, BaseModel):
         try:
             value = value.model_dump(mode="json")

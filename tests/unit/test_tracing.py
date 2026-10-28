@@ -220,6 +220,18 @@ class Strange:
             },
         ),
         ({"cuisine": "south_indian"}, {"cuisine": MASKED}),
+        # Under an id field, only a string shaped like an id is kept.
+        ({"slot_id": "breakfast for a South Indian plan"}, {"slot_id": MASKED}),
+        ({"id": "x" * 65}, {"id": MASKED}),
+        ({"id": ""}, {"id": MASKED}),
+        ({"days": ["mon", "a long day"]}, {"days": ["mon", MASKED]}),
+        (
+            {"error_type": "RateLimitError", "id": "v1.2-a_b"},
+            {
+                "error_type": "RateLimitError",
+                "id": "v1.2-a_b",
+            },
+        ),
         ({"counts": {"ran": 2}}, {"counts": {"ran": 2}}),
         (Strange(), MASKED),
         ({"id": Strange()}, {"id": MASKED}),
