@@ -19,7 +19,7 @@ dependencies = [
     # client, and the client's options have changed between major releases.
     "langfuse==5.0.4",
     # Exact: LangGraph's streaming and runtime APIs change between minor releases.
-    "langgraph==1.2.16",
+    "langgraph==1.2.17",
     # Exact: LiteLLM ships several releases a week, so a bump is a deliberate change.
     "litellm==1.105.1",
     "mcp>=2.3,<3",
