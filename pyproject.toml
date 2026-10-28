@@ -15,12 +15,18 @@ dependencies = [
     # Exact: FastAPI is pre-1.0 and the streaming routes use its server-sent events support, so a
     # bump is a deliberate change.
     "fastapi==0.161.1",
+    # Exact: tracing passes its own tracer provider, span filter and mask hook to the Langfuse
+    # client, and the client's options have changed between major releases.
+    "langfuse==5.0.4",
     # Exact: LangGraph's streaming and runtime APIs change between minor releases.
     "langgraph==1.2.16",
     # Exact: LiteLLM ships several releases a week, so a bump is a deliberate change.
     "litellm==1.105.1",
     "mcp>=2.3,<3",
     "nutrition-mcp",
+    # tracing.py builds the tracer provider Langfuse exports through, so this is a direct
+    # dependency; the range is the one langfuse 5.0.4 asks for.
+    "opentelemetry-sdk>=1.45,<2",
     "pydantic>=2.9",
     # 2.7 is the first release with NoDecode, which the CORS origins setting uses.
     "pydantic-settings>=2.7",

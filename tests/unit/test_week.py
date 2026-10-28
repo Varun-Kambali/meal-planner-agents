@@ -5,7 +5,7 @@ import json
 import math
 import os
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -55,13 +55,6 @@ from meal_planner.week_prompts import Job, repair_prompt, writer_prompt
 pytestmark = pytest.mark.anyio
 
 SNAPSHOT = FIXTURES / "prompts" / "write_slot_breakfast.txt"
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
-        monkeypatch.delenv(name)
-    yield
 
 
 async def run(

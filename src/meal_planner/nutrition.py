@@ -41,7 +41,8 @@ class NutritionError(Exception):
     A refusal carries nutrition-mcp's own message, and `food_id` when one food is to blame; a
     refusal whose message names no food has no `food_id`. `unreachable` is set only when
     nutrition-mcp could not be asked at all (the connection failed or timed out), which says
-    nothing about the foods asked about. Every other error leaves it False.
+    nothing about the foods asked about. `unreadable` is set only when it answered with a result
+    that could not be read. A refusal leaves both False.
     """
 
     def __init__(
@@ -51,11 +52,13 @@ class NutritionError(Exception):
         valid_units: list[str] | None = None,
         *,
         unreachable: bool = False,
+        unreadable: bool = False,
     ) -> None:
         super().__init__(message)
         self.food_id = food_id
         self.valid_units = valid_units or []
         self.unreachable = unreachable
+        self.unreadable = unreadable
 
 
 def refusal(message: str, food_id: str | None = None) -> NutritionError:
@@ -165,7 +168,7 @@ class NutritionClient:
     ) -> T:
         """The tool's result as `result`, or a NutritionError. The arguments are never in its
         message, because they can hold what the user typed."""
-        unreadable = f"nutrition-mcp's result for {tool} could not be read"
+        not_read = f"nutrition-mcp's result for {tool} could not be read"
         try:
             answer = await self._session.call_tool(tool, arguments)
         except (MCPError, OSError, TimeoutError) as exc:
@@ -178,16 +181,18 @@ class NutritionClient:
             # The SDK checks a result against the protocol (ValidationError) and against the
             # tool's output schema (RuntimeError). Its message can quote the result, which can
             # echo the arguments, so it stays on the cause.
-            raise NutritionError(unreadable) from exc
+            raise NutritionError(not_read, unreadable=True) from exc
         if answer.is_error:
             raise refusal(_message(answer), food_id)
         content = answer.structured_content
         if not isinstance(content, dict):
-            raise NutritionError(f"nutrition-mcp sent no structured content for {tool}")
+            raise NutritionError(
+                f"nutrition-mcp sent no structured content for {tool}", unreadable=True
+            )
         try:
             return result.model_validate(content)
         except ValidationError as exc:
-            raise NutritionError(unreadable) from exc
+            raise NutritionError(not_read, unreadable=True) from exc
 
 
 def _detail(exc: Exception) -> str:

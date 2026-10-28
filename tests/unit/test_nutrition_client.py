@@ -61,6 +61,7 @@ async def test_tool_error_maps_to_nutrition_error() -> None:
     assert caught.value.food_id == "rajma"
     assert caught.value.valid_units == ["g", "katori"]
     assert caught.value.unreachable is False
+    assert caught.value.unreadable is False
 
 
 async def test_valid_units_are_read_from_the_end_of_the_message() -> None:
@@ -99,6 +100,7 @@ async def test_meal_error_names_the_failing_food() -> None:
     assert caught.value.food_id == "test_rotti"
     assert caught.value.valid_units == []
     assert caught.value.unreachable is False
+    assert caught.value.unreadable is False
 
 
 async def test_error_without_text_still_raises() -> None:
@@ -107,6 +109,7 @@ async def test_error_without_text_still_raises() -> None:
     with pytest.raises(NutritionError, match="no text") as caught:
         await client.search("rajma")
     assert caught.value.unreachable is False
+    assert caught.value.unreadable is False
 
 
 async def test_a_refusal_without_a_food_id_is_not_unreachable() -> None:
@@ -120,6 +123,7 @@ async def test_a_refusal_without_a_food_id_is_not_unreachable() -> None:
     assert str(caught.value) == message
     assert caught.value.food_id is None
     assert caught.value.unreachable is False
+    assert caught.value.unreadable is False
 
 
 async def call_each_tool(client: NutritionClient, tool: str) -> None:
@@ -146,7 +150,20 @@ async def test_a_result_that_does_not_fit_its_model_is_a_nutrition_error(tool: s
     assert str(caught.value) == f"nutrition-mcp's result for {tool} could not be read"
     assert caught.value.food_id is None
     assert caught.value.unreachable is False
+    assert caught.value.unreadable is True
     assert isinstance(caught.value.__cause__, ValidationError)
+
+
+@pytest.mark.parametrize("tool", TOOLS)
+async def test_a_result_with_no_structured_content_is_unreadable(tool: str) -> None:
+    session = StandInSession(CallToolResult(content=[], structured_content=None))
+
+    with pytest.raises(NutritionError) as caught:
+        await call_each_tool(NutritionClient(session), tool)
+
+    assert str(caught.value) == f"nutrition-mcp sent no structured content for {tool}"
+    assert caught.value.unreachable is False
+    assert caught.value.unreadable is True
 
 
 def sdk_validation_error() -> ValidationError:
@@ -175,6 +192,7 @@ async def test_the_sdk_refusing_a_result_is_a_nutrition_error(tool: str, error: 
 
     assert str(caught.value) == f"nutrition-mcp's result for {tool} could not be read"
     assert caught.value.unreachable is False
+    assert caught.value.unreadable is True
     assert caught.value.__cause__ is error
     # The arguments, and the result that may echo them, stay out of the message.
     assert "rajma" not in str(caught.value)
@@ -212,6 +230,7 @@ async def test_transport_failure_maps_to_nutrition_error(error: Exception, shown
     assert caught.value.food_id is None
     assert caught.value.valid_units == []
     assert caught.value.unreachable is True
+    assert caught.value.unreadable is False
     assert caught.value.__cause__ is error
     # What the user asked about is not repeated in the message.
     assert "rajma" not in str(caught.value)
@@ -507,6 +526,7 @@ async def test_fake_search_refuses_what_the_server_refuses(
     assert caught.value.food_id is None
     assert caught.value.valid_units == []
     assert caught.value.unreachable is False
+    assert caught.value.unreadable is False
 
 
 # FakeNutrition, refusing the way the server does

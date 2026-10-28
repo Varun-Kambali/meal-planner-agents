@@ -336,6 +336,7 @@ async def write_week(
         nutrition=services.nutrition,
         catalogue=services.catalogue,
         settings=settings,
+        tracer=services.tracer,
     )
     async for message in _stream("week", run, settings, cleanup):
         yield message
@@ -357,6 +358,7 @@ async def write_one_again(
         nutrition=services.nutrition,
         catalogue=services.catalogue,
         settings=settings,
+        tracer=services.tracer,
     )
     async for message in _stream("replace", run, settings, cleanup):
         yield message
@@ -376,6 +378,7 @@ async def read_typed_meal(
             nutrition=services.nutrition,
             catalogue=services.catalogue,
             settings=settings,
+            tracer=services.tracer,
         )
     except ReadError as exc:
         # The message names the step and holds nothing that was typed.

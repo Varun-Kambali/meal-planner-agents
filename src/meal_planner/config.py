@@ -1,13 +1,24 @@
-"""Settings, read from environment variables prefixed MEAL_PLANNER_."""
+"""Settings, read from environment variables prefixed MEAL_PLANNER_ (and Langfuse's own), and the
+tracing variables the app refuses."""
 
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# LangGraph sends a trace of every run to LangSmith when one of these is on, and a trace holds
+# the user's rules, so the app refuses to start with one on (startup.check_tracing_off). The first
+# two are the names the current LangSmith client reads, the others the older LangChain ones.
+TRACING_VARIABLES = (
+    "LANGSMITH_TRACING",
+    "LANGSMITH_TRACING_V2",
+    "LANGCHAIN_TRACING",
+    "LANGCHAIN_TRACING_V2",
+)
 
 
 class Settings(BaseSettings):
@@ -73,6 +84,17 @@ class Settings(BaseSettings):
     # The ingredients the writer may use. Both paths are relative to a source checkout; set the
     # variables where the repository is not on disk.
     catalogue_path: Path = REPO_ROOT / "data" / "catalogue.yaml"
+
+    # Tracing to Langfuse, on only when both keys are set (docs/decisions/0010). These three are
+    # read from Langfuse's own variable names, which have no MEAL_PLANNER_ prefix.
+    langfuse_public_key: str | None = Field(default=None, validation_alias="LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key: SecretStr | None = Field(
+        default=None, validation_alias="LANGFUSE_SECRET_KEY"
+    )
+    # The Langfuse server; unset or empty means Langfuse Cloud's EU region.
+    langfuse_base_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("LANGFUSE_BASE_URL", "LANGFUSE_HOST")
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -85,6 +85,9 @@ class ModelReply[T]:
     cost_usd: float | None = None
     latency_ms: float = 0.0
     model: str = ""
+    # The class of the exception behind `error`, when the call raised one. Never its text, which
+    # can echo the request.
+    error_type: str | None = None
 
 
 @runtime_checkable
@@ -302,7 +305,12 @@ class LiteLLMModel:
         latency_ms = round((time.perf_counter() - started) * 1000, 1)
         if response is None:
             reply = ModelReply[T](
-                value=None, raw="", error=error, latency_ms=latency_ms, model=self.model
+                value=None,
+                raw="",
+                error=error,
+                latency_ms=latency_ms,
+                model=self.model,
+                error_type=error_type,
             )
         else:
             raw = _text(response)
@@ -330,7 +338,7 @@ class LiteLLMModel:
                 "latency_ms": reply.latency_ms,
                 "cost_usd": reply.cost_usd,
                 **({"error": reply.error} if reply.error else {}),
-                **({"error_type": error_type} if error_type else {}),
+                **({"error_type": reply.error_type} if reply.error_type else {}),
             },
         )
         return reply

@@ -22,7 +22,9 @@ nothing it adds to a reply is used. Code decides the rest:
 - Every number comes from nutrition-mcp. The meal's total adds the matched items only.
 
 The text goes to the model as data, quoted so that it cannot close the data block. Nothing here
-logs it, and a ReadError names the step that failed and nothing the person wrote.
+logs it, and a ReadError names the step that failed and nothing the person wrote. With a tracer
+a read is one trace, "read", holding its model calls; the text and every word in the result are
+masked there (tracing.py).
 """
 
 import math
@@ -39,10 +41,11 @@ from pydantic import BaseModel, Field
 
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
+from meal_planner.data_block import quote, template
 from meal_planner.llm import MODEL_ERROR, RATE_LIMITED, SERVER_ERROR, TIMEOUT, ModelPort, ModelReply
 from meal_planner.log import get_logger
 from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.week_prompts import quote, template
+from meal_planner.tracing import Tracer, current, trace
 
 logger = get_logger(__name__)
 
@@ -242,13 +245,20 @@ async def read_meal(
     nutrition: NutritionPort,
     catalogue: Catalogue,
     settings: Settings,
+    tracer: Tracer | None = None,
 ) -> ReadResult:
     """The foods in `text`, each with its amount in grams and nutrition-mcp's numbers.
 
     The caller has checked the text's length. Raises ReadError when the model or nutrition-mcp
     cannot be used.
     """
-    deps = _Deps(model, nutrition, catalogue, settings)
+    with trace(tracer, "read", text=text, text_length=len(text)) as root:
+        result = await _read(text, _Deps(model, nutrition, catalogue, settings))
+        root.set_output(result)
+    return result
+
+
+async def _read(text: str, deps: _Deps) -> ReadResult:
     prompt = "\n".join(["<data>", f"text: {quote(text)}", "</data>", "List the foods in the text."])
     extracted = await _ask(
         deps, task="read_meal", system=template("reader.md"), user=prompt, schema=Extracted
@@ -508,8 +518,9 @@ async def _ask[T: BaseModel](
         )
     except Exception as exc:
         # The model port promises a reply, never an exception. If one comes anyway it is a model
-        # that failed. Only the class is logged: the message could hold the prompt.
+        # that failed. Only the class is logged and traced: the message could hold the prompt.
         logger.error("model_call_raised", extra={"task": task, "error_type": type(exc).__name__})
+        current().failed(exc)
         reply = ModelReply(value=None, raw="", error=MODEL_ERROR)
     if reply.value is None:
         if reply.error in (RATE_LIMITED, TIMEOUT, SERVER_ERROR):

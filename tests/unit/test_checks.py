@@ -1,7 +1,6 @@
 import json
-import os
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from datetime import time
 from pathlib import Path
 from typing import Any
@@ -40,13 +39,6 @@ from meal_planner.rules import (
 )
 
 PLAN = Path(__file__).resolve().parent.parent / "fixtures" / "plans" / "office_weekday.json"
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    for name in [n for n in os.environ if n.startswith("MEAL_PLANNER_")]:
-        monkeypatch.delenv(name)
-    yield
 
 
 # Builders
