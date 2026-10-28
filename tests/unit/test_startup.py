@@ -25,6 +25,16 @@ def settings_for(folder: Path) -> Settings:
 # Tracing
 
 
+def test_the_refused_tracing_variables_are_the_four_langsmith_and_langchain_names() -> None:
+    """The tests below run over the tuple itself, so dropping a name would only shrink them."""
+    assert TRACING_VARIABLES == (
+        "LANGSMITH_TRACING",
+        "LANGSMITH_TRACING_V2",
+        "LANGCHAIN_TRACING",
+        "LANGCHAIN_TRACING_V2",
+    )
+
+
 @pytest.mark.parametrize("name", TRACING_VARIABLES)
 @pytest.mark.parametrize("value", ["true", "True", "1", "yes", " on "])
 def test_tracing_switched_on_stops_the_start(
