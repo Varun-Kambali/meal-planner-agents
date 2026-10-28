@@ -90,6 +90,13 @@ NUTRITION_FAILED = "nutrition_failed"
 NUTRITION_UNAVAILABLE = "nutrition_unavailable"
 _CARRIED = (NUTRITION_FAILED, NUTRITION_UNAVAILABLE)
 
+# The codes of a refused call that the reply's own error code does not give: recipes for another
+# slot or other days than those asked, a reply with neither a value nor a code, and a slot given up
+# with no refusal recorded. A refusal's reason can quote the reply; its code is what a trace shows.
+WRONG_RECIPES = "wrong_recipes"
+NO_REPLY_CODE = "no_reply"
+NOT_WRITTEN = "not_written"
+
 
 # Graph state and the work handed to a node
 
@@ -114,11 +121,16 @@ def _add_usage(a: _Usage, b: _Usage) -> _Usage:
 
 @dataclass(frozen=True)
 class _Refusal:
-    """Why a call gave no recipes. `final` when asking again cannot help."""
+    """Why a call gave no recipes. `final` when asking again cannot help.
+
+    `reason` is for the next call and the client, and can quote the reply; `code` is a fixed word
+    for the same thing, the reply's error code or one of those above.
+    """
 
     reason: str
     final: bool
     attempt: int
+    code: str
 
 
 @dataclass(frozen=True)
@@ -219,12 +231,13 @@ def _read(
 ) -> tuple[list[DraftRecipe], None] | tuple[None, _Refusal]:
     """The recipes in a reply, or why there are none."""
     if reply.error in (INVALID_JSON, SCHEMA_MISMATCH):
-        return None, _Refusal(_why_unreadable(reply.raw), last_try, job.attempt)
+        return None, _Refusal(_why_unreadable(reply.raw), last_try, job.attempt, reply.error)
     if reply.value is None:
         # A rate limit, a timeout or a server error, which the model client has already retried.
-        return None, _Refusal(reply.error or "no_reply", True, job.attempt)
+        code = reply.error or NO_REPLY_CODE
+        return None, _Refusal(code, True, job.attempt, code)
     if problem := _wrong_recipes(reply.value, job):
-        return None, _Refusal(problem, last_try, job.attempt)
+        return None, _Refusal(problem, last_try, job.attempt, WRONG_RECIPES)
     return reply.value.recipes, None
 
 
@@ -258,10 +271,8 @@ async def _ask(
     last_try = job.attempt > deps.settings.max_repair_attempts
     recipes, refusal = _read(reply, job, last_try)
     if refusal is not None:
-        # The reason can quote the reply, so the span gets the error code alone.
-        current().note(
-            refused=True, final=refusal.final, **({"error": reply.error} if reply.error else {})
-        )
+        # The reason can quote the reply, so the span gets the refusal's code alone.
+        current().note(refused=True, final=refusal.final, error=refusal.code)
         emit(
             SlotFailed(
                 slot_id=job.slot_id,
@@ -610,7 +621,9 @@ def _settle_unwritten(
         )
         if not missing:
             continue
-        refusal = state["refused"].get(missing[0]) or _Refusal("not written", True, attempt - 1)
+        refusal = state["refused"].get(missing[0]) or _Refusal(
+            "not written", True, attempt - 1, NOT_WRITTEN
+        )
         if rounds_left and not refusal.final:
             others = [
                 state["recipes"][(day, slot.id)]

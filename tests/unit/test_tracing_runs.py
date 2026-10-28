@@ -302,6 +302,76 @@ async def test_a_refused_reply_is_recorded_with_its_code(sent: Sent) -> None:
     assert (call.level, call.metadata["error"]) == ("WARNING", "rate_limited")
 
 
+class NoValueNoCode:
+    """A model whose lunch reply has neither a value nor an error code, against the port's word."""
+
+    def __init__(self) -> None:
+        self.inner = model_for()
+
+    async def structured[T: BaseModel](
+        self, *, task: str, system: str, user: str, schema: type[T], timeout_s: float
+    ) -> ModelReply[T]:
+        if 'slot_id: "lunch"' in user:
+            return ModelReply(value=None, raw="")
+        return await self.inner.structured(
+            task=task, system=system, user=user, schema=schema, timeout_s=timeout_s
+        )
+
+
+def first_breakfast_writing(found: list[Observation]) -> Observation:
+    return next(
+        o
+        for o in found
+        if o.kind == "span"
+        and o.name == "write_slot"
+        and o.input["slot_id"] == "breakfast"
+        and o.input["attempt"] == 1
+    )
+
+
+@pytest.mark.parametrize(
+    ("first", "code"),
+    [
+        pytest.param("not json", "invalid_json", id="invalid_json"),
+        pytest.param('{"slot_id": "breakfast"}', "schema_mismatch", id="schema_mismatch"),
+        pytest.param(
+            json.dumps({"slot_id": "lunch", "recipes": json.loads(good("breakfast"))["recipes"]}),
+            "wrong_recipes",
+            id="wrong_slot",
+        ),
+        pytest.param(
+            json.dumps({"slot_id": "breakfast", "recipes": [recipe_of("breakfast", "mon")]}),
+            "wrong_recipes",
+            id="missing_days",
+        ),
+    ],
+)
+async def test_every_refused_reply_has_a_code_on_its_span(
+    sent: Sent, first: str, code: str
+) -> None:
+    """The refusal's reason can quote the reply, so the span says why with a fixed code."""
+    model = model_for(writes={"breakfast": [first, good("breakfast")]})
+
+    await week(sent.tracer, model)
+
+    step = first_breakfast_writing(sent.observations())
+    assert step.metadata["refused"] is True
+    assert step.metadata["final"] is False
+    assert step.metadata["error"] == code
+
+
+async def test_a_reply_with_no_value_and_no_code_is_traced_as_no_reply(sent: Sent) -> None:
+    await week(sent.tracer, NoValueNoCode())
+
+    found = sent.observations()
+    lunch = next(
+        o
+        for o in found
+        if o.kind == "span" and o.name == "write_slot" and o.input["slot_id"] == "lunch"
+    )
+    assert (lunch.metadata["error"], lunch.metadata["final"]) == ("no_reply", True)
+
+
 async def test_a_replacement_is_a_trace_of_its_own(sent: Sent) -> None:
     previous = await week(None)
     lunch = recipe_of("lunch", "wed") | {"title": "Rajma rice, the other way"}
