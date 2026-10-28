@@ -24,6 +24,9 @@ dependencies = [
     "litellm==1.105.1",
     "mcp>=2.3,<3",
     "nutrition-mcp",
+    # tracing.py builds the tracer provider Langfuse exports through, so this is a direct
+    # dependency; the range is the one langfuse 5.0.4 asks for.
+    "opentelemetry-sdk>=1.45,<2",
     "pydantic>=2.9",
     # 2.7 is the first release with NoDecode, which the CORS origins setting uses.
     "pydantic-settings>=2.7",
