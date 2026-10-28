@@ -64,7 +64,7 @@ CI replays a recorded slice of three plans and ten meals on every PR, with no ke
 
 ## Status
 
-Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. Milestone 4 is under way: the evals are built and their results are above, and tracing is next. The browser app and a deployed demo come with milestone 5.
+Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. Milestone 4 is under way: the evals are built and their results are above, and tracing to Langfuse is built. The browser app and a deployed demo come with milestone 5.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
@@ -81,6 +81,8 @@ uv run meal-planner summary tests/fixtures/plans/office_weekday.json tests/fixtu
 make run   # the API on 127.0.0.1:8000
 ```
 
+To trace `week`, `read` and the API in [Langfuse](https://langfuse.com), set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env`. Each run's steps, model calls, tokens, cost and failed checks are sent with the plan's words and the typed text masked; without the keys nothing is sent ([0010](docs/decisions/0010-masked-langfuse-tracing.md)).
+
 `week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The log in the example is made up, for the same plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Details are in [docs/architecture.md](docs/architecture.md).
 
 ## Design decisions
@@ -94,6 +96,7 @@ make run   # the API on 127.0.0.1:8000
 - [0007](docs/decisions/0007-the-log-holds-foods-and-amounts.md) The meal log holds foods and amounts, and the server works out the numbers.
 - [0008](docs/decisions/0008-smoke-replay-gates-every-pr.md) A replay of the smoke slice gates every PR, held to its own numbers.
 - [0009](docs/decisions/0009-unsettled-day-checks.md) A day check that cannot tell is unsettled, and saturated fat is bounded by total fat.
+- [0010](docs/decisions/0010-masked-langfuse-tracing.md) Traces are made by this code, masked twice, and off without keys.
 
 ## License
 
