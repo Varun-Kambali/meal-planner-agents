@@ -14,7 +14,7 @@ requires-python = ">=3.12"
 dependencies = [
     # Exact: FastAPI is pre-1.0 and the streaming routes use its server-sent events support, so a
     # bump is a deliberate change.
-    "fastapi==0.161.1",
+    "fastapi==0.162.0",
     # Exact: tracing passes its own tracer provider, span filter and mask hook to the Langfuse
     # client, and the client's options have changed between major releases.
     "langfuse==5.0.4",
