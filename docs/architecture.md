@@ -226,7 +226,7 @@ Startup problems stop the app with one line that says why. A request that cannot
 
 ## Evaluation design
 
-The first full run is committed, and `evals/results/summary.md` has its numbers. The smoke recording and the thresholds CI holds it to are committed as well ([0008](decisions/0008-smoke-replay-gates-every-pr.md)).
+The full runs are committed, and `evals/results/summary.md` has the newest one's numbers. The smoke recording and the thresholds CI holds it to are committed as well ([0008](decisions/0008-smoke-replay-gates-every-pr.md)).
 
 `evals/run_evals.py` runs the suites against nutrition-mcp, started as the app starts it, one case at a time: a plan written by the pipeline, the same plan written by the baseline, or a typed meal read by the reader. Each finished case is kept as one line in `evals/results/runs/<name>/cases.jsonl`, so a run cut off by a rate limit or Ctrl-C can be finished with `--resume`. A rate limit or server errors that outlast the model client's tries, or nutrition-mcp out of reach, stop the run without scoring the case; a reply that cannot be used or a timeout is part of the result, and summary.md counts the recipes never written by reason. A finished run writes `evals/results/<date>_<model>_<commit>.json` with the dataset version, the pipeline's switches, the check settings, the catalogue and food-data paths (a run with data from outside the repository never feeds summary.md), the LiteLLM version, every metric with the counts behind it, and the calls, tokens and cost (LiteLLM's list price; the free tier bills nothing). A full run from a clean tree rebuilds `evals/results/summary.md` from the newest such file for each suite.
 
