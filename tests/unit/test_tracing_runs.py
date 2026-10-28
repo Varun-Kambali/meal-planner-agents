@@ -6,6 +6,7 @@ chance into the plan, the replies and the typed text, and look for it in every s
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -603,6 +604,36 @@ async def test_services_shut_the_tracer_down_when_they_stop(
         assert stopped == []
 
     assert stopped == ["shutdown"]
+
+
+async def test_services_send_what_is_left_off_the_event_loop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With Langfuse out of reach the last flush waits for the exporter's timeout. It runs in a
+    worker thread, so the event loop goes on meanwhile: here the loop has to release it."""
+    loop_thread = threading.get_ident()
+    released = threading.Event()
+    ran_on: list[int] = []
+
+    class Slow(Tracer):
+        def shutdown(self) -> None:
+            ran_on.append(threading.get_ident())
+            # On the loop's own thread this would wait out its timeout, as the loop could not run.
+            assert released.wait(timeout=5)
+
+    async def release_soon() -> None:
+        await asyncio.sleep(0.01)
+        released.set()
+
+    monkeypatch.setattr(startup, "setup_tracing", lambda _: Slow(None, None))  # type: ignore[arg-type]
+    settings = Settings(**keyed(catalogue_path=write_catalogue_file(tmp_path)))
+
+    async with start_services(settings, model=model_for(), nutrition=SpyNutrition()):
+        releaser = asyncio.create_task(release_soon())
+
+    await releaser
+    assert len(ran_on) == 1
+    assert ran_on[0] != loop_thread
 
 
 def spans_without_flushing(sent: Sent) -> list[str]:

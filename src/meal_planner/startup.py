@@ -6,6 +6,7 @@ message is one line, so a person who has just run the command sees the reason an
 of library internals. Stopping sends whatever traces are left.
 """
 
+import asyncio
 import os
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -70,7 +71,9 @@ async def start_services(
 
     With both Langfuse keys set, the model's calls are traced and the services carry the tracer;
     when the block ends, by any path, every span still held is sent before this returns. The CLI
-    leaves the block before it exits and the API when it shuts down.
+    leaves the block before it exits and the API when it shuts down. Sending waits on Langfuse,
+    for up to the exporter's timeout when it is out of reach, so it runs in a worker thread and
+    the event loop goes on meanwhile.
     """
     check_tracing_off()
     if model is None:
@@ -88,7 +91,7 @@ async def start_services(
             yield Services(model, nutrition, catalogue, tracer)
     finally:
         if tracer is not None:
-            tracer.shutdown()
+            await asyncio.to_thread(tracer.shutdown)
 
 
 async def _start_nutrition(stack: AsyncExitStack, settings: Settings) -> NutritionClient:
