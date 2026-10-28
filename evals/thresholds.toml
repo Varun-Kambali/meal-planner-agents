@@ -1,0 +1,32 @@
+# What make eval-smoke holds the replayed smoke slice to, on every PR. Why these numbers and these
+# metrics: docs/decisions/0008-smoke-replay-gates-every-pr.md.
+#
+# Set from the replay of evals/recordings/smoke.jsonl at commit 51b7e0a (3 plans, 10 meals). A
+# replay gives the same numbers every time, so each minimum is the replayed value rounded down to
+# two decimal places and each maximum rounded up: losing one recipe or one food fails the gate.
+# A change that moves a number on purpose sets the new value here in the same PR, with the reason.
+
+[min]
+# 46 of 70 recipes pass every hard check.
+"recipes.pipeline.recipe_pass_share" = 0.65
+# 27 of 70 pass at their first attempt, before any repair.
+"recipes.pipeline.first_attempt_pass_share" = 0.38
+# 66 of 70 pass the variety checks.
+"recipes.pipeline.variety_pass_share" = 0.94
+# 7 of 70 for the single-call baseline, so a change cannot flatter the comparison by weakening it.
+"recipes.baseline.recipe_pass_share" = 0.10
+# 15 of the reader's 16 foods are right.
+"reading.all.food_precision" = 0.93
+# 15 of 17 labelled foods are found.
+"reading.all.food_recall" = 0.88
+# 14 of 17 labelled foods get the right status.
+"reading.all.status_accuracy" = 0.82
+# 5 of 6 labels that need an amount or a unit are asked about.
+"reading.all.asked_share" = 0.83
+# 4 of 4 foods that are not in the data are reported missing.
+"reading.all.missing_share" = 1.0
+
+[max]
+# 12.5% mean calorie error against the labels, over 8 meals.
+"reading.all.kcal_mape" = 0.13
+"reading.all.reads_failed" = 0

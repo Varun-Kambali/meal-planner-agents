@@ -32,6 +32,17 @@ jobs:
           changes="$(git status --porcelain schemas/)"
           if [ -n "$changes" ]; then echo "$changes"; git diff schemas/; exit 1; fi
       - run: docker build -t meal-planner-agents .
+  # Replays the recorded smoke slice and holds it to evals/thresholds.toml. It makes no model
+  # call, so it needs no key; nutrition-mcp runs here as it does for a user.
+  eval-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+      - run: make eval-smoke
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
