@@ -1,8 +1,9 @@
 """What has to be true before the app answers, in one place for the API and the command line.
 
-Starting runs nutrition-mcp, loads the catalogue against it and settles which model to use. Each
-way it can fail ends in a StartupError whose message is one line, so a person who has just run
-the command sees the reason and not a traceback of library internals.
+Starting runs nutrition-mcp, loads the catalogue against it, settles which model to use and turns
+tracing on when the Langfuse keys are set. Each way it can fail ends in a StartupError whose
+message is one line, so a person who has just run the command sees the reason and not a traceback
+of library internals. Stopping sends whatever traces are left.
 """
 
 import os
@@ -16,6 +17,7 @@ from meal_planner.catalogue import Catalogue, CatalogueError, load_catalogue
 from meal_planner.config import TRACING_VARIABLES, Settings
 from meal_planner.llm import LiteLLMModel, ModelPort, missing_api_key
 from meal_planner.nutrition import NutritionClient, NutritionError, NutritionPort
+from meal_planner.tracing import TracedModel, Tracer, setup_tracing
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
 
@@ -26,11 +28,13 @@ class StartupError(Exception):
 
 @dataclass(frozen=True)
 class Services:
-    """What a run needs: the model, nutrition-mcp and the catalogue loaded against it."""
+    """What a run needs: the model, nutrition-mcp, the catalogue loaded against it, and the
+    tracer, which is None when tracing is off."""
 
     model: ModelPort
     nutrition: NutritionPort
     catalogue: Catalogue
+    tracer: Tracer | None = None
 
 
 def check_tracing_off() -> None:
@@ -63,16 +67,28 @@ async def start_services(
     A `model` or `nutrition` passed in is used as it is: the model's key is not looked for, and
     nutrition-mcp is not started. Tests pass fakes this way. `needs_model` is False for work that
     makes no model call, such as adding up a meal log, and then the key is not looked for either.
+
+    With both Langfuse keys set, the model's calls are traced and the services carry the tracer;
+    when the block ends, by any path, every span still held is sent before this returns. The CLI
+    leaves the block before it exits and the API when it shuts down.
     """
     check_tracing_off()
     if model is None:
         if needs_model:
             check_model_key(settings.model)
         model = LiteLLMModel(settings.model)
-    async with AsyncExitStack() as stack:
-        if nutrition is None:
-            nutrition = await _start_nutrition(stack, settings)
-        yield Services(model, nutrition, await _load_catalogue(settings, nutrition))
+    tracer = setup_tracing(settings)
+    if tracer is not None:
+        model = TracedModel(model)
+    try:
+        async with AsyncExitStack() as stack:
+            if nutrition is None:
+                nutrition = await _start_nutrition(stack, settings)
+            catalogue = await _load_catalogue(settings, nutrition)
+            yield Services(model, nutrition, catalogue, tracer)
+    finally:
+        if tracer is not None:
+            tracer.shutdown()
 
 
 async def _start_nutrition(stack: AsyncExitStack, settings: Settings) -> NutritionClient:

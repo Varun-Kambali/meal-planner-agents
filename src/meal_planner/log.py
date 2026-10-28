@@ -25,6 +25,9 @@ FIELDS = (
     "cost_usd",
     "error",
     "error_type",
+    # How many recipes had their grams fitted and worked out again ("ran"), needed no fitting
+    # ("not_needed"), or were fitted but could not be worked out again ("failed").
+    "recount",
 )
 
 

@@ -23,11 +23,16 @@ cannot fix that, and it is reported as failing.
 
 Progress goes out as events while the graph runs. The model is only ever asked for words and
 for grams of catalogue ingredients; every nutrition number comes from nutrition-mcp.
+
+With a tracer, a run is one trace (see tracing.py): a span for each node, the model calls inside
+the nodes that make them, the recounts and the checks that failed.
 """
 
 import asyncio
+import functools
 import operator
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections import Counter
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -58,6 +63,7 @@ from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.portions import portion_factor, scale_draft
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure, SlotDraft
 from meal_planner.rules import DAYS, DayKey, PlanRules, SlotSpec, expand
+from meal_planner.tracing import Span, Tracer, current, start_trace
 from meal_planner.week_events import (
     EVENTS,
     RecipeChecked,
@@ -160,6 +166,8 @@ class _Deps:
     # Every model call waits here, so the slots do not all hit a rate limit at once.
     gate: asyncio.Semaphore
     allowed: list[CatalogueItem]
+    # The run's trace, whose spans the nodes open theirs in; NO_SPAN when tracing is off.
+    trace: Span
 
 
 # Reading a reply
@@ -239,16 +247,21 @@ async def _ask(
         except Exception as exc:
             # The model port promises a reply, never an exception. If one comes anyway it is a
             # final refusal for this slot only, so the rest of the week goes on. Only the class
-            # is logged: the message could hold the prompt.
+            # is logged and traced: the message could hold the prompt.
             logger.error(
                 "model_call_raised", extra={"task": task, "error_type": type(exc).__name__}
             )
+            current().failed(exc)
             reply = ModelReply(value=None, raw="", error=MODEL_ERROR)
     usage = _Usage(1, reply.input_tokens, reply.output_tokens, reply.cost_usd)
     days = [spec.day for spec in job.specs]
     last_try = job.attempt > deps.settings.max_repair_attempts
     recipes, refusal = _read(reply, job, last_try)
     if refusal is not None:
+        # The reason can quote the reply, so the span gets the error code alone.
+        current().note(
+            refused=True, final=refusal.final, **({"error": reply.error} if reply.error else {})
+        )
         emit(
             SlotFailed(
                 slot_id=job.slot_id,
@@ -260,6 +273,7 @@ async def _ask(
         )
         return None, refusal, usage
     assert recipes is not None
+    current().note(recipes=len(recipes))
     emit(SlotWritten(slot_id=job.slot_id, days=days, attempt=job.attempt))
     return recipes, None, usage
 
@@ -372,6 +386,8 @@ async def with_numbers(
     except NutritionError as exc:
         if exc.unreachable and raise_if_unreachable:
             raise
+        if exc.unreadable:
+            _unreadable(exc)
         failure = (
             Failure(
                 check=NUTRITION_UNAVAILABLE,
@@ -387,6 +403,18 @@ async def with_numbers(
     return recipe.model_copy(update={"nutrition": meal})
 
 
+def _unreadable(exc: NutritionError) -> None:
+    """Log and trace a result nutrition-mcp sent that could not be read.
+
+    The recipe is failed with nutrition_failed, as a refusal is, although the writer cannot fix
+    it, so a schema mismatch or a closed client has to show somewhere. Only the class of the
+    cause is kept: the SDK's message can quote the result.
+    """
+    cause = type(exc.__cause__ or exc).__name__
+    logger.error("nutrition_unreadable", extra={"error_type": cause})
+    current().count("unreadable", cause)
+
+
 async def _meal(nutrition: NutritionPort, items: list[MealItemIn]) -> MealResult:
     """compute_meal, asked once more when nutrition-mcp could not be reached the first time."""
     try:
@@ -397,19 +425,26 @@ async def _meal(nutrition: NutritionPort, items: list[MealItemIn]) -> MealResult
     return await nutrition.meal(items)
 
 
-async def _numbered(recipe: CheckedRecipe, deps: _Deps) -> CheckedRecipe:
-    """The recipe with its numbers, scaled to its slot's calories first if that is called for.
+Recount = Literal["off", "not_needed", "ran", "failed"]
 
-    Scaling changes grams only. The scaled recipe is worked out again by nutrition-mcp, so every
-    number still comes from it. If that second call fails, the recipe stays as the writer gave
-    it, with the numbers it already has: fitting is an improvement, never a reason to fail.
+
+async def _numbered(recipe: CheckedRecipe, deps: _Deps) -> tuple[CheckedRecipe, Recount]:
+    """The recipe with its numbers, scaled to its slot's calories first if that is called for,
+    and what became of the recount.
+
+    Scaling changes grams only. The scaled recipe is worked out again by nutrition-mcp (the
+    recount), so every number still comes from it. If that second call fails, the recipe stays
+    as the writer gave it, with the numbers it already has: fitting is an improvement, never a
+    reason to fail. The recount is "off" when fitting is switched off, "not_needed" when the
+    recipe is not scaled (inside its band, without numbers, or out of the scaling bounds), and
+    otherwise "ran" or "failed".
     """
     numbered = await with_numbers(recipe, nutrition=deps.nutrition, catalogue=deps.catalogue)
     if not deps.settings.fit_portions:
-        return numbered
+        return numbered, "off"
     factor = portion_factor(numbered, deps.settings)
     if factor is None:
-        return numbered
+        return numbered, "not_needed"
     fitted = numbered.model_copy(
         update={
             "draft": scale_draft(numbered.draft, factor),
@@ -418,7 +453,18 @@ async def _numbered(recipe: CheckedRecipe, deps: _Deps) -> CheckedRecipe:
         }
     )
     fitted = await with_numbers(fitted, nutrition=deps.nutrition, catalogue=deps.catalogue)
-    return fitted if fitted.nutrition is not None else numbered
+    if fitted.nutrition is None:
+        return numbered, "failed"
+    return fitted, "ran"
+
+
+def _numbers(recipe: CheckedRecipe) -> str:
+    """Whether the recipe has its numbers, or the check that says why not."""
+    if recipe.nutrition is not None:
+        return "ok"
+    carried = [f.check for f in recipe.failures if f.check in _CARRIED]
+    # No carried failure: an ingredient is not in the catalogue, and nutrition-mcp was not asked.
+    return carried[0] if carried else "not_asked"
 
 
 async def _compute(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
@@ -426,8 +472,13 @@ async def _compute(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     # keeps are never scaled.
     keys = state["fresh"]
     deps = runtime.context
-    numbered = await asyncio.gather(*(_numbered(state["recipes"][key], deps) for key in keys))
-    return {"recipes": dict(zip(keys, numbered, strict=True))}
+    done = await asyncio.gather(*(_numbered(state["recipes"][key], deps) for key in keys))
+    recount = dict(Counter(status for _, status in done))
+    current().note(recount=recount, numbers=dict(Counter(_numbers(r) for r, _ in done)))
+    # A pass in which no recipe was scaled logs nothing.
+    if "ran" in recount or "failed" in recount:
+        logger.info("recipes_numbered", extra={"task": "compute", "recount": recount})
+    return {"recipes": dict(zip(keys, (recipe for recipe, _ in done), strict=True))}
 
 
 def _is_unavailable(recipe: CheckedRecipe) -> bool:
@@ -654,6 +705,11 @@ async def _check(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     if rounds_left:
         busy = {job.slot_id for job in work}
         work += _repair_jobs(state, deps, evaluation, repairable, attempt, busy)
+    current().note(
+        **_check_counts(evaluation.recipes.values(), evaluation.days),
+        calls_next=len(work),
+        unwritten=len(unwritten),
+    )
 
     return {
         "recipes": evaluation.recipes,
@@ -686,6 +742,33 @@ async def _report(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
     return {}
 
 
+def _check_counts(
+    recipes: Iterable[CheckedRecipe], days: Iterable[DayReport]
+) -> dict[str, dict[str, int]]:
+    """How many recipe and day failures there are of each check, and how many days leave each
+    check unsettled, by the check's name."""
+    days = list(days)
+    return {
+        "failed_recipe_checks": dict(Counter(f.check for r in recipes for f in r.failures)),
+        "failed_day_checks": dict(Counter(f.check for d in days for f in d.failures)),
+        "unsettled_day_checks": dict(Counter(f.check for d in days for f in d.unsettled)),
+    }
+
+
+def _summary(week: WeekResult) -> dict[str, object]:
+    """What the trace of a run says it came to."""
+    return {
+        "recipes": len(week.recipes),
+        "failing_recipes": sum(1 for r in week.recipes if r.failures),
+        "unwritten": len(week.unwritten),
+        "calls": week.calls,
+        "input_tokens": week.input_tokens,
+        "output_tokens": week.output_tokens,
+        "cost_usd": week.cost_usd,
+        **_check_counts(week.recipes, week.days),
+    }
+
+
 def _route(state: _State) -> list[Send] | Literal["report"]:
     if not state["work"]:
         return "report"
@@ -694,16 +777,40 @@ def _route(state: _State) -> list[Send] | Literal["report"]:
     ]
 
 
+_Node = Callable[..., Awaitable[dict[str, Any]]]
+
+
+def _traced(name: str, node: _Node) -> _Node:
+    """The node, running in a span of its own in the run's trace.
+
+    The span is the current span while the node runs, so a model call or a step inside it opens
+    its own span there. A node that writes or repairs a slot names the slot, the days and the
+    attempt. functools.wraps keeps the node's signature, which LangGraph reads to know what to
+    pass it.
+    """
+
+    @functools.wraps(node)
+    async def run(value: Any, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
+        about: dict[str, object] = {}
+        if isinstance(value, _Send):
+            job = value.job
+            days = [spec.day for spec in job.specs]
+            about = {"slot_id": job.slot_id, "days": days, "attempt": job.attempt}
+        with runtime.context.trace.child(name, **about):
+            return await node(value, runtime=runtime)
+
+    return run
+
+
 def _build() -> CompiledStateGraph[_State, _Deps, _State, _State]:
     graph = StateGraph(_State, context_schema=_Deps)
-    graph.add_node("expand", _expand)
-    # LangGraph's type stubs only accept a node that takes the graph's own state, and these two
-    # take the payload of a Send. At run time that is supported and tested.
-    graph.add_node("write_slot", _write_slot)  # type: ignore[call-overload]
-    graph.add_node("repair_slot", _repair_slot)  # type: ignore[call-overload]
-    graph.add_node("compute", _compute)
-    graph.add_node("check", _check)
-    graph.add_node("report", _report)
+    graph.add_node("expand", _traced("expand", _expand))
+    # These two take the payload of a Send rather than the graph's state.
+    graph.add_node("write_slot", _traced("write_slot", _write_slot))
+    graph.add_node("repair_slot", _traced("repair_slot", _repair_slot))
+    graph.add_node("compute", _traced("compute", _compute))
+    graph.add_node("check", _traced("check", _check))
+    graph.add_node("report", _traced("report", _report))
     graph.add_edge(START, "expand")
     graph.add_conditional_edges("expand", _route, ["write_slot", "report"])
     graph.add_edge("write_slot", "compute")
@@ -728,7 +835,16 @@ async def _stream(
     nutrition: NutritionPort,
     catalogue: Catalogue,
     settings: Settings,
+    tracer: Tracer | None,
 ) -> AsyncIterator[WeekEvent]:
+    # The trace's first span is passed to the nodes, not made current here: this generator runs
+    # in whichever task reads it, and can be closed from another.
+    trace = start_trace(
+        tracer,
+        "week" if only is None else "replace",
+        rules=rules,
+        **({} if only is None else {"day": only[0], "slot_id": only[1]}),
+    )
     deps = _Deps(
         rules=rules,
         model=model,
@@ -738,6 +854,7 @@ async def _stream(
         only=only,
         gate=asyncio.Semaphore(settings.max_concurrent_model_calls),
         allowed=catalogue.allowed_for(rules),
+        trace=trace,
     )
     start: _State = {
         "previous": previous,
@@ -755,8 +872,21 @@ async def _stream(
     }
     # Each round is three steps (call, compute, check), and LangGraph stops a run at 25 steps.
     config: RunnableConfig = {"recursion_limit": 3 * settings.max_repair_attempts + 15}
-    async for event in _GRAPH.astream(start, config, context=deps, stream_mode="custom"):
-        yield EVENTS.validate_python(event)
+    week: WeekResult | None = None
+    try:
+        async for event in _GRAPH.astream(start, config, context=deps, stream_mode="custom"):
+            checked = EVENTS.validate_python(event)
+            if isinstance(checked, WeekDone):
+                week = checked.week
+            yield checked
+    except BaseException as exc:
+        # Cancelled, closed early or failed: the trace still ends, and says by what.
+        trace.failed(exc)
+        raise
+    finally:
+        if week is not None:
+            trace.set_output(_summary(week))
+        trace.end()
 
 
 async def run_week(
@@ -766,13 +896,22 @@ async def run_week(
     nutrition: NutritionPort,
     catalogue: Catalogue,
     settings: Settings,
+    tracer: Tracer | None = None,
 ) -> AsyncIterator[WeekEvent]:
     """Write, check and repair a week for the plan, yielding progress events.
 
-    The last event is always `week_done`, also when slots could not be written.
+    The last event is always `week_done`, also when slots could not be written. With a tracer
+    the run is traced as "week".
     """
     async for event in _stream(
-        rules, {}, None, model=model, nutrition=nutrition, catalogue=catalogue, settings=settings
+        rules,
+        {},
+        None,
+        model=model,
+        nutrition=nutrition,
+        catalogue=catalogue,
+        settings=settings,
+        tracer=tracer,
     ):
         yield event
 
@@ -787,13 +926,15 @@ async def replace_recipe(
     nutrition: NutritionPort,
     catalogue: Catalogue,
     settings: Settings,
+    tracer: Tracer | None = None,
 ) -> AsyncIterator[WeekEvent]:
     """Write one recipe again inside the rest of the week, yielding progress events.
 
     The other recipes are not changed. The writer is sent a one-line summary of each other
     recipe of the slot (day, title, cuisine and ingredient ids) to stay different from, and every
     recipe of the week is there for the day and variety checks. The old recipe leaves the week
-    before the new one is checked, and stays in the result if no new one could be written.
+    before the new one is checked, and stays in the result if no new one could be written. With
+    a tracer the run is traced as "replace".
     """
     if slot_id not in {slot.id for slot in rules.slots}:
         raise ValueError(f"the plan has no slot '{slot_id}'")
@@ -806,5 +947,6 @@ async def replace_recipe(
         nutrition=nutrition,
         catalogue=catalogue,
         settings=settings,
+        tracer=tracer,
     ):
         yield event

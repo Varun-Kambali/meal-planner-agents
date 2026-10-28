@@ -12,7 +12,8 @@ start or the run failed, 2 the rules, the text or the log could not be used, 130
 with Ctrl-C.
 
 Settings come from the environment only; the command does not read a .env file, so run it with
-`uv run --env-file .env meal-planner ...` to use one.
+`uv run --env-file .env meal-planner ...` to use one. With the Langfuse keys set, `week` and `read`
+are traced, and the traces are sent before the command exits.
 """
 
 import argparse
@@ -139,6 +140,7 @@ async def _write_week(rules: PlanRules, settings: Settings, services: Services) 
         nutrition=services.nutrition,
         catalogue=services.catalogue,
         settings=settings,
+        tracer=services.tracer,
     ):
         _say(progress_line(event))
         if isinstance(event, WeekDone):
@@ -175,6 +177,7 @@ async def _read_text(text: str, settings: Settings, services: Services) -> ReadR
             nutrition=services.nutrition,
             catalogue=services.catalogue,
             settings=settings,
+            tracer=services.tracer,
         )
     except ReadError as exc:
         # The message names the step and holds nothing that was typed.

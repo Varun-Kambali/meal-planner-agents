@@ -3,6 +3,7 @@
 Every tracer here sends to an in-memory exporter (tracing_helpers), so no test reaches Langfuse.
 """
 
+import contextvars
 import json
 from collections.abc import Iterator
 from typing import Any
@@ -10,7 +11,7 @@ from typing import Any
 import pytest
 from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from tracing_helpers import Sent, sending, tracing_settings
 from week_helpers import canned, plan_rules
 
@@ -229,6 +230,18 @@ def test_mask_edges(value: object, masked: object) -> None:
     assert mask(value) == masked
 
 
+class Unserialisable(BaseModel):
+    count: int
+
+    @field_serializer("count")
+    def _refuse(self, count: int) -> int:
+        raise ValueError(MARK)
+
+
+def test_a_model_that_cannot_be_dumped_is_masked_whole() -> None:
+    assert mask({"id": "x", "model": Unserialisable(count=1)}) == {"id": "x", "model": MASKED}
+
+
 def test_mask_twice_is_mask_once() -> None:
     once = mask({"rules": plan_rules(), "draft": SlotDraft.model_validate(canned("lunch"))})
 
@@ -358,6 +371,17 @@ def test_child_spans_nest_and_become_current(sent: Sent) -> None:
     assert compute.parent == week.id
     assert compute.input == {"recipes": 2}
     assert compute.metadata == {"recount": {"ran": 2, "failed": 1}, "recipes": 2}
+
+
+def test_a_trace_closed_in_another_context_still_ends(sent: Sent) -> None:
+    """Leaving the block from another context (a generator closed elsewhere) must not raise."""
+    block = tracing.trace(sent.tracer, "read")
+    contextvars.copy_context().run(block.__enter__)
+
+    block.__exit__(None, None, None)
+
+    assert tracing.current() is tracing.NO_SPAN
+    assert [o.name for o in sent.observations()] == ["read"]
 
 
 def test_the_no_span_records_nothing() -> None:
