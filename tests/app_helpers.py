@@ -1,5 +1,5 @@
-"""What the API and command-line tests share: a marked plan, a nutrition-mcp that breaks, and the
-checks that nothing the user typed reaches a log.
+"""What the API and command-line tests share: a marked plan, a nutrition-mcp that breaks, the
+checks that nothing the user typed reaches a log, and reading a week's event stream.
 
 A marker is a string that cannot occur by chance. A test puts it into what the user sends and then
 looks for it in every place it must not appear.
@@ -29,6 +29,7 @@ from meal_planner.api import create_app
 from meal_planner.config import Settings
 from meal_planner.llm import ModelPort
 from meal_planner.nutrition import NutritionPort
+from meal_planner.week_events import WeekResult
 
 MARK = "ZXQ-MARKER-7731"
 
@@ -128,3 +129,23 @@ def assert_no_marker(records: list[logging.LogRecord], captured: Any, mark: str 
     for record in records:
         assert mark not in record.getMessage()
         assert mark not in json.dumps(vars(record), default=str), record.name
+
+
+def parse_stream(text: str) -> list[tuple[str, dict[str, Any]]]:
+    """The messages of an event stream as (event name, data), each data a complete JSON object."""
+    found: list[tuple[str, dict[str, Any]]] = []
+    for block in text.split("\n\n"):
+        if not block.strip() or block.startswith(":"):
+            continue
+        fields = dict(line.split(": ", 1) for line in block.split("\n"))
+        assert set(fields) == {"event", "data"}, block[:200]
+        data = json.loads(fields["data"])
+        assert isinstance(data, dict)
+        found.append((fields["event"], data))
+    return found
+
+
+def week_of(events: list[tuple[str, dict[str, Any]]]) -> WeekResult:
+    name, data = events[-1]
+    assert name == "week_done"
+    return WeekResult.model_validate(data["week"])
