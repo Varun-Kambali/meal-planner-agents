@@ -5,6 +5,7 @@ Every tracer here sends to an in-memory exporter (tracing_helpers), so no test r
 
 import contextvars
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -456,18 +457,31 @@ async def test_an_observation_that_cannot_end_does_not_fail_the_call(
     assert MARK not in err
 
 
-def test_an_exporter_that_fails_does_not_fail_the_flush(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_an_exporter_that_fails_does_not_fail_the_flush(caplog: pytest.LogCaptureFixture) -> None:
+    """An export that raises (Langfuse down, say) never reaches this code: OpenTelemetry's batch
+    span processor, which the SDK exports through, catches it and logs it under its own logger.
+    The test pins that behaviour: the flush returns, the tracer keeps working, and nothing of ours
+    is logged, because `_quietly` never saw an error."""
+    exported: list[int] = []
+
     class Failing(InMemorySpanExporter):
         def export(self, spans: Any) -> Any:
-            raise RuntimeError(MARK)
+            exported.append(len(spans))
+            raise RuntimeError("export failed")
 
     tracer = setup_tracing(tracing_settings(), exporter=Failing())
     assert tracer is not None
-    with tracing.trace(tracer, "read"):
-        pass
+    caplog.set_level(logging.ERROR)
 
-    tracer.flush()
+    for _ in range(2):
+        with tracing.trace(tracer, "read"):
+            pass
+        tracer.flush()
     tracer.shutdown()
     tracer.provider.shutdown()
+
+    assert exported == [1, 1]
+    caught = [r for r in caplog.records if r.name.startswith("opentelemetry.sdk")]
+    assert caught and all(r.exc_info for r in caught)
+    ours = [r for r in caplog.records if r.name.startswith("meal_planner")]
+    assert not [r for r in ours if r.levelno >= logging.WARNING]
