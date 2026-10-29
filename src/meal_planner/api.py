@@ -20,7 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from nutrition_mcp.schemas import MealResult
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 
 from meal_planner.catalogue import Category
 from meal_planner.config import Settings, get_settings
@@ -37,7 +38,7 @@ from meal_planner.middleware import (
 from meal_planner.nutrition import NutritionError, NutritionPort, NutritionUnusable
 from meal_planner.problems import (
     Problem,
-    food_query_problems,
+    food_query_problem,
     meal_text_problems,
     problems_from,
     unknown_foods,
@@ -93,6 +94,25 @@ class ReadRequest(_Body):
 class SummaryRequest(_Body):
     rules: PlanRules
     log: MealLog
+
+
+class SearchQuery(BaseModel):
+    """The query string of a food search.
+
+    It is a model so that FastAPI checks every parameter and reports every problem at once, as
+    the routes with a body do, and not only the first.
+    """
+
+    q: str
+    limit: int = Field(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT)
+
+    @field_validator("q")
+    @classmethod
+    def _can_be_searched(cls, q: str) -> str:
+        problem = food_query_problem(q)
+        if problem is not None:
+            raise PydanticCustomError("food_query", problem)
+        return q.strip()
 
 
 class ComputeRequest(_Body):
@@ -261,15 +281,6 @@ async def _checked_text(
     if problems:
         raise _invalid(problems)
     return body.text
-
-
-async def _checked_query(q: Annotated[str, Query()]) -> str:
-    """The food search, once it is known to be neither blank nor longer than nutrition-mcp
-    takes, without the spaces around it."""
-    problems = food_query_problems(q)
-    if problems:
-        raise _invalid(problems)
-    return q.strip()
 
 
 def _nutrition_failed(task: str, exc: NutritionUnusable) -> HTTPException:
@@ -457,14 +468,12 @@ async def summarise_log(
 
 @router.get(SEARCH_PATH, response_model=list[FoodOption])
 async def search_foods(
-    q: Annotated[str, Depends(_checked_query)],
-    services: Annotated[Services, Depends(_services)],
-    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    query: Annotated[SearchQuery, Query()], services: Annotated[Services, Depends(_services)]
 ) -> list[FoodOption]:
     """The foods nutrition-mcp has under a name, with the units an amount of each can use."""
     try:
         return await food_options(
-            q, limit, nutrition=services.nutrition, catalogue=services.catalogue
+            query.q, query.limit, nutrition=services.nutrition, catalogue=services.catalogue
         )
     except NutritionUnusable as exc:
         raise _nutrition_failed("food_search", exc) from exc

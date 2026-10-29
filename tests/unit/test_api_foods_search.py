@@ -149,6 +149,48 @@ def test_a_blank_unsearchable_or_long_query_is_422_without_asking_nutrition_mcp(
     assert searched(nutrition) == []
 
 
+@pytest.mark.parametrize(
+    ("params", "problems"),
+    [
+        (
+            {"q": "  ", "limit": "0"},
+            [
+                (["query", "q"], "type a food name: the text is blank"),
+                (["query", "limit"], "Input should be greater than or equal to 1"),
+            ],
+        ),
+        (
+            {"q": "x" * 101, "limit": "51"},
+            [
+                (["query", "q"], "the text has 101 characters and the most is 100"),
+                (["query", "limit"], "Input should be less than or equal to 50"),
+            ],
+        ),
+        (
+            {"limit": "many"},
+            [
+                (["query", "q"], "Field required"),
+                (
+                    ["query", "limit"],
+                    "Input should be a valid integer, unable to parse string as an integer",
+                ),
+            ],
+        ),
+    ],
+)
+def test_a_bad_query_and_a_bad_limit_are_both_reported(
+    tmp_path: Path, params: dict[str, str], problems: list[tuple[list[str], str]]
+) -> None:
+    nutrition = ReaderNutrition()
+
+    with serving_foods(tmp_path, nutrition) as client:
+        response = client.get(SEARCH, params=params)
+
+    assert response.status_code == 422
+    assert [(p["loc"], p["msg"]) for p in response.json()["detail"]] == problems
+    assert searched(nutrition) == []
+
+
 def test_a_query_of_the_longest_length_is_searched_and_spaces_around_it_are_not_counted(
     tmp_path: Path,
 ) -> None:

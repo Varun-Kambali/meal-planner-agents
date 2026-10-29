@@ -61,19 +61,18 @@ def meal_text_problems(
     return []
 
 
-def food_query_problems(query: str, *, under: tuple[str, ...] = ("query",)) -> list[Problem]:
-    """A problem when a food search is blank, has no letter or digit, or is longer than
-    nutrition-mcp searches for. The spaces around it are not counted.
+def food_query_problem(query: str) -> str | None:
+    """What is wrong with a food search, or None when it can be searched: it is blank, has no
+    letter or digit, or is longer than nutrition-mcp searches for. The spaces around it are not
+    counted.
 
-    The messages say what is wrong and hold none of the text, which is what the user typed.
+    The message says what is wrong and holds none of the text, which is what the user typed.
     """
     text = query.strip()
-    loc: list[str | int] = [*under, "q"]
     if not text:
-        return [{"loc": loc, "msg": "type a food name: the text is blank"}]
+        return "type a food name: the text is blank"
     if not normalise(text):
-        return [{"loc": loc, "msg": "type a food name: the text has no letter or digit"}]
+        return "type a food name: the text has no letter or digit"
     if len(text) > MAX_QUERY_LENGTH:
-        message = f"the text has {len(text)} characters and the most is {MAX_QUERY_LENGTH}"
-        return [{"loc": loc, "msg": message}]
-    return []
+        return f"the text has {len(text)} characters and the most is {MAX_QUERY_LENGTH}"
+    return None
