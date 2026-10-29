@@ -228,7 +228,7 @@ def test_summary_first_row_is_headline(tmp_path: Path) -> None:
     first_row = [cell.strip() for cell in lines[first_table + 2].strip("|").split("|")]
     assert header == ["Measure", "Baseline", "This project"]
     assert first_row == [
-        "Recipes passing every hard check (share)",
+        "Recipes passing every recipe check (share)",
         "42.9% (3 of 7)",
         "57.1% (4 of 7)",
     ]

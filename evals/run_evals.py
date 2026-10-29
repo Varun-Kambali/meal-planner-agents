@@ -413,7 +413,7 @@ def _print_headline(results: Results) -> None:
         for system in ("baseline", "pipeline"):
             m = getattr(results.recipes, system)
             print(
-                f"recipes, {system}: {m.recipes_passing} of {m.recipes_asked} pass every hard "
+                f"recipes, {system}: {m.recipes_passing} of {m.recipes_asked} pass every recipe "
                 f"check, {m.weeks_passing} of {m.weeks} weeks pass"
             )
     if results.reading is not None:

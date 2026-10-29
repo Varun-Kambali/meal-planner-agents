@@ -8,7 +8,7 @@
 # moves a number on purpose sets the new value here in the same PR, with the reason.
 
 [min]
-# 50 of 70 recipes pass every hard check.
+# 50 of 70 recipes pass every recipe check.
 "recipes.pipeline.recipe_pass_share" = 0.71
 # 26 of 70 pass at their first attempt, before any repair.
 "recipes.pipeline.first_attempt_pass_share" = 0.37

@@ -8,8 +8,8 @@ From `2026-10-27_gemini-gemini-3.1-flash-lite_50aab53.json`: model gemini/gemini
 
 | Measure | Baseline | This project |
 |---|---|---|
-| Recipes passing every hard check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
-| Recipes passing every hard check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
+| Recipes passing every recipe check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
+| Recipes passing every recipe check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
 | Recipes passing the variety checks (share) | 65.1% (360 of 553) | 94.4% (522 of 553) |
 | Days passing every check (share) | 2.1% (3 of 140) | 51.4% (72 of 140) |
 | Days the checks could not settle (share) | 1.4% (2 of 140) | 20.0% (28 of 140) |
