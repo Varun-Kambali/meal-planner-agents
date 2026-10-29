@@ -45,10 +45,9 @@ class NutritionError(Exception):
     A refusal carries nutrition-mcp's own message, and `food_id` when one food is to blame; a
     refusal whose message names no food has no `food_id`. A meal's message also names the item
     that failed, and `item` is its place in the meal, counting from 0 (None when it names none).
-    `unreachable` is set only when
-    nutrition-mcp could not be asked at all (the connection failed or timed out), which says
-    nothing about the foods asked about. `unreadable` is set only when it answered with a result
-    that could not be read. A refusal leaves both False.
+    `unreachable` is set only when nutrition-mcp could not be asked at all (the connection failed
+    or timed out), which says nothing about the foods asked about. `unreadable` is set only when
+    it answered with a result that could not be read. A refusal leaves both False.
     """
 
     def __init__(
@@ -88,6 +87,29 @@ def refusal(message: str, food_id: str | None = None) -> NutritionError:
         listed[-1].split(", ") if listed else [],
         item=int(number.group(1)) - 1 if number else None,
     )
+
+
+class NutritionUnusable(Exception):
+    """nutrition-mcp could not be used for a request, which is its trouble and not the caller's.
+
+    The message names the step and holds nothing the caller sent. `unavailable` is set when it
+    could not be reached, so that trying again later can help; otherwise it answered with
+    something that could not be used.
+    """
+
+    def __init__(self, message: str, *, unavailable: bool) -> None:
+        super().__init__(message)
+        self.unavailable = unavailable
+
+
+def nutrition_unusable(exc: NutritionError) -> NutritionUnusable:
+    """The error for a nutrition-mcp that could not be reached, or sent an answer that no one
+    can do anything with."""
+    if exc.unreachable:
+        message = "nutrition-mcp could not be reached (step: nutrition)"
+        return NutritionUnusable(message, unavailable=True)
+    message = "nutrition-mcp sent an answer that could not be used (step: nutrition)"
+    return NutritionUnusable(message, unavailable=False)
 
 
 @runtime_checkable

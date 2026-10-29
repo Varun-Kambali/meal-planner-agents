@@ -12,9 +12,8 @@ from nutrition_mcp.search import MAX_SEARCH_LIMIT
 from pydantic import BaseModel
 
 from meal_planner.catalogue import Catalogue
-from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.nutrition import NutritionError, NutritionPort, nutrition_unusable
 from meal_planner.reader import OPTIONS
-from meal_planner.summary import nutrition_unusable
 
 # A search offers as many foods as the reader chooses between, unless asked for more, and for no
 # more than nutrition-mcp returns.
@@ -39,7 +38,7 @@ async def food_options(
     """The foods nutrition-mcp finds for `query`, best match first; none when it has none.
 
     The caller has checked the query (`problems.food_query_problems`) and the limit. Raises
-    SummaryError when nutrition-mcp cannot be used; its message holds nothing of the query.
+    NutritionUnusable when nutrition-mcp cannot be used; its message holds nothing of the query.
     """
     try:
         found = await nutrition.search(query, limit=limit)

@@ -22,7 +22,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from meal_planner.catalogue import Catalogue
 from meal_planner.checks import add_up_meals, check_day_totals, sat_fat_ceiling
 from meal_planner.config import Settings
-from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.nutrition import (
+    NutritionError,
+    NutritionPort,
+    NutritionUnusable,
+    nutrition_unusable,
+)
 from meal_planner.problems import Problem
 from meal_planner.recipes import Failure
 from meal_planner.rules import CORE_TARGET_FIELDS, DAYS, DayType, PlanRules
@@ -172,16 +177,13 @@ class LogRejected(Exception):
         self.problems = problems
 
 
-class SummaryError(Exception):
-    """nutrition-mcp could not be used. The message names the step and holds nothing from the log.
+class SummaryError(NutritionUnusable):
+    """nutrition-mcp could not be used to summarise a log. The message names the step and holds
+    nothing from the log.
 
     `unavailable` is set when it could not be reached, so that trying again later can help;
     otherwise it answered with something that could not be used.
     """
-
-    def __init__(self, message: str, *, unavailable: bool) -> None:
-        super().__init__(message)
-        self.unavailable = unavailable
 
 
 class MealRefused(Exception):
@@ -252,6 +254,8 @@ async def summarise(
             continue
         try:
             meals[index] = await meal_of(entry.items, nutrition=nutrition, catalogue=catalogue)
+        except NutritionUnusable as exc:
+            raise SummaryError(str(exc), unavailable=exc.unavailable) from exc
         except MealRefused as exc:
             refused.append(
                 {
@@ -348,7 +352,7 @@ async def meal_of(
 
     This is what the summary adds up a log with, so a meal has the same numbers wherever it is
     worked out. Raises MealRefused for a food, amount or unit nutrition-mcp refuses, and
-    SummaryError when nutrition-mcp cannot be used. Neither message holds anything from `items`
+    NutritionUnusable when nutrition-mcp cannot be used. Neither message holds anything from `items`
     except what nutrition-mcp says about the food it refused.
     """
     try:
@@ -357,21 +361,11 @@ async def meal_of(
         raise _refusal(items, exc, catalogue) from exc
 
 
-def nutrition_unusable(exc: NutritionError) -> SummaryError:
-    """The error for a nutrition-mcp that could not be reached, or sent an answer that no one
-    can do anything with. It says the step and holds nothing the caller sent."""
-    if exc.unreachable:
-        message = "nutrition-mcp could not be reached (step: nutrition)"
-        return SummaryError(message, unavailable=True)
-    message = "nutrition-mcp sent an answer that could not be used (step: nutrition)"
-    return SummaryError(message, unavailable=False)
-
-
 def _refusal(
     items: list[LogItem], exc: NutritionError, catalogue: Catalogue
-) -> MealRefused | SummaryError:
+) -> MealRefused | NutritionUnusable:
     """MealRefused for a meal nutrition-mcp refused over one of its foods, which the sender is to
-    fix. Any other failure is nutrition-mcp's, and is a SummaryError.
+    fix. Any other failure is nutrition-mcp's, and is a NutritionUnusable.
 
     A unit it refused for a catalogue food lists the catalogue's measures too, as the reader
     does, since they work as well. nutrition-mcp ends its message with its own list.

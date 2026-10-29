@@ -34,7 +34,7 @@ from meal_planner.middleware import (
     RateLimiter,
     RequestContext,
 )
-from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.nutrition import NutritionError, NutritionPort, NutritionUnusable
 from meal_planner.problems import (
     Problem,
     food_query_problems,
@@ -272,7 +272,7 @@ async def _checked_query(q: Annotated[str, Query()]) -> str:
     return q.strip()
 
 
-def _nutrition_failed(task: str, exc: SummaryError) -> HTTPException:
+def _nutrition_failed(task: str, exc: NutritionUnusable) -> HTTPException:
     """The refusal for a nutrition-mcp that could not be used. The message names the step and
     holds nothing the caller sent, and the log line holds only the error's class."""
     logger.error(f"{task}_failed", extra={"task": task, "error_type": type(exc).__name__})
@@ -466,7 +466,7 @@ async def search_foods(
         return await food_options(
             q, limit, nutrition=services.nutrition, catalogue=services.catalogue
         )
-    except SummaryError as exc:
+    except NutritionUnusable as exc:
         raise _nutrition_failed("food_search", exc) from exc
 
 
@@ -480,7 +480,7 @@ async def compute_foods(
     except MealRefused as exc:
         # The item is named by its place in the list, and the message is nutrition-mcp's own.
         raise _invalid([{"loc": exc.located(["body", "items"]), "msg": exc.reason}]) from exc
-    except SummaryError as exc:
+    except NutritionUnusable as exc:
         raise _nutrition_failed("compute", exc) from exc
 
 

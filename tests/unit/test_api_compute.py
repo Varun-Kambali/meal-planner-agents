@@ -281,7 +281,7 @@ def test_nutrition_mcp_being_down_is_a_503_naming_the_step(
     assert response.status_code == 503
     assert response.json() == {"detail": "nutrition-mcp could not be reached (step: nutrition)"}
     (failed,) = [e for e in log_entries(capfd.readouterr().err) if e["event"] == "compute_failed"]
-    assert (failed["task"], failed["error_type"]) == ("compute", "SummaryError")
+    assert (failed["task"], failed["error_type"]) == ("compute", "NutritionUnusable")
     assert failed["request_id"] == response.headers["x-request-id"]
 
 

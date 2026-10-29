@@ -21,7 +21,7 @@ from week_helpers import SLOTS, SpyNutrition, catalogue, item, model_for, plan_r
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
 from meal_planner.llm import FakeModel
-from meal_planner.nutrition import NutritionError
+from meal_planner.nutrition import NutritionError, NutritionUnusable
 from meal_planner.reader import MAX_ITEMS, read_meal
 from meal_planner.rules import PlanRules
 from meal_planner.summary import (
@@ -766,6 +766,18 @@ async def test_an_answer_that_cannot_be_read_is_not_taken_for_a_bad_food() -> No
         await summary_of(log_of(entry(MON, "lunch")), nutrition=Unreadable())
 
     assert err.value.unavailable is False
+
+
+@pytest.mark.parametrize(("nutrition", "unavailable"), [(Unreachable, True), (Unreadable, False)])
+async def test_a_meal_nutrition_mcp_cannot_work_out_is_the_error_of_no_summary(
+    nutrition: type[Spy], unavailable: bool
+) -> None:
+    """`meal_of` is the summary's and the compute route's, so its error is not a summary's."""
+    with pytest.raises(NutritionUnusable) as err:
+        await meal_of([CHAPATI], nutrition=nutrition(), catalogue=reader_catalogue())
+
+    assert type(err.value) is NutritionUnusable
+    assert err.value.unavailable is unavailable
 
 
 # Targets
