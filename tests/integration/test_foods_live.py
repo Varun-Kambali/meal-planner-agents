@@ -90,3 +90,17 @@ def test_the_servers_refusals_name_the_item_and_the_units_that_work(client: Test
     (problem,) = food.json()["detail"]
     assert problem["loc"] == ["body", "items", 1]
     assert problem["msg"].startswith("item 2 (nonesuch): unknown food id 'nonesuch'")
+
+
+def test_a_food_id_with_a_bracket_is_a_422_naming_the_item(client: TestClient) -> None:
+    """The id is the sender's own and can hold any character; the real server's message quotes
+    it as it is."""
+    egg = {"food_id": "egg", "amount": 1, "unit": "piece"}
+    bracketed = {"food_id": "a) b", "amount": 1, "unit": "g"}
+
+    response = client.post("/v1/log/compute", json={"items": [egg, bracketed]})
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "items", 1]
+    assert problem["msg"].startswith("item 2 (a) b): unknown food id 'a) b'")
