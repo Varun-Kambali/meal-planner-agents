@@ -342,6 +342,12 @@ async def test_an_error_that_places_the_item_badly_is_put_on_the_first_item_with
     assert err.value.reason == message
 
 
+def test_a_refusal_is_located_at_its_item_or_where_the_items_are() -> None:
+    assert MealRefused("no", 3).located(["body", "items"]) == ["body", "items", 3]
+    assert MealRefused("no", 0).located(["entries", 2, "items"]) == ["entries", 2, "items", 0]
+    assert MealRefused("no", None).located(["body", "items"]) == ["body", "items"]
+
+
 @pytest.mark.parametrize("food_id", ["a) b", "x): y", "(", ")", "x (y)"])
 async def test_the_item_refused_is_found_whatever_characters_its_food_id_has(food_id: str) -> None:
     """The id is the sender's and can hold any character, so it is read from the list sent and

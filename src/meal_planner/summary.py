@@ -196,6 +196,11 @@ class MealRefused(Exception):
         self.reason = reason
         self.item = item
 
+    def located(self, items: list[str | int]) -> list[str | int]:
+        """The location of the item, given the location of the list it is in: that list's, and
+        the item's place in it. When the item cannot be told, the list itself."""
+        return items if self.item is None else [*items, self.item]
+
 
 def log_problems(rules: PlanRules, log: MealLog) -> list[Problem]:
     """A problem for each entry whose slot the plan does not have.
@@ -248,10 +253,9 @@ async def summarise(
         try:
             meals[index] = await meal_of(entry.items, nutrition=nutrition, catalogue=catalogue)
         except MealRefused as exc:
-            loc: list[str | int] = ["entries", index, "items"]
             refused.append(
                 {
-                    "loc": loc if exc.item is None else [*loc, exc.item],
+                    "loc": exc.located(["entries", index, "items"]),
                     "msg": f"{entry.date.isoformat()} {entry.slot_id}: {exc.reason}",
                 }
             )

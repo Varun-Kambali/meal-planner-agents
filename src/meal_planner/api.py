@@ -479,9 +479,7 @@ async def compute_foods(
         return await meal_of(body.items, nutrition=services.nutrition, catalogue=services.catalogue)
     except MealRefused as exc:
         # The item is named by its place in the list, and the message is nutrition-mcp's own.
-        loc: list[str | int] = ["body", "items"]
-        problem: Problem = {"loc": loc if exc.item is None else [*loc, exc.item], "msg": exc.reason}
-        raise _invalid([problem]) from exc
+        raise _invalid([{"loc": exc.located(["body", "items"]), "msg": exc.reason}]) from exc
     except SummaryError as exc:
         raise _nutrition_failed("compute", exc) from exc
 
