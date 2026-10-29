@@ -64,6 +64,30 @@ def test_kilograms_and_litres_are_sent_in_grams_and_millilitres(tmp_path: Path) 
     assert MealResult.model_validate(response.json()).total.kcal == pytest.approx(825 + 154.5)
 
 
+def test_each_item_comes_back_with_the_amount_and_unit_nutrition_mcp_was_asked_about(
+    tmp_path: Path,
+) -> None:
+    """A catalogue measure and a kilogram are converted before nutrition-mcp is asked, so the
+    item carries the grams, and the browser has to keep what the user typed."""
+    items = [
+        ROTIS,
+        EGGS,
+        {"food_id": "chicken_breast", "amount": 0.2, "unit": "kg"},
+        {"food_id": "whole_milk", "amount": 1, "unit": "cup"},
+    ]
+
+    with serving_foods(tmp_path) as client:
+        response = client.post(COMPUTE, json={"items": items})
+
+    meal = MealResult.model_validate(response.json())
+    assert [(item.amount, item.unit) for item in meal.items] == [
+        (2, "roti"),
+        (100, "g"),
+        (200, "g"),
+        (1, "cup"),
+    ]
+
+
 def test_a_food_has_the_numbers_here_that_it_has_in_the_day_view(tmp_path: Path) -> None:
     """Both read the units through the same function, so the edit screen and the day agree."""
     items = [ROTIS, EGGS, {"food_id": "whole_milk", "amount": 0.25, "unit": "litre"}]

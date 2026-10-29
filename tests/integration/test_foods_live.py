@@ -71,6 +71,8 @@ def test_a_catalogue_measure_is_read_as_the_summary_reads_it(client: TestClient)
 
     meal = MealResult.model_validate(response.json())
     assert [item.grams for item in meal.items] == [100, 200]
+    # What nutrition-mcp was asked about: the piece became grams, and so did the kilograms.
+    assert [(item.amount, item.unit) for item in meal.items] == [(100, "g"), (200, "g")]
 
 
 def test_the_servers_refusals_name_the_item_and_the_units_that_work(client: TestClient) -> None:
