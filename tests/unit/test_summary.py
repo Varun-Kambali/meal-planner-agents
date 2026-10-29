@@ -27,12 +27,15 @@ from meal_planner.rules import PlanRules
 from meal_planner.summary import (
     MAX_FOODS,
     Export,
+    LogItem,
     LogRejected,
     MealLog,
+    MealRefused,
     MealStatus,
     SummaryError,
     WeekSummary,
     log_problems,
+    meal_of,
     summarise,
 )
 from meal_planner.week import run_week
@@ -293,6 +296,44 @@ async def test_the_item_refused_is_the_one_nutrition_mcp_names_when_a_food_is_li
     (problem,) = err.value.problems
     assert problem["loc"] == ["entries", 0, "items", 1]
     assert "item 2 (egg)" in problem["msg"]
+
+
+class RefusingEgg(ReaderNutrition):
+    """nutrition-mcp refusing the egg with an error that places the item as `item` says."""
+
+    def __init__(self, food_id: str, item: int | None) -> None:
+        super().__init__()
+        self.refusal = NutritionError("unknown unit 'cup' for egg", food_id, item=item)
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        raise self.refusal
+
+
+@pytest.mark.parametrize(
+    ("food_id", "item", "placed"),
+    [
+        # Not placed, placed outside the meal, or placed on a different food: the first item
+        # with the food that was refused is the best guess.
+        ("egg", None, 1),
+        ("egg", 7, 1),
+        ("egg", 0, 1),
+        # Placed on the food.
+        ("egg", 2, 2),
+        # A food that is not in the meal at all names no item.
+        ("ghost", None, None),
+    ],
+)
+async def test_an_error_that_places_the_item_badly_is_put_on_the_first_item_with_the_food(
+    food_id: str, item: int | None, placed: int | None
+) -> None:
+    eggs = LogItem(food_id="egg", amount=1, unit="piece")
+    items = [LogItem(food_id="chapati", amount=1, unit="roti"), eggs, eggs]
+
+    with pytest.raises(MealRefused) as err:
+        await meal_of(items, nutrition=RefusingEgg(food_id, item), catalogue=reader_catalogue())
+
+    assert err.value.item == placed
+    assert err.value.reason == "unknown unit 'cup' for egg"
 
 
 @pytest.mark.parametrize(
