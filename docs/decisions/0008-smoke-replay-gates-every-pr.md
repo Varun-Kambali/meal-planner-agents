@@ -13,7 +13,7 @@ The plan said to set the thresholds a few points below the first full run. That 
 
 **The thresholds come from the replay itself.** Each minimum is the replayed value rounded down to two decimal places, and each maximum rounded up. At the slice's counts that is less than one item away from the replayed number, so losing one recipe or one food fails the gate. A margin of a few points is there to absorb noise between runs, and a replay has none.
 
-**What is held:**
+**What is held, at the first recording** (the current values are in `evals/thresholds.toml`):
 
 | Metric | Replayed | Threshold |
 |---|---|---|
@@ -31,7 +31,7 @@ The plan said to set the thresholds a few points below the first full run. That 
 
 **The baseline has a minimum too,** so a change cannot make the headline look better by making the comparison worse.
 
-**Not held, and why.** No day and no week passes in the slice for either system. The pipeline's days fail the saturated-fat check most (17 of its 21 days), and 8 of the 21 fail only because a food in them, such as rohu or curry leaves, has no saturated-fat or fibre value in the food data, so the check cannot show the day is within its limit. The hard plan's days miss protein by design. A minimum of 0 checks nothing, so days and weeks get thresholds once those missing values are dealt with. Tokens, cost and time are not held: a replay times nothing real, and cost comes from LiteLLM's price list, which changes with its version.
+**Not held at the first recording, and why.** No day and no week passes in the slice for either system. The pipeline's days fail the saturated-fat check most (17 of its 21 days), and 8 of the 21 fail only because a food in them, such as rohu or curry leaves, has no saturated-fat or fibre value in the food data, so the check cannot show the day is within its limit. The hard plan's days miss protein by design. A minimum of 0 checks nothing, so days and weeks get thresholds once those missing values are dealt with. Tokens, cost and time are not held: a replay times nothing real, and cost comes from LiteLLM's price list, which changes with its version.
 
 **Moving a threshold** happens in the PR whose change moves the number, with the reason in the PR. A change to anything the model is sent (a prompt, the catalogue, the food data, the portion fitting or a check, whose failures go back to the model in a repair) makes the replay miss, since the recording no longer stands for the code. That PR records the slice again with a key, which needs Varun's yes, and sets the thresholds from the new replay.
 
