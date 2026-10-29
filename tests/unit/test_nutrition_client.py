@@ -16,6 +16,7 @@ from meal_planner.nutrition import (
     NutritionClient,
     NutritionError,
     NutritionPort,
+    refusal,
     server_parameters,
 )
 
@@ -113,6 +114,15 @@ async def test_a_meal_error_says_which_item_failed() -> None:
 
     assert caught.value.item == 2
     assert caught.value.food_id == "egg"
+
+
+@pytest.mark.parametrize("food_id", ["a) b", "x): y", "(", ")"])
+def test_the_item_is_found_whatever_characters_the_food_id_has(food_id: str) -> None:
+    """A food id can hold any character, brackets included, so the item's place is read from the
+    number alone."""
+    error = refusal(f"item 2 ({food_id}): unknown food id '{food_id}'; search_food finds foods")
+
+    assert error.item == 1
 
 
 async def test_a_refusal_that_names_no_item_has_no_item_number() -> None:

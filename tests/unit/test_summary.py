@@ -298,42 +298,65 @@ async def test_the_item_refused_is_the_one_nutrition_mcp_names_when_a_food_is_li
     assert "item 2 (egg)" in problem["msg"]
 
 
-class RefusingEgg(ReaderNutrition):
-    """nutrition-mcp refusing the egg with an error that places the item as `item` says."""
+class Refusing(ReaderNutrition):
+    """nutrition-mcp refusing a meal with the error it is given."""
 
-    def __init__(self, food_id: str, item: int | None) -> None:
+    def __init__(self, error: NutritionError) -> None:
         super().__init__()
-        self.refusal = NutritionError("unknown unit 'cup' for egg", food_id, item=item)
+        self.error = error
 
     async def meal(self, items: list[MealItemIn]) -> MealResult:
-        raise self.refusal
+        raise self.error
+
+
+EGGS = LogItem(food_id="egg", amount=1, unit="piece")
+CHAPATI = LogItem(food_id="chapati", amount=1, unit="roti")
 
 
 @pytest.mark.parametrize(
-    ("food_id", "item", "placed"),
+    ("food_id", "item", "message", "placed"),
     [
-        # Not placed, placed outside the meal, or placed on a different food: the first item
-        # with the food that was refused is the best guess.
-        ("egg", None, 1),
-        ("egg", 7, 1),
-        ("egg", 0, 1),
-        # Placed on the food.
-        ("egg", 2, 2),
+        # The message names the item and the food sent at that place.
+        ("egg", 2, "item 3 (egg): unknown unit 'cup' for egg", 2),
+        # Not placed, placed outside the meal, placed on a different food or with a message that
+        # names another one: the first item with the food that was refused is the best guess.
+        ("egg", None, "unknown unit 'cup' for egg", 1),
+        ("egg", 7, "item 8 (egg): unknown unit 'cup' for egg", 1),
+        ("egg", 0, "item 1 (egg): unknown unit 'cup' for egg", 1),
+        ("egg", 2, "item 3 (chapati): unknown unit 'cup' for egg", 1),
         # A food that is not in the meal at all names no item.
-        ("ghost", None, None),
+        ("ghost", None, "unknown unit 'cup' for ghost", None),
     ],
 )
 async def test_an_error_that_places_the_item_badly_is_put_on_the_first_item_with_the_food(
-    food_id: str, item: int | None, placed: int | None
+    food_id: str, item: int | None, message: str, placed: int | None
 ) -> None:
-    eggs = LogItem(food_id="egg", amount=1, unit="piece")
-    items = [LogItem(food_id="chapati", amount=1, unit="roti"), eggs, eggs]
+    error = NutritionError(message, food_id, item=item)
 
     with pytest.raises(MealRefused) as err:
-        await meal_of(items, nutrition=RefusingEgg(food_id, item), catalogue=reader_catalogue())
+        await meal_of(
+            [CHAPATI, EGGS, EGGS], nutrition=Refusing(error), catalogue=reader_catalogue()
+        )
 
     assert err.value.item == placed
-    assert err.value.reason == "unknown unit 'cup' for egg"
+    assert err.value.reason == message
+
+
+@pytest.mark.parametrize("food_id", ["a) b", "x): y", "(", ")", "x (y)"])
+async def test_the_item_refused_is_found_whatever_characters_its_food_id_has(food_id: str) -> None:
+    """The id is the sender's and can hold any character, so it is read from the list sent and
+    not cut out of nutrition-mcp's message."""
+    bracketed = LogItem(food_id=food_id, amount=1, unit="g")
+
+    with pytest.raises(MealRefused) as err:
+        await meal_of(
+            [CHAPATI, bracketed, bracketed],
+            nutrition=ReaderNutrition(),
+            catalogue=reader_catalogue(),
+        )
+
+    assert err.value.item == 1
+    assert err.value.reason.startswith(f"item 2 ({food_id}): unknown food id '{food_id}'")
 
 
 @pytest.mark.parametrize(

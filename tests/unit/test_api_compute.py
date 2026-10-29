@@ -144,6 +144,24 @@ def test_a_unit_the_food_does_not_take_is_422_naming_the_item_and_the_units_that
     assert problem["msg"].endswith(f"valid units: {valid}")
 
 
+@pytest.mark.parametrize("food_id", ["a) b", "x): y", "(", ")"])
+def test_an_unknown_food_id_with_brackets_is_422_naming_the_item_and_logs_no_error(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str], food_id: str
+) -> None:
+    """The id is the sender's own and can hold any character. It is their mistake, not a failure
+    of nutrition-mcp, so it is a 422 and nothing is logged as an error."""
+    ghost = {"food_id": food_id, "amount": 1, "unit": "g"}
+
+    with serving_foods(tmp_path) as client:
+        response = client.post(COMPUTE, json={"items": [ROTIS, ghost]})
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "items", 1]
+    assert problem["msg"].startswith(f"item 2 ({food_id}): unknown food id")
+    assert [e for e in log_entries(capfd.readouterr().err) if e["level"] == "ERROR"] == []
+
+
 def test_the_item_named_is_the_one_refused_when_a_food_is_listed_twice(tmp_path: Path) -> None:
     with serving_foods(tmp_path) as client:
         response = client.post(COMPUTE, json={"items": [EGGS, EGGS | {"unit": "cup"}]})

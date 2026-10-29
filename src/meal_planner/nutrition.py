@@ -31,7 +31,11 @@ _SDK_PREFIX = re.compile(r"^Error executing tool \w+: ")
 # the units a food takes. The unit list ends at the next ";" or the end of the message. The
 # message also echoes the unit as it was typed, and typed text can say "valid units: " too, so the
 # list that counts is the last one: nutrition-mcp writes its own at the very end.
-_ITEM_FOOD = re.compile(r"^item (\d+) \(([^)]+)\):")
+# A food id can hold any character, ")" included, so the food is cut out of the message only as a
+# best guess; the item's number is always found. A caller that sent the meal knows which food it
+# sent at that place and checks the message against it (summary.py, `_refused_item`).
+_ITEM_NUMBER = re.compile(r"^item (\d+) \(")
+_ITEM_FOOD = re.compile(r"^item \d+ \(([^)]+)\):")
 _VALID_UNITS = re.compile(r"valid units: ([^;]+)")
 
 
@@ -75,13 +79,14 @@ def refusal(message: str, food_id: str | None = None) -> NutritionError:
     """
     named = _ITEM_FOOD.match(message)
     if food_id is None and named:
-        food_id = named.group(2)
+        food_id = named.group(1)
+    number = _ITEM_NUMBER.match(message)
     listed = _VALID_UNITS.findall(message)
     return NutritionError(
         message,
         food_id,
         listed[-1].split(", ") if listed else [],
-        item=int(named.group(1)) - 1 if named else None,
+        item=int(number.group(1)) - 1 if number else None,
     )
 
 

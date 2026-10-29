@@ -140,6 +140,22 @@ def test_unknown_food_id_422_names_entry(tmp_path: Path) -> None:
     assert problem["msg"].startswith("2026-10-27 lunch: item 2 (ghost): unknown food id 'ghost'")
 
 
+@pytest.mark.parametrize("food_id", ["a) b", "x): y", "(", ")"])
+def test_an_unknown_food_id_with_brackets_is_422_naming_the_item(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str], food_id: str
+) -> None:
+    log = body(entry(MON, "breakfast", "as_planned", food(), food(food_id, 50)))
+
+    with serving(tmp_path) as client:
+        response = client.post("/v1/summary", json=log)
+
+    assert response.status_code == 422
+    (problem,) = response.json()["detail"]
+    assert problem["loc"] == ["body", "log", "entries", 0, "items", 1]
+    assert problem["msg"].startswith(f"2026-10-26 breakfast: item 2 ({food_id}): unknown food id")
+    assert [e for e in log_entries(capfd.readouterr().err) if e["level"] == "ERROR"] == []
+
+
 def test_every_entry_nutrition_mcp_refuses_is_named(tmp_path: Path) -> None:
     log = body(
         entry(MON, "breakfast", "as_planned", food("ghost")),

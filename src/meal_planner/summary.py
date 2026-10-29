@@ -372,15 +372,32 @@ def _refusal(
     A unit it refused for a catalogue food lists the catalogue's measures too, as the reader
     does, since they work as well. nutrition-mcp ends its message with its own list.
     """
-    if exc.unreachable or exc.food_id is None:
+    if exc.unreachable:
+        return nutrition_unusable(exc)
+    at = _refused_item(items, exc)
+    food_id = items[at].food_id if at is not None else exc.food_id
+    if food_id is None:
         return nutrition_unusable(exc)
     reason = str(exc)
-    if exc.valid_units and exc.food_id in catalogue.items:
+    if exc.valid_units and food_id in catalogue.items:
         before, listed, _ = reason.rpartition("valid units: ")
-        reason = before + listed + ", ".join(catalogue.valid_units(exc.food_id))
-    # nutrition-mcp counts the item it failed on. Where it did not, the first item with that food
-    # is the best guess.
-    at = exc.item
-    if at is None or not 0 <= at < len(items) or items[at].food_id != exc.food_id:
-        at = next((n for n, item in enumerate(items) if item.food_id == exc.food_id), None)
+        reason = before + listed + ", ".join(catalogue.valid_units(food_id))
     return MealRefused(reason, at)
+
+
+def _refused_item(items: list[LogItem], exc: NutritionError) -> int | None:
+    """The place in `items` of the item nutrition-mcp refused, or None when it cannot be told.
+
+    nutrition-mcp counts the item it failed on and puts the food it was sent in front of its
+    message. That is trusted when the food is the one sent at that place, whatever characters the
+    id holds, since the message cannot be cut up to find it. Otherwise the first item with the
+    food the error names is the best guess.
+    """
+    at = exc.item
+    if (
+        at is not None
+        and 0 <= at < len(items)
+        and str(exc).startswith(f"item {at + 1} ({items[at].food_id}):")
+    ):
+        return at
+    return next((n for n, item in enumerate(items) if item.food_id == exc.food_id), None)
