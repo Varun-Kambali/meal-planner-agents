@@ -67,8 +67,8 @@ The newest full run (gemini-3.1-flash-lite, commit 50aab53) covered 20 synthetic
 
 | Measure | Baseline | This project |
 |---|---|---|
-| Recipes passing every hard check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
-| Recipes passing every hard check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
+| Recipes passing every recipe check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
+| Recipes passing every recipe check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
 | Days passing every check (share) | 2.1% (3 of 140) | 51.4% (72 of 140) |
 | Weeks where every recipe and day passes (share) | 0.0% (0 of 20) | 5.0% (1 of 20) |
 | Model calls per week (mean) | 1.0 | 12.6 |
