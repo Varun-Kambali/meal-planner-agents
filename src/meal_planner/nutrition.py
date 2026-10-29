@@ -27,11 +27,11 @@ CALL_TIMEOUT_S = 30.0
 # The SDK puts this in front of the message a tool raised, which is the text worth keeping.
 _SDK_PREFIX = re.compile(r"^Error executing tool \w+: ")
 # The two messages nutrition-mcp writes that hold what a caller can act on: "item 2 (toor_dal):
-# ..." names the meal item that failed, and "...; valid units: g, katori" lists the units a
-# food takes. The unit list ends at the next ";" or the end of the message. The message also echoes
-# the unit as it was typed, and typed text can say "valid units: " too, so the list that counts is
-# the last one: nutrition-mcp writes its own at the very end.
-_ITEM_FOOD = re.compile(r"^item \d+ \(([^)]+)\):")
+# ..." names the meal item that failed (counting from 1), and "...; valid units: g, katori" lists
+# the units a food takes. The unit list ends at the next ";" or the end of the message. The
+# message also echoes the unit as it was typed, and typed text can say "valid units: " too, so the
+# list that counts is the last one: nutrition-mcp writes its own at the very end.
+_ITEM_FOOD = re.compile(r"^item (\d+) \(([^)]+)\):")
 _VALID_UNITS = re.compile(r"valid units: ([^;]+)")
 
 
@@ -39,7 +39,9 @@ class NutritionError(Exception):
     """nutrition-mcp refused a call, could not be asked, or sent a result that could not be read.
 
     A refusal carries nutrition-mcp's own message, and `food_id` when one food is to blame; a
-    refusal whose message names no food has no `food_id`. `unreachable` is set only when
+    refusal whose message names no food has no `food_id`. A meal's message also names the item
+    that failed, and `item` is its place in the meal, counting from 0 (None when it names none).
+    `unreachable` is set only when
     nutrition-mcp could not be asked at all (the connection failed or timed out), which says
     nothing about the foods asked about. `unreadable` is set only when it answered with a result
     that could not be read. A refusal leaves both False.
@@ -51,12 +53,14 @@ class NutritionError(Exception):
         food_id: str | None = None,
         valid_units: list[str] | None = None,
         *,
+        item: int | None = None,
         unreachable: bool = False,
         unreadable: bool = False,
     ) -> None:
         super().__init__(message)
         self.food_id = food_id
         self.valid_units = valid_units or []
+        self.item = item
         self.unreachable = unreachable
         self.unreadable = unreadable
 
@@ -65,14 +69,20 @@ def refusal(message: str, food_id: str | None = None) -> NutritionError:
     """The error for a call nutrition-mcp refused, from the message it wrote.
 
     `food_id` is the food the call was about, when one food was asked about. A meal's message
-    names the item that failed instead, which is read from it. The units the message lists are
-    the food's valid units. Both the real client and the test fake build their errors here, so
-    they cannot read a message differently.
+    names the item that failed instead, and its place in the meal, which are read from it. The
+    units the message lists are the food's valid units. Both the real client and the test fake
+    build their errors here, so they cannot read a message differently.
     """
-    if food_id is None and (item := _ITEM_FOOD.match(message)):
-        food_id = item.group(1)
+    named = _ITEM_FOOD.match(message)
+    if food_id is None and named:
+        food_id = named.group(2)
     listed = _VALID_UNITS.findall(message)
-    return NutritionError(message, food_id, listed[-1].split(", ") if listed else [])
+    return NutritionError(
+        message,
+        food_id,
+        listed[-1].split(", ") if listed else [],
+        item=int(named.group(1)) - 1 if named else None,
+    )
 
 
 @runtime_checkable

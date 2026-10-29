@@ -184,6 +184,19 @@ class SummaryError(Exception):
         self.unavailable = unavailable
 
 
+class MealRefused(Exception):
+    """nutrition-mcp refused a food, an amount or a unit of a meal, which is the sender's to fix.
+
+    `reason` is nutrition-mcp's own message, with the units a person may give for the food, and
+    `item` is the place of the item to blame, counting from 0 (None when it cannot be told).
+    """
+
+    def __init__(self, reason: str, item: int | None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.item = item
+
+
 def log_problems(rules: PlanRules, log: MealLog) -> list[Problem]:
     """A problem for each entry whose slot the plan does not have.
 
@@ -232,11 +245,16 @@ async def summarise(
         # A skipped meal has no foods to add up; it is not a meal with numbers missing.
         if entry.status == "skipped":
             continue
-        items = [_to_send(item, catalogue) for item in entry.items]
         try:
-            meals[index] = await nutrition.meal(items)
-        except NutritionError as exc:
-            refused.append(_refusal(index, entry, exc, catalogue))
+            meals[index] = await meal_of(entry.items, nutrition=nutrition, catalogue=catalogue)
+        except MealRefused as exc:
+            loc: list[str | int] = ["entries", index, "items"]
+            refused.append(
+                {
+                    "loc": loc if exc.item is None else [*loc, exc.item],
+                    "msg": f"{entry.date.isoformat()} {entry.slot_id}: {exc.reason}",
+                }
+            )
     if refused:
         raise LogRejected(refused)
 
@@ -319,26 +337,50 @@ def _targets(day_type: DayType) -> dict[str, float]:
     return targets | {target.nutrient: target.value for target in day_type.extra}
 
 
-def _refusal(index: int, entry: LogEntry, exc: NutritionError, catalogue: Catalogue) -> Problem:
-    """The problem for a meal nutrition-mcp refused over one of its foods, which is the log's to
-    fix. Any other failure is nutrition-mcp's, and ends the summary.
+async def meal_of(
+    items: list[LogItem], *, nutrition: NutritionPort, catalogue: Catalogue
+) -> MealResult:
+    """nutrition-mcp's numbers for the foods of one meal, each unit read as the reader reads it.
+
+    This is what the summary adds up a log with, so a meal has the same numbers wherever it is
+    worked out. Raises MealRefused for a food, amount or unit nutrition-mcp refuses, and
+    SummaryError when nutrition-mcp cannot be used. Neither message holds anything from `items`
+    except what nutrition-mcp says about the food it refused.
+    """
+    try:
+        return await nutrition.meal([_to_send(item, catalogue) for item in items])
+    except NutritionError as exc:
+        raise _refusal(items, exc, catalogue) from exc
+
+
+def nutrition_unusable(exc: NutritionError) -> SummaryError:
+    """The error for a nutrition-mcp that could not be reached, or sent an answer that no one
+    can do anything with. It says the step and holds nothing the caller sent."""
+    if exc.unreachable:
+        message = "nutrition-mcp could not be reached (step: nutrition)"
+        return SummaryError(message, unavailable=True)
+    message = "nutrition-mcp sent an answer that could not be used (step: nutrition)"
+    return SummaryError(message, unavailable=False)
+
+
+def _refusal(
+    items: list[LogItem], exc: NutritionError, catalogue: Catalogue
+) -> MealRefused | SummaryError:
+    """MealRefused for a meal nutrition-mcp refused over one of its foods, which the sender is to
+    fix. Any other failure is nutrition-mcp's, and is a SummaryError.
 
     A unit it refused for a catalogue food lists the catalogue's measures too, as the reader
     does, since they work as well. nutrition-mcp ends its message with its own list.
     """
-    if exc.unreachable:
-        message = "nutrition-mcp could not be reached (step: nutrition)"
-        raise SummaryError(message, unavailable=True) from exc
-    if exc.food_id is None:
-        message = "nutrition-mcp sent an answer that could not be used (step: nutrition)"
-        raise SummaryError(message, unavailable=False) from exc
+    if exc.unreachable or exc.food_id is None:
+        return nutrition_unusable(exc)
     reason = str(exc)
     if exc.valid_units and exc.food_id in catalogue.items:
         before, listed, _ = reason.rpartition("valid units: ")
         reason = before + listed + ", ".join(catalogue.valid_units(exc.food_id))
-    at = next((n for n, item in enumerate(entry.items) if item.food_id == exc.food_id), None)
-    loc: list[str | int] = ["entries", index, "items"]
-    return {
-        "loc": loc if at is None else [*loc, at],
-        "msg": f"{entry.date.isoformat()} {entry.slot_id}: {reason}",
-    }
+    # nutrition-mcp counts the item it failed on. Where it did not, the first item with that food
+    # is the best guess.
+    at = exc.item
+    if at is None or not 0 <= at < len(items) or items[at].food_id != exc.food_id:
+        at = next((n for n, item in enumerate(items) if item.food_id == exc.food_id), None)
+    return MealRefused(reason, at)

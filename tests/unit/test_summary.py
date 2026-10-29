@@ -281,6 +281,20 @@ async def test_a_unit_nobody_has_is_refused_with_the_catalogues_measures_as_vali
     )
 
 
+async def test_the_item_refused_is_the_one_nutrition_mcp_names_when_a_food_is_listed_twice() -> (
+    None
+):
+    eggs = {"food_id": "egg", "amount": 2, "unit": "piece"}
+    log = log_of(entry(MON, "breakfast", "as_planned", eggs, eggs | {"unit": "cup"}))
+
+    with pytest.raises(LogRejected) as err:
+        await summary_of(log, nutrition=ReaderNutrition(), catalogue=reader_catalogue())
+
+    (problem,) = err.value.problems
+    assert problem["loc"] == ["entries", 0, "items", 1]
+    assert "item 2 (egg)" in problem["msg"]
+
+
 @pytest.mark.parametrize(
     ("food", "food_id"),
     [

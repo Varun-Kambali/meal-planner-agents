@@ -103,6 +103,27 @@ async def test_meal_error_names_the_failing_food() -> None:
     assert caught.value.unreadable is False
 
 
+async def test_a_meal_error_says_which_item_failed() -> None:
+    """The message counts items from 1; the error counts them from 0, as a list does."""
+    message = "item 3 (egg): unknown unit 'cup' for egg; valid units: g"
+    client = NutritionClient(StandInSession(tool_error(message)))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.meal([MealItemIn(food_id="egg", amount=1, unit="g")] * 3)
+
+    assert caught.value.item == 2
+    assert caught.value.food_id == "egg"
+
+
+async def test_a_refusal_that_names_no_item_has_no_item_number() -> None:
+    client = NutritionClient(StandInSession(tool_error("unknown unit 'x' for rajma")))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.nutrition("rajma", 1, "x")
+
+    assert caught.value.item is None
+
+
 async def test_error_without_text_still_raises() -> None:
     client = NutritionClient(StandInSession(CallToolResult(content=[], is_error=True)))
 
