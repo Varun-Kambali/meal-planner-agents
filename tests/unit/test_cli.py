@@ -21,6 +21,7 @@ from week_helpers import (
     write_catalogue_file,
 )
 
+from meal_planner import tracing
 from meal_planner.cli import main, progress_line
 from meal_planner.config import Settings
 from meal_planner.llm import RATE_LIMITED, FakeModel, ModelReply
@@ -549,6 +550,30 @@ def test_summary_needs_no_model_key(
 
     captured = capsys.readouterr()
     assert code == 0
+    assert captured.err == ""
+    assert WeekSummary.model_validate_json(captured.out).planned_meals == 4
+
+
+def test_a_summary_is_not_traced_even_with_the_langfuse_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It makes no model call, so there is nothing to trace: no client is made and none is logged.
+    made: list[dict[str, Any]] = []
+
+    def client(**values: Any) -> None:
+        made.append(values)
+        raise RuntimeError("no Langfuse client in this test")
+
+    monkeypatch.setattr(tracing, "Langfuse", client)
+    log = log_file(tmp_path, log_entry(MON, "lunch"))
+
+    code = summary_cli(
+        tmp_path, log, langfuse_public_key="pk-lf-cli", langfuse_secret_key="sk-lf-cli"
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert made == []
     assert captured.err == ""
     assert WeekSummary.model_validate_json(captured.out).planned_meals == 4
 

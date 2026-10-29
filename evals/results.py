@@ -24,7 +24,7 @@ from records import ReadingCase, RecipeCase, reading_case_id, recipe_case_id
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 SUMMARY_NAME = "summary.md"
-HEADLINE = "Recipes passing every hard check (share)"
+HEADLINE = "Recipes passing every recipe check (share)"
 
 
 class Switches(BaseModel):
@@ -190,7 +190,7 @@ Row = tuple[str, Callable[[Any], str]]
 RECIPE_ROWS: list[Row] = [
     (HEADLINE, lambda m: _counted(m.recipes_passing, m.recipes_asked)),
     (
-        "Recipes passing every hard check at their first attempt (share)",
+        "Recipes passing every recipe check at their first attempt (share)",
         lambda m: _counted(m.first_attempt_passing, m.recipes_asked),
     ),
     (

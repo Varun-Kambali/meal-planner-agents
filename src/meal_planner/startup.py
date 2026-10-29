@@ -62,25 +62,29 @@ async def start_services(
     model: ModelPort | None = None,
     nutrition: NutritionPort | None = None,
     needs_model: bool = True,
+    trace: bool = True,
 ) -> AsyncIterator[Services]:
     """Check the environment, start nutrition-mcp and load the catalogue, until the block ends.
 
     A `model` or `nutrition` passed in is used as it is: the model's key is not looked for, and
     nutrition-mcp is not started. Tests pass fakes this way. `needs_model` is False for work that
     makes no model call, such as adding up a meal log, and then the key is not looked for either.
+    `trace` is False for work that is never traced, such as adding up a meal log or an eval run:
+    then no Langfuse client is made, the model is not wrapped and nothing is logged about
+    tracing, even with the keys set.
 
-    With both Langfuse keys set, the model's calls are traced and the services carry the tracer;
-    when the block ends, by any path, every span still held is sent before this returns. The CLI
-    leaves the block before it exits and the API when it shuts down. Sending waits on Langfuse,
-    for up to the exporter's timeout when it is out of reach, so it runs in a worker thread and
-    the event loop goes on meanwhile.
+    With both Langfuse keys set and `trace` on, the model's calls are traced and the services
+    carry the tracer; when the block ends, by any path, every span still held is sent before this
+    returns. The CLI leaves the block before it exits and the API when it shuts down. Sending
+    waits on Langfuse, for up to the exporter's timeout when it is out of reach, so it runs in a
+    worker thread and the event loop goes on meanwhile.
     """
     check_tracing_off()
     if model is None:
         if needs_model:
             check_model_key(settings.model)
         model = LiteLLMModel(settings.model)
-    tracer = setup_tracing(settings)
+    tracer = setup_tracing(settings) if trace else None
     if tracer is not None:
         model = TracedModel(model)
     try:

@@ -21,12 +21,12 @@ Every feature, with what it must do, is in [docs/requirements.md](docs/requireme
 
 The newest full run of `make eval`: model gemini/gemini-3.1-flash-lite, commit 50aab53, dataset 4a35ea1576a9, started 2026-10-27. Every number below is in [`evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_50aab53.json`](evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_50aab53.json), and [`evals/results/summary.md`](evals/results/summary.md) has these tables with the checks that failed or could not be settled.
 
-**Recipes.** Each of 20 synthetic plans gets a week from the agent pipeline and from a baseline that writes the whole week in one model call, with the same plan lines and ingredient list and no portion fitting or repair. The same code checks both.
+**Recipes.** Each of 20 synthetic plans gets a week from the agent pipeline and from a baseline that writes the whole week in one model call, with the same plan lines and ingredient list and no portion fitting or repair. The same code checks both. A recipe's own checks are counted on the recipe, and a day's checks on the day.
 
 | Measure | Baseline | This project |
 |---|---|---|
-| Recipes passing every hard check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
-| Recipes passing every hard check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
+| Recipes passing every recipe check (share) | 8.3% (46 of 553) | 86.6% (479 of 553) |
+| Recipes passing every recipe check at their first attempt (share) | 8.3% (46 of 553) | 46.7% (258 of 553) |
 | Recipes passing the variety checks (share) | 65.1% (360 of 553) | 94.4% (522 of 553) |
 | Days passing every check (share) | 2.1% (3 of 140) | 51.4% (72 of 140) |
 | Days the checks could not settle (share) | 1.4% (2 of 140) | 20.0% (28 of 140) |
@@ -64,7 +64,7 @@ CI replays a recorded slice of three plans and ten meals on every PR, with no ke
 
 ## Status
 
-Milestones 1 to 3 of 5 are built: the foundations, the recipe pipeline, and tracking (reading a typed meal, and day and week totals). They run from the command line and from an HTTP API on your own machine. Milestone 4 is under way: the evals are built and their results are above, and tracing to Langfuse is built. The browser app and a deployed demo come with milestone 5.
+Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. The browser app and a deployed demo come with milestone 5.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
@@ -81,7 +81,7 @@ uv run meal-planner summary tests/fixtures/plans/office_weekday.json tests/fixtu
 make run   # the API on 127.0.0.1:8000
 ```
 
-To trace `week`, `read` and the API in [Langfuse](https://langfuse.com), set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env`. Each run's steps, model calls, tokens, cost and failed checks are sent with the plan's words and the typed text masked; without the keys nothing is sent ([0010](docs/decisions/0010-masked-langfuse-tracing.md)).
+To trace `week`, `read` and the API in [Langfuse](https://langfuse.com), set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env`. Each run's steps, model calls, tokens, cost and failed checks are sent with the plan's words and the typed text masked; without the keys nothing is sent ([0010](docs/decisions/0010-masked-langfuse-tracing.md)). [`docs/media/trace.png`](docs/media/trace.png) shows a traced week and meal read in Langfuse.
 
 `week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The log in the example is made up, for the same plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Details are in [docs/architecture.md](docs/architecture.md).
 

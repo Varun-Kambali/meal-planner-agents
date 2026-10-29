@@ -72,14 +72,14 @@ v1 is done when a person could rely on it: every MVP box below is ticked, it run
 
 ### Observability
 
-- [ ] **Langfuse traces** for every run: each step, the model, tokens, cost, latency, and which checks passed or failed. The user's rules and typed text are masked in traces. Tracing is off unless its keys are set.
+- [x] **Langfuse traces** for every run: each step, the model, tokens, cost, latency, and which checks passed or failed. The user's rules and typed text are masked in traces. Tracing is off unless its keys are set.
 
 ### Evaluation
 
-- [ ] **Recipe eval:** 20 synthetic plans in `evals/datasets/plans/`, shaped like real plans with no personal data. The full pipeline against a single-call baseline (one model call with the same rules and catalogue, no checks and no repair), both scored by the same code checks. Measures: the share of recipes that pass every hard check (the headline), the share of weeks where every recipe and day passes, the variety pass rate, the pass rate before and after repair, tokens and cost per week, and p95 time per week.
-- [ ] **Reading eval:** about 50 typed meals written by hand and labelled with their foods and grams, including foods the data doesn't have. Measures: food match (precision and recall), calorie error against the label, and the share of not-in-data foods reported missing.
-- [ ] **Smoke eval in CI:** a fixed slice replayed from recorded model responses, so CI costs nothing and gives the same result every time, with thresholds in `evals/thresholds.toml` that fail the build on a regression.
-- [ ] **Full runs on demand** (`make eval`), with results committed with the date, model, commit, dataset version and cost.
+- [x] **Recipe eval:** 20 synthetic plans in `evals/datasets/plans/`, shaped like real plans with no personal data. The full pipeline against a single-call baseline (one model call with the same rules and catalogue, no checks and no repair), both scored by the same code checks. Measures: the share of recipes that pass every recipe check (the headline; a day's checks are measured on the days' own rows), the share of weeks where every recipe and day passes, the variety pass rate, the pass rate before and after repair, tokens and cost per week, and p95 time per week.
+- [x] **Reading eval:** about 50 typed meals written by hand and labelled with their foods and grams, including foods the data doesn't have. Measures: food match (precision and recall), calorie error against the label, and the share of not-in-data foods reported missing.
+- [x] **Smoke eval in CI:** a fixed slice replayed from recorded model responses, so CI costs nothing and gives the same result every time, with thresholds in `evals/thresholds.toml` that fail the build on a regression.
+- [x] **Full runs on demand** (`make eval`), with results committed with the date, model, commit, dataset version and cost.
 
 ### Frontend
 
@@ -129,7 +129,7 @@ v1 is done when a person could rely on it: every MVP box below is ticked, it run
 
 ## Success metrics
 
-1. **Headline:** the share of recipes that pass every hard check, pipeline against single call, over the 20 synthetic plans.
+1. **Headline:** the share of recipes that pass every recipe check, pipeline against single call, over the 20 synthetic plans. Days are measured on their own rows.
 2. The variety pass rate, and the pass rate before and after repair.
 3. Reading accuracy on typed meals.
 4. Cost and p95 time per week.

@@ -159,7 +159,10 @@ def test_the_summary_shows_shares_with_their_counts(tmp_path: Path) -> None:
 
     rows = {row[0]: row[1:] for row in table_rows(build_summary(tmp_path) or "")}
 
-    assert rows["Recipes passing every hard check (share)"] == ["57.1% (4 of 7)", "57.1% (4 of 7)"]
+    assert rows["Recipes passing every recipe check (share)"] == [
+        "57.1% (4 of 7)",
+        "57.1% (4 of 7)",
+    ]
     assert rows["Weeks where every recipe and day passes (share)"] == [
         "33.3% (1 of 3)",
         "33.3% (1 of 3)",
@@ -179,8 +182,8 @@ def test_the_recipe_rows_keep_their_order_with_the_headline_first(tmp_path: Path
 
     assert [row[0] for row in rows[:8]] == [
         "Measure",
-        "Recipes passing every hard check (share)",
-        "Recipes passing every hard check at their first attempt (share)",
+        "Recipes passing every recipe check (share)",
+        "Recipes passing every recipe check at their first attempt (share)",
         "Recipes passing the variety checks (share)",
         "Days passing every check (share)",
         "Days the checks could not settle (share)",

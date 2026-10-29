@@ -588,6 +588,33 @@ async def test_services_without_keys_have_no_tracer_and_the_model_as_given(
         assert services.model is model
 
 
+async def test_services_started_untraced_make_no_client_even_with_keys(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    made: list[dict[str, Any]] = []
+
+    def client(**values: Any) -> None:
+        made.append(values)
+        raise RuntimeError("no Langfuse client in this test")
+
+    monkeypatch.setattr(tracing, "Langfuse", client)
+    settings = Settings(**keyed(catalogue_path=write_catalogue_file(tmp_path)))
+    model = model_for()
+
+    async with start_services(
+        settings, model=model, nutrition=SpyNutrition(), trace=False
+    ) as services:
+        assert services.tracer is None
+        assert services.model is model
+
+    assert made == []
+    assert "tracing_" not in capsys.readouterr().err
+    # The same settings with tracing left on do ask for a client, so the keys above are enough.
+    async with start_services(settings, model=model, nutrition=SpyNutrition()):
+        pass
+    assert len(made) == 1
+
+
 async def test_services_shut_the_tracer_down_when_they_stop(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

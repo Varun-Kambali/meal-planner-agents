@@ -112,7 +112,15 @@ def passes_first_time(recipe: RecipeOutcome) -> bool:
 
 
 def passes_variety(recipe: RecipeOutcome) -> bool:
-    """Written, and no variety failure at the end."""
+    """Written, and no variety failure at the end.
+
+    A clash between two recipes fails only the one the blame rule picks, so the count depends on
+    that pick, and the two systems pick differently. In the pipeline's last round `check_variety`
+    prefers a recipe the run may rewrite, then the one written in the latest round, then the
+    later day; `evaluate_week`, which scores the baseline, treats every recipe as new, so the
+    later day takes it. One recipe that clashes with two others can count once for the pipeline
+    and twice for the baseline.
+    """
     return recipe.written and not any(f.check in VARIETY_CHECKS for f in recipe.failures)
 
 
