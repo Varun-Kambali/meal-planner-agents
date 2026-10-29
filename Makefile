@@ -13,8 +13,9 @@ lint:
 	uv run ruff format --check .
 	uv run mypy
 
+# The coverage gate measures evals/ as well as the app, since it computes the published numbers.
 test:
-	uv run pytest --cov=src --cov-fail-under=$(COV_MIN)
+	uv run pytest --cov=src --cov=evals --cov-fail-under=$(COV_MIN)
 
 foods:
 	uv run $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE)) --group build-data python scripts/build_foods.py
