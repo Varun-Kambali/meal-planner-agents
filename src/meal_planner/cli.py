@@ -110,14 +110,16 @@ async def _with_services[T](
     work: Callable[[Services], Awaitable[T | int]],
     *,
     needs_model: bool = True,
+    trace: bool = True,
 ) -> T | int:
     """Start the services, run `work` with them, and turn a failure into an exit code.
 
-    `needs_model` is False for work that makes no model call, which then needs no model key.
+    `needs_model` is False for work that makes no model call, which then needs no model key, and
+    `trace` False for work that is never traced, which then makes no Langfuse client.
     """
     try:
         async with start_services(
-            settings, model=model, nutrition=nutrition, needs_model=needs_model
+            settings, model=model, nutrition=nutrition, needs_model=needs_model, trace=trace
         ) as services:
             return await work(services)
     except StartupError as exc:
@@ -289,8 +291,10 @@ def _summary(
                 model,
                 nutrition,
                 lambda services: _summarise_log(rules, log, log_path, settings, services),
-                # Adding up a log calls no model, so it runs without the model's key.
+                # Adding up a log calls no model, so it runs without the model's key, and there is
+                # nothing to trace.
                 needs_model=False,
+                trace=False,
             )
         )
     except KeyboardInterrupt:

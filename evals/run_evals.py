@@ -330,7 +330,11 @@ def _run(
     async def work() -> str | None:
         """Run the cases; the reason the run stopped early, or None when it finished. The stop is
         caught inside the services' block, whose task groups would wrap it in a group."""
-        async with start_services(settings, model=inner, nutrition=nutrition) as services:
+        # An eval run is never traced (docs/decisions/0010), so no Langfuse client is made even
+        # when make eval reads the keys from .env.
+        async with start_services(
+            settings, model=inner, nutrition=nutrition, trace=False
+        ) as services:
             try:
                 await run_cases(
                     selection,

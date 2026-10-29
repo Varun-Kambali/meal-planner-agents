@@ -31,6 +31,7 @@ from results import (
 )
 from run_evals import main
 
+from meal_planner import tracing
 from meal_planner.config import REPO_ROOT, Settings
 
 
@@ -464,6 +465,28 @@ def test_a_missing_key_is_named_before_any_case_runs(
     assert code == 1
     assert "GEMINI_API_KEY" in capsys.readouterr().err
     assert not (tmp_path / "runs").exists()
+
+
+def test_an_eval_run_is_not_traced_even_with_the_langfuse_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    made: list[dict[str, Any]] = []
+
+    def client(**values: Any) -> None:
+        made.append(values)
+        raise RuntimeError("no Langfuse client in this test")
+
+    monkeypatch.setattr(tracing, "Langfuse", client)
+
+    code = main(
+        ["--suite", "reading", "--only", "m28", "--out", str(tmp_path)],
+        settings=Settings(langfuse_public_key="pk-lf-eval", langfuse_secret_key="sk-lf-eval"),
+        model=ScriptedModel(),
+    )
+
+    assert code == 0
+    assert made == []
+    assert "tracing_" not in capsys.readouterr().err
 
 
 def test_a_catalogue_that_cannot_be_loaded_is_a_startup_error(
