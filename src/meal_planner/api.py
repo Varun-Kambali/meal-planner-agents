@@ -19,6 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
+from nutrition_mcp.schemas import MealResult
 from pydantic import BaseModel, ConfigDict, Field
 
 from meal_planner.catalogue import Category
@@ -45,7 +46,17 @@ from meal_planner.reader import ReadError, ReadResult, read_meal
 from meal_planner.recipes import CheckedRecipe, DraftRecipe
 from meal_planner.rules import Allergen, DayKey, Diet, PlanRules, Slug, expand
 from meal_planner.startup import Services, start_services
-from meal_planner.summary import LogRejected, MealLog, SummaryError, WeekSummary, summarise
+from meal_planner.summary import (
+    MAX_FOODS,
+    LogItem,
+    LogRejected,
+    MealLog,
+    MealRefused,
+    SummaryError,
+    WeekSummary,
+    meal_of,
+    summarise,
+)
 from meal_planner.week import replace_recipe, run_week, with_numbers
 from meal_planner.week_events import WeekDone, WeekEvent, WeekResult
 
@@ -55,6 +66,7 @@ REPLACE_PATH = "/v1/week/replace"
 READ_PATH = "/v1/log/read"
 SUMMARY_PATH = "/v1/summary"
 SEARCH_PATH = "/v1/foods/search"
+COMPUTE_PATH = "/v1/log/compute"
 # A week has a recipe for each of 7 days and each slot, and a plan has at most 8 slots.
 MAX_WEEK_RECIPES = 7 * 8
 # The most times one recipe is tried: the writing, then `max_repair_attempts` repairs, which is 3
@@ -81,6 +93,12 @@ class ReadRequest(_Body):
 class SummaryRequest(_Body):
     rules: PlanRules
     log: MealLog
+
+
+class ComputeRequest(_Body):
+    """The foods of one meal as the log holds them: ids, amounts and units, and no number."""
+
+    items: list[LogItem] = Field(min_length=1, max_length=MAX_FOODS)
 
 
 class ReplaceEntry(_Body):
@@ -450,6 +468,22 @@ async def search_foods(
         )
     except SummaryError as exc:
         raise _nutrition_failed("food_search", exc) from exc
+
+
+@router.post(COMPUTE_PATH, response_model=MealResult)
+async def compute_foods(
+    body: ComputeRequest, services: Annotated[Services, Depends(_services)]
+) -> MealResult:
+    """The numbers of each food of a meal and of the meal, worked out by nutrition-mcp."""
+    try:
+        return await meal_of(body.items, nutrition=services.nutrition, catalogue=services.catalogue)
+    except MealRefused as exc:
+        # The item is named by its place in the list, and the message is nutrition-mcp's own.
+        loc: list[str | int] = ["body", "items"]
+        problem: Problem = {"loc": loc if exc.item is None else [*loc, exc.item], "msg": exc.reason}
+        raise _invalid([problem]) from exc
+    except SummaryError as exc:
+        raise _nutrition_failed("compute", exc) from exc
 
 
 def create_app(
