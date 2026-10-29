@@ -29,4 +29,6 @@ Mapping keys are kept, so no caller may pass a mapping keyed by what the user wr
 
 A new graph node is traced only when it is added through `_traced` in `week.py`; a new model task is traced by the model wrapper with no more code. Spans other libraries make are never sent, and turning one on would mean changing the filter and showing that what it sends is masked.
 
-The eval runner passes no tracer, so evals send no trace even with keys set. A screenshot of a real trace (`docs/media/trace.png`) waits for the first run with a Langfuse project's keys.
+`meal-planner summary` and the eval runner start with tracing off, so they make no Langfuse client even with keys set. The first run with keys, a week and a meal read on 2026-10-29, was read back from Langfuse: the plan's words and the typed text arrived as `[masked]`, and the only plan strings left were food ids and nutrient field names. [`docs/media/trace.png`](../media/trace.png) shows its observations in Langfuse.
+
+The same scope holds for the public demo: traces keep the plan's targets and shares, its slot and day type ids, and the food ids and grams a meal was read into, and mask only words. The demo's privacy note says so.

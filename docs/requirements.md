@@ -72,7 +72,7 @@ v1 is done when a person could rely on it: every MVP box below is ticked, it run
 
 ### Observability
 
-- [ ] **Langfuse traces** for every run: each step, the model, tokens, cost, latency, and which checks passed or failed. The user's rules and typed text are masked in traces. Tracing is off unless its keys are set.
+- [x] **Langfuse traces** for every run: each step, the model, tokens, cost, latency, and which checks passed or failed. The user's rules and typed text are masked in traces. Tracing is off unless its keys are set.
 
 ### Evaluation
 
