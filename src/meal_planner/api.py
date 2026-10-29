@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from meal_planner.catalogue import Category
 from meal_planner.config import Settings, get_settings
+from meal_planner.foods import DEFAULT_LIMIT, MAX_LIMIT, FoodOption, food_options
 from meal_planner.llm import ModelPort
 from meal_planner.log import get_logger
 from meal_planner.middleware import (
@@ -33,7 +34,13 @@ from meal_planner.middleware import (
     RequestContext,
 )
 from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.problems import Problem, meal_text_problems, problems_from, unknown_foods
+from meal_planner.problems import (
+    Problem,
+    food_query_problems,
+    meal_text_problems,
+    problems_from,
+    unknown_foods,
+)
 from meal_planner.reader import ReadError, ReadResult, read_meal
 from meal_planner.recipes import CheckedRecipe, DraftRecipe
 from meal_planner.rules import Allergen, DayKey, Diet, PlanRules, Slug, expand
@@ -47,6 +54,7 @@ logger = get_logger(__name__)
 REPLACE_PATH = "/v1/week/replace"
 READ_PATH = "/v1/log/read"
 SUMMARY_PATH = "/v1/summary"
+SEARCH_PATH = "/v1/foods/search"
 # A week has a recipe for each of 7 days and each slot, and a plan has at most 8 slots.
 MAX_WEEK_RECIPES = 7 * 8
 # The most times one recipe is tried: the writing, then `max_repair_attempts` repairs, which is 3
@@ -237,6 +245,22 @@ async def _checked_text(
     return body.text
 
 
+async def _checked_query(q: Annotated[str, Query()]) -> str:
+    """The food search, once it is known to be neither blank nor longer than nutrition-mcp
+    takes, without the spaces around it."""
+    problems = food_query_problems(q)
+    if problems:
+        raise _invalid(problems)
+    return q.strip()
+
+
+def _nutrition_failed(task: str, exc: SummaryError) -> HTTPException:
+    """The refusal for a nutrition-mcp that could not be used. The message names the step and
+    holds nothing the caller sent, and the log line holds only the error's class."""
+    logger.error(f"{task}_failed", extra={"task": task, "error_type": type(exc).__name__})
+    return HTTPException(status_code=503 if exc.unavailable else 502, detail=str(exc))
+
+
 async def _cleanup() -> AsyncIterator[AsyncExitStack]:
     """An exit stack that unwinds once the response is over, however it ended."""
     async with AsyncExitStack() as stack:
@@ -410,9 +434,22 @@ async def summarise_log(
         ]
         raise _invalid(problems) from exc
     except SummaryError as exc:
-        # The message names the step and holds nothing from the log.
-        logger.error("summary_failed", extra={"task": "summary", "error_type": type(exc).__name__})
-        raise HTTPException(status_code=503 if exc.unavailable else 502, detail=str(exc)) from exc
+        raise _nutrition_failed("summary", exc) from exc
+
+
+@router.get(SEARCH_PATH, response_model=list[FoodOption])
+async def search_foods(
+    q: Annotated[str, Depends(_checked_query)],
+    services: Annotated[Services, Depends(_services)],
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+) -> list[FoodOption]:
+    """The foods nutrition-mcp has under a name, with the units an amount of each can use."""
+    try:
+        return await food_options(
+            q, limit, nutrition=services.nutrition, catalogue=services.catalogue
+        )
+    except SummaryError as exc:
+        raise _nutrition_failed("food_search", exc) from exc
 
 
 def create_app(
