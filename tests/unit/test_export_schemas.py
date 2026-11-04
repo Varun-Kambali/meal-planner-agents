@@ -6,7 +6,11 @@ import json
 import pytest
 from export_schemas import SCHEMAS_DIR, schema_texts
 
+from meal_planner.summary import Export
 from meal_planner.week_events import StreamError
+
+# The export file the frontend's tests load, written by the API with the test fakes.
+FRONTEND_SAMPLE = SCHEMAS_DIR.parent / "frontend" / "src" / "test" / "export-sample.json"
 
 API_SCHEMAS = [
     "api/catalogue.json",
@@ -44,6 +48,12 @@ def test_the_export_schema_describes_a_file() -> None:
     assert set(schema["required"]) == {"version", "rules", "week", "log"}
     assert schema["properties"]["version"]["const"] == 1
     assert {"PlanRules", "MealLog", "LogEntry", "LogItem", "WeekResult"} <= set(schema["$defs"])
+
+
+def test_the_frontend_sample_export_is_a_file_the_server_accepts() -> None:
+    """The browser's storage tests start from this file and change one thing at a time, so it
+    has to be a file the server accepts as it is."""
+    Export.model_validate_json(FRONTEND_SAMPLE.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize("file_name", API_SCHEMAS)
