@@ -181,7 +181,9 @@ export async function* serverSentEvents(
       if (done) return
     }
   } finally {
-    reader.releaseLock()
+    // Stopping early (the week has arrived, or the caller stopped reading) closes the
+    // connection, so the server cancels a run that no one is reading.
+    await reader.cancel().catch(() => undefined)
   }
 }
 

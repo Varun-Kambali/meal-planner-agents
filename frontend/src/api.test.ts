@@ -151,6 +151,41 @@ describe('streamWeek', () => {
     expect(result).toEqual(week)
   })
 
+  it('closes the connection once the week is done, so nothing is left open', async () => {
+    const cancel = vi.fn<(reason: unknown) => void>()
+    const encoder = new TextEncoder()
+    const open = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(message(started) + message(done)))
+        // The server has not closed the stream yet.
+      },
+      cancel,
+    })
+    serve(() => new Response(open, { status: 200 }))
+
+    await expect(streamWeek(rules, () => {})).resolves.toEqual(week)
+    expect(cancel).toHaveBeenCalledOnce()
+  })
+
+  it('closes the connection when the callback fails, so the server stops the run', async () => {
+    const cancel = vi.fn<(reason: unknown) => void>()
+    const encoder = new TextEncoder()
+    const open = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(message(started)))
+      },
+      cancel,
+    })
+    serve(() => new Response(open, { status: 200 }))
+
+    await expect(
+      streamWeek(rules, () => {
+        throw new Error('the screen went away')
+      }),
+    ).rejects.toThrow('the screen went away')
+    expect(cancel).toHaveBeenCalledOnce()
+  })
+
   it('rejects with the step when the run stops after the stream started', async () => {
     const error: StreamEvent = {
       kind: 'error',
