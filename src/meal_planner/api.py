@@ -19,10 +19,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from pydantic import BaseModel, ConfigDict, Field
+from nutrition_mcp.schemas import MealResult
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 
 from meal_planner.catalogue import Category
 from meal_planner.config import Settings, get_settings
+from meal_planner.foods import DEFAULT_LIMIT, MAX_LIMIT, FoodOption, food_options
 from meal_planner.llm import ModelPort
 from meal_planner.log import get_logger
 from meal_planner.middleware import (
@@ -32,13 +35,29 @@ from meal_planner.middleware import (
     RateLimiter,
     RequestContext,
 )
-from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.problems import Problem, meal_text_problems, problems_from, unknown_foods
+from meal_planner.nutrition import NutritionError, NutritionPort, NutritionUnusable
+from meal_planner.problems import (
+    Problem,
+    food_query_problem,
+    meal_text_problems,
+    problems_from,
+    unknown_foods,
+)
 from meal_planner.reader import ReadError, ReadResult, read_meal
 from meal_planner.recipes import CheckedRecipe, DraftRecipe
 from meal_planner.rules import Allergen, DayKey, Diet, PlanRules, Slug, expand
 from meal_planner.startup import Services, start_services
-from meal_planner.summary import LogRejected, MealLog, SummaryError, WeekSummary, summarise
+from meal_planner.summary import (
+    MAX_FOODS,
+    LogItem,
+    LogRejected,
+    MealLog,
+    MealRefused,
+    SummaryError,
+    WeekSummary,
+    meal_of,
+    summarise,
+)
 from meal_planner.week import replace_recipe, run_week, with_numbers
 from meal_planner.week_events import WeekDone, WeekEvent, WeekResult
 
@@ -47,6 +66,8 @@ logger = get_logger(__name__)
 REPLACE_PATH = "/v1/week/replace"
 READ_PATH = "/v1/log/read"
 SUMMARY_PATH = "/v1/summary"
+SEARCH_PATH = "/v1/foods/search"
+COMPUTE_PATH = "/v1/log/compute"
 # A week has a recipe for each of 7 days and each slot, and a plan has at most 8 slots.
 MAX_WEEK_RECIPES = 7 * 8
 # The most times one recipe is tried: the writing, then `max_repair_attempts` repairs, which is 3
@@ -73,6 +94,31 @@ class ReadRequest(_Body):
 class SummaryRequest(_Body):
     rules: PlanRules
     log: MealLog
+
+
+class SearchQuery(BaseModel):
+    """The query string of a food search.
+
+    It is a model so that FastAPI checks every parameter and reports every problem at once, as
+    the routes with a body do, and not only the first.
+    """
+
+    q: str
+    limit: int = Field(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT)
+
+    @field_validator("q")
+    @classmethod
+    def _can_be_searched(cls, q: str) -> str:
+        problem = food_query_problem(q)
+        if problem is not None:
+            raise PydanticCustomError("food_query", problem)
+        return q.strip()
+
+
+class ComputeRequest(_Body):
+    """The foods of one meal as the log holds them: ids, amounts and units, and no number."""
+
+    items: list[LogItem] = Field(min_length=1, max_length=MAX_FOODS)
 
 
 class ReplaceEntry(_Body):
@@ -235,6 +281,13 @@ async def _checked_text(
     if problems:
         raise _invalid(problems)
     return body.text
+
+
+def _nutrition_failed(task: str, exc: NutritionUnusable) -> HTTPException:
+    """The refusal for a nutrition-mcp that could not be used. The message names the step and
+    holds nothing the caller sent, and the log line holds only the error's class."""
+    logger.error(f"{task}_failed", extra={"task": task, "error_type": type(exc).__name__})
+    return HTTPException(status_code=503 if exc.unavailable else 502, detail=str(exc))
 
 
 async def _cleanup() -> AsyncIterator[AsyncExitStack]:
@@ -410,9 +463,34 @@ async def summarise_log(
         ]
         raise _invalid(problems) from exc
     except SummaryError as exc:
-        # The message names the step and holds nothing from the log.
-        logger.error("summary_failed", extra={"task": "summary", "error_type": type(exc).__name__})
-        raise HTTPException(status_code=503 if exc.unavailable else 502, detail=str(exc)) from exc
+        raise _nutrition_failed("summary", exc) from exc
+
+
+@router.get(SEARCH_PATH, response_model=list[FoodOption])
+async def search_foods(
+    query: Annotated[SearchQuery, Query()], services: Annotated[Services, Depends(_services)]
+) -> list[FoodOption]:
+    """The foods nutrition-mcp has under a name, with the units an amount of each can use."""
+    try:
+        return await food_options(
+            query.q, query.limit, nutrition=services.nutrition, catalogue=services.catalogue
+        )
+    except NutritionUnusable as exc:
+        raise _nutrition_failed("food_search", exc) from exc
+
+
+@router.post(COMPUTE_PATH, response_model=MealResult)
+async def compute_foods(
+    body: ComputeRequest, services: Annotated[Services, Depends(_services)]
+) -> MealResult:
+    """The numbers of each food of a meal and of the meal, worked out by nutrition-mcp."""
+    try:
+        return await meal_of(body.items, nutrition=services.nutrition, catalogue=services.catalogue)
+    except MealRefused as exc:
+        # The item is named by its place in the list, and the message is nutrition-mcp's own.
+        raise _invalid([{"loc": exc.located(["body", "items"]), "msg": exc.reason}]) from exc
+    except NutritionUnusable as exc:
+        raise _nutrition_failed("compute", exc) from exc
 
 
 def create_app(

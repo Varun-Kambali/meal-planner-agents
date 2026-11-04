@@ -8,6 +8,8 @@ every response and every log.
 from collections.abc import Iterable, Mapping
 from typing import Any, TypedDict
 
+from nutrition_mcp.search import MAX_QUERY_LENGTH, normalise
+
 from meal_planner.catalogue import Catalogue, check_rules_against
 from meal_planner.config import Settings
 from meal_planner.rules import PlanRules
@@ -57,3 +59,20 @@ def meal_text_problems(
         )
         return [{"loc": [*under, "text"], "msg": message}]
     return []
+
+
+def food_query_problem(query: str) -> str | None:
+    """What is wrong with a food search, or None when it can be searched: it is blank, has no
+    letter or digit, or is longer than nutrition-mcp searches for. The spaces around it are not
+    counted.
+
+    The message says what is wrong and holds none of the text, which is what the user typed.
+    """
+    text = query.strip()
+    if not text:
+        return "type a food name: the text is blank"
+    if not normalise(text):
+        return "type a food name: the text has no letter or digit"
+    if len(text) > MAX_QUERY_LENGTH:
+        return f"the text has {len(text)} characters and the most is {MAX_QUERY_LENGTH}"
+    return None

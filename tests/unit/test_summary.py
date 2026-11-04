@@ -21,18 +21,21 @@ from week_helpers import SLOTS, SpyNutrition, catalogue, item, model_for, plan_r
 from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
 from meal_planner.llm import FakeModel
-from meal_planner.nutrition import NutritionError
+from meal_planner.nutrition import NutritionError, NutritionUnusable
 from meal_planner.reader import MAX_ITEMS, read_meal
 from meal_planner.rules import PlanRules
 from meal_planner.summary import (
     MAX_FOODS,
     Export,
+    LogItem,
     LogRejected,
     MealLog,
+    MealRefused,
     MealStatus,
     SummaryError,
     WeekSummary,
     log_problems,
+    meal_of,
     summarise,
 )
 from meal_planner.week import run_week
@@ -279,6 +282,87 @@ async def test_a_unit_nobody_has_is_refused_with_the_catalogues_measures_as_vali
     assert problem["msg"] == (
         "2026-10-26 breakfast: item 1 (egg): unknown unit 'cup' for egg; valid units: g, piece"
     )
+
+
+async def test_the_item_refused_is_the_one_nutrition_mcp_names_when_a_food_is_listed_twice() -> (
+    None
+):
+    eggs = {"food_id": "egg", "amount": 2, "unit": "piece"}
+    log = log_of(entry(MON, "breakfast", "as_planned", eggs, eggs | {"unit": "cup"}))
+
+    with pytest.raises(LogRejected) as err:
+        await summary_of(log, nutrition=ReaderNutrition(), catalogue=reader_catalogue())
+
+    (problem,) = err.value.problems
+    assert problem["loc"] == ["entries", 0, "items", 1]
+    assert "item 2 (egg)" in problem["msg"]
+
+
+class Refusing(ReaderNutrition):
+    """nutrition-mcp refusing a meal with the error it is given."""
+
+    def __init__(self, error: NutritionError) -> None:
+        super().__init__()
+        self.error = error
+
+    async def meal(self, items: list[MealItemIn]) -> MealResult:
+        raise self.error
+
+
+EGGS = LogItem(food_id="egg", amount=1, unit="piece")
+CHAPATI = LogItem(food_id="chapati", amount=1, unit="roti")
+
+
+@pytest.mark.parametrize(
+    ("food_id", "item", "message", "placed"),
+    [
+        # The message names the item and the food sent at that place.
+        ("egg", 2, "item 3 (egg): unknown unit 'cup' for egg", 2),
+        # Not placed, placed outside the meal, placed on a different food or with a message that
+        # names another one: the first item with the food that was refused is the best guess.
+        ("egg", None, "unknown unit 'cup' for egg", 1),
+        ("egg", 7, "item 8 (egg): unknown unit 'cup' for egg", 1),
+        ("egg", 0, "item 1 (egg): unknown unit 'cup' for egg", 1),
+        ("egg", 2, "item 3 (chapati): unknown unit 'cup' for egg", 1),
+        # A food that is not in the meal at all names no item.
+        ("ghost", None, "unknown unit 'cup' for ghost", None),
+    ],
+)
+async def test_an_error_that_places_the_item_badly_is_put_on_the_first_item_with_the_food(
+    food_id: str, item: int | None, message: str, placed: int | None
+) -> None:
+    error = NutritionError(message, food_id, item=item)
+
+    with pytest.raises(MealRefused) as err:
+        await meal_of(
+            [CHAPATI, EGGS, EGGS], nutrition=Refusing(error), catalogue=reader_catalogue()
+        )
+
+    assert err.value.item == placed
+    assert err.value.reason == message
+
+
+def test_a_refusal_is_located_at_its_item_or_where_the_items_are() -> None:
+    assert MealRefused("no", 3).located(["body", "items"]) == ["body", "items", 3]
+    assert MealRefused("no", 0).located(["entries", 2, "items"]) == ["entries", 2, "items", 0]
+    assert MealRefused("no", None).located(["body", "items"]) == ["body", "items"]
+
+
+@pytest.mark.parametrize("food_id", ["a) b", "x): y", "(", ")", "x (y)"])
+async def test_the_item_refused_is_found_whatever_characters_its_food_id_has(food_id: str) -> None:
+    """The id is the sender's and can hold any character, so it is read from the list sent and
+    not cut out of nutrition-mcp's message."""
+    bracketed = LogItem(food_id=food_id, amount=1, unit="g")
+
+    with pytest.raises(MealRefused) as err:
+        await meal_of(
+            [CHAPATI, bracketed, bracketed],
+            nutrition=ReaderNutrition(),
+            catalogue=reader_catalogue(),
+        )
+
+    assert err.value.item == 1
+    assert err.value.reason.startswith(f"item 2 ({food_id}): unknown food id '{food_id}'")
 
 
 @pytest.mark.parametrize(
@@ -682,6 +766,18 @@ async def test_an_answer_that_cannot_be_read_is_not_taken_for_a_bad_food() -> No
         await summary_of(log_of(entry(MON, "lunch")), nutrition=Unreadable())
 
     assert err.value.unavailable is False
+
+
+@pytest.mark.parametrize(("nutrition", "unavailable"), [(Unreachable, True), (Unreadable, False)])
+async def test_a_meal_nutrition_mcp_cannot_work_out_is_the_error_of_no_summary(
+    nutrition: type[Spy], unavailable: bool
+) -> None:
+    """`meal_of` is the summary's and the compute route's, so its error is not a summary's."""
+    with pytest.raises(NutritionUnusable) as err:
+        await meal_of([CHAPATI], nutrition=nutrition(), catalogue=reader_catalogue())
+
+    assert type(err.value) is NutritionUnusable
+    assert err.value.unavailable is unavailable
 
 
 # Targets

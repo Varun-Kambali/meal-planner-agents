@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from nutrition_mcp.schemas import MealItemIn, MealResult
+from reader_helpers import ReaderNutrition, write_reader_catalogue
 from week_helpers import (
     PLAN,
     SLOTS,
@@ -27,7 +28,7 @@ from week_helpers import (
 
 from meal_planner.api import create_app
 from meal_planner.config import Settings
-from meal_planner.llm import ModelPort
+from meal_planner.llm import FakeModel, ModelPort
 from meal_planner.nutrition import NutritionPort
 from meal_planner.week_events import WeekResult
 
@@ -64,6 +65,27 @@ def make_app(
 @contextmanager
 def serving(folder: Path, **kwargs: Any) -> Iterator[TestClient]:
     with TestClient(make_app(folder, **kwargs)) as client:
+        yield client
+
+
+@contextmanager
+def serving_foods(
+    folder: Path,
+    nutrition: NutritionPort | None = None,
+    model: FakeModel | None = None,
+    **changes: Any,
+) -> Iterator[TestClient]:
+    """The app with the foods typed meals name (reader_helpers), for the routes that look foods
+    up and work meals out. Unless a model is passed in, none is scripted, so a call to one would
+    fail the test."""
+    catalogue = write_reader_catalogue(folder)
+    with serving(
+        folder,
+        model=model or FakeModel({}),
+        nutrition=nutrition or ReaderNutrition(),
+        catalogue_path=catalogue,
+        **changes,
+    ) as client:
         yield client
 
 

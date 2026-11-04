@@ -11,7 +11,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from app_helpers import EXTRA_FOODS, MARK, marked_plan, plan_json, renamed_replies, serving
+from app_helpers import (
+    EXTRA_FOODS,
+    MARK,
+    marked_plan,
+    plan_json,
+    renamed_replies,
+    serving,
+    serving_foods,
+)
 from nutrition_mcp.schemas import MealItemIn, MealResult
 from pydantic import BaseModel
 from reader_helpers import (
@@ -737,6 +745,22 @@ def test_the_api_traces_a_read_with_no_typed_text(traced_startup: Sent, tmp_path
     assert sorted(names) == ["read", "read_meal"]
     for observation in traced_startup.observations():
         assert MARK not in observation.sent
+
+
+def test_the_api_opens_no_span_for_the_food_search_or_the_meal_compute(
+    traced_startup: Sent, tmp_path: Path
+) -> None:
+    """Neither route calls a model, and the search is typed text: nothing of either is sent."""
+    rotis = {"food_id": "chapati", "amount": 2, "unit": "roti"}
+
+    with serving_foods(tmp_path, **keyed()) as client:
+        search = client.get("/v1/foods/search", params={"q": f"roti {MARK}"})
+        compute = client.post("/v1/log/compute", json={"items": [rotis]})
+        refused = client.post("/v1/log/compute", json={"items": [rotis | {"unit": MARK}]})
+
+    assert (search.status_code, compute.status_code, refused.status_code) == (200, 200, 422)
+    assert spans_without_flushing(traced_startup) == []
+    assert traced_startup.observations() == []
 
 
 def test_the_api_traces_a_replacement_with_no_plan_text(

@@ -16,6 +16,7 @@ from meal_planner.nutrition import (
     NutritionClient,
     NutritionError,
     NutritionPort,
+    refusal,
     server_parameters,
 )
 
@@ -101,6 +102,36 @@ async def test_meal_error_names_the_failing_food() -> None:
     assert caught.value.valid_units == []
     assert caught.value.unreachable is False
     assert caught.value.unreadable is False
+
+
+async def test_a_meal_error_says_which_item_failed() -> None:
+    """The message counts items from 1; the error counts them from 0, as a list does."""
+    message = "item 3 (egg): unknown unit 'cup' for egg; valid units: g"
+    client = NutritionClient(StandInSession(tool_error(message)))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.meal([MealItemIn(food_id="egg", amount=1, unit="g")] * 3)
+
+    assert caught.value.item == 2
+    assert caught.value.food_id == "egg"
+
+
+@pytest.mark.parametrize("food_id", ["a) b", "x): y", "(", ")"])
+def test_the_item_is_found_whatever_characters_the_food_id_has(food_id: str) -> None:
+    """A food id can hold any character, brackets included, so the item's place is read from the
+    number alone."""
+    error = refusal(f"item 2 ({food_id}): unknown food id '{food_id}'; search_food finds foods")
+
+    assert error.item == 1
+
+
+async def test_a_refusal_that_names_no_item_has_no_item_number() -> None:
+    client = NutritionClient(StandInSession(tool_error("unknown unit 'x' for rajma")))
+
+    with pytest.raises(NutritionError) as caught:
+        await client.nutrition("rajma", 1, "x")
+
+    assert caught.value.item is None
 
 
 async def test_error_without_text_still_raises() -> None:

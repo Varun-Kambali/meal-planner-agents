@@ -22,7 +22,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from meal_planner.catalogue import Catalogue
 from meal_planner.checks import add_up_meals, check_day_totals, sat_fat_ceiling
 from meal_planner.config import Settings
-from meal_planner.nutrition import NutritionError, NutritionPort
+from meal_planner.nutrition import (
+    NutritionError,
+    NutritionPort,
+    NutritionUnusable,
+    nutrition_unusable,
+)
 from meal_planner.problems import Problem
 from meal_planner.recipes import Failure
 from meal_planner.rules import CORE_TARGET_FIELDS, DAYS, DayType, PlanRules
@@ -172,16 +177,31 @@ class LogRejected(Exception):
         self.problems = problems
 
 
-class SummaryError(Exception):
-    """nutrition-mcp could not be used. The message names the step and holds nothing from the log.
+class SummaryError(NutritionUnusable):
+    """nutrition-mcp could not be used to summarise a log. The message names the step and holds
+    nothing from the log.
 
     `unavailable` is set when it could not be reached, so that trying again later can help;
     otherwise it answered with something that could not be used.
     """
 
-    def __init__(self, message: str, *, unavailable: bool) -> None:
-        super().__init__(message)
-        self.unavailable = unavailable
+
+class MealRefused(Exception):
+    """nutrition-mcp refused a food, an amount or a unit of a meal, which is the sender's to fix.
+
+    `reason` is nutrition-mcp's own message, with the units a person may give for the food, and
+    `item` is the place of the item to blame, counting from 0 (None when it cannot be told).
+    """
+
+    def __init__(self, reason: str, item: int | None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.item = item
+
+    def located(self, items: list[str | int]) -> list[str | int]:
+        """The location of the item, given the location of the list it is in: that list's, and
+        the item's place in it. When the item cannot be told, the list itself."""
+        return items if self.item is None else [*items, self.item]
 
 
 def log_problems(rules: PlanRules, log: MealLog) -> list[Problem]:
@@ -232,11 +252,17 @@ async def summarise(
         # A skipped meal has no foods to add up; it is not a meal with numbers missing.
         if entry.status == "skipped":
             continue
-        items = [_to_send(item, catalogue) for item in entry.items]
         try:
-            meals[index] = await nutrition.meal(items)
-        except NutritionError as exc:
-            refused.append(_refusal(index, entry, exc, catalogue))
+            meals[index] = await meal_of(entry.items, nutrition=nutrition, catalogue=catalogue)
+        except NutritionUnusable as exc:
+            raise SummaryError(str(exc), unavailable=exc.unavailable) from exc
+        except MealRefused as exc:
+            refused.append(
+                {
+                    "loc": exc.located(["entries", index, "items"]),
+                    "msg": f"{entry.date.isoformat()} {entry.slot_id}: {exc.reason}",
+                }
+            )
     if refused:
         raise LogRejected(refused)
 
@@ -319,26 +345,57 @@ def _targets(day_type: DayType) -> dict[str, float]:
     return targets | {target.nutrient: target.value for target in day_type.extra}
 
 
-def _refusal(index: int, entry: LogEntry, exc: NutritionError, catalogue: Catalogue) -> Problem:
-    """The problem for a meal nutrition-mcp refused over one of its foods, which is the log's to
-    fix. Any other failure is nutrition-mcp's, and ends the summary.
+async def meal_of(
+    items: list[LogItem], *, nutrition: NutritionPort, catalogue: Catalogue
+) -> MealResult:
+    """nutrition-mcp's numbers for the foods of one meal, each unit read as the reader reads it.
+
+    This is what the summary adds up a log with, so a meal has the same numbers wherever it is
+    worked out. Raises MealRefused for a food, amount or unit nutrition-mcp refuses, and
+    NutritionUnusable when nutrition-mcp cannot be used. Neither message holds anything from `items`
+    except what nutrition-mcp says about the food it refused.
+    """
+    try:
+        return await nutrition.meal([_to_send(item, catalogue) for item in items])
+    except NutritionError as exc:
+        raise _refusal(items, exc, catalogue) from exc
+
+
+def _refusal(
+    items: list[LogItem], exc: NutritionError, catalogue: Catalogue
+) -> MealRefused | NutritionUnusable:
+    """MealRefused for a meal nutrition-mcp refused over one of its foods, which the sender is to
+    fix. Any other failure is nutrition-mcp's, and is a NutritionUnusable.
 
     A unit it refused for a catalogue food lists the catalogue's measures too, as the reader
     does, since they work as well. nutrition-mcp ends its message with its own list.
     """
     if exc.unreachable:
-        message = "nutrition-mcp could not be reached (step: nutrition)"
-        raise SummaryError(message, unavailable=True) from exc
-    if exc.food_id is None:
-        message = "nutrition-mcp sent an answer that could not be used (step: nutrition)"
-        raise SummaryError(message, unavailable=False) from exc
+        return nutrition_unusable(exc)
+    at = _refused_item(items, exc)
+    food_id = items[at].food_id if at is not None else exc.food_id
+    if food_id is None:
+        return nutrition_unusable(exc)
     reason = str(exc)
-    if exc.valid_units and exc.food_id in catalogue.items:
+    if exc.valid_units and food_id in catalogue.items:
         before, listed, _ = reason.rpartition("valid units: ")
-        reason = before + listed + ", ".join(catalogue.valid_units(exc.food_id))
-    at = next((n for n, item in enumerate(entry.items) if item.food_id == exc.food_id), None)
-    loc: list[str | int] = ["entries", index, "items"]
-    return {
-        "loc": loc if at is None else [*loc, at],
-        "msg": f"{entry.date.isoformat()} {entry.slot_id}: {reason}",
-    }
+        reason = before + listed + ", ".join(catalogue.valid_units(food_id))
+    return MealRefused(reason, at)
+
+
+def _refused_item(items: list[LogItem], exc: NutritionError) -> int | None:
+    """The place in `items` of the item nutrition-mcp refused, or None when it cannot be told.
+
+    nutrition-mcp counts the item it failed on and puts the food it was sent in front of its
+    message. That is trusted when the food is the one sent at that place, whatever characters the
+    id holds, since the message cannot be cut up to find it. Otherwise the first item with the
+    food the error names is the best guess.
+    """
+    at = exc.item
+    if (
+        at is not None
+        and 0 <= at < len(items)
+        and str(exc).startswith(f"item {at + 1} ({items[at].food_id}):")
+    ):
+        return at
+    return next((n for n, item in enumerate(items) if item.food_id == exc.food_id), None)
