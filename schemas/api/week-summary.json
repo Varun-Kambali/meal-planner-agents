@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "DaySummary": {
+      "additionalProperties": false,
+      "description": "One date of the log against the targets of its day type.\n\n`totals`, `failures` and `unsettled` come from the functions the day checks use, so they read\nthe same. A total is None when no food eaten has a value for the nutrient. The two dicts by\nslot cover the meals of the day that were eaten.",
+      "properties": {
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "day_type": {
+          "title": "Day Type",
+          "type": "string"
+        },
+        "totals": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Totals",
+          "type": "object"
+        },
+        "targets": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Targets",
+          "type": "object"
+        },
+        "failures": {
+          "items": {
+            "$ref": "#/$defs/Failure"
+          },
+          "title": "Failures",
+          "type": "array"
+        },
+        "unsettled": {
+          "items": {
+            "$ref": "#/$defs/Failure"
+          },
+          "title": "Unsettled",
+          "type": "array"
+        },
+        "soft": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Soft",
+          "type": "object"
+        },
+        "glycemic_load": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Glycemic Load",
+          "type": "object"
+        },
+        "gl_missing": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Gl Missing",
+          "type": "object"
+        }
+      },
+      "required": [
+        "date",
+        "day_type",
+        "totals",
+        "targets",
+        "failures",
+        "unsettled",
+        "soft",
+        "glycemic_load",
+        "gl_missing"
+      ],
+      "title": "DaySummary",
+      "type": "object"
+    },
+    "Failure": {
+      "additionalProperties": false,
+      "description": "A rule a recipe or day misses, in words the writer can act on.",
+      "properties": {
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check",
+        "message"
+      ],
+      "title": "Failure",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The days of a log, and how much of the plan was followed.",
+  "properties": {
+    "days": {
+      "items": {
+        "$ref": "#/$defs/DaySummary"
+      },
+      "title": "Days",
+      "type": "array"
+    },
+    "as_planned_share": {
+      "title": "As Planned Share",
+      "type": "number"
+    },
+    "days_on_target": {
+      "title": "Days On Target",
+      "type": "integer"
+    },
+    "days_unsettled": {
+      "title": "Days Unsettled",
+      "type": "integer"
+    },
+    "planned_meals": {
+      "title": "Planned Meals",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "days",
+    "as_planned_share",
+    "days_on_target",
+    "days_unsettled",
+    "planned_meals"
+  ],
+  "title": "WeekSummary",
+  "type": "object"
+}

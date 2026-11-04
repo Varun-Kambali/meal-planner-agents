@@ -7,12 +7,11 @@ stream has started its status is sent, so a failure after that is a last `error`
 """
 
 import asyncio
-import json
 import time
 from collections.abc import AsyncIterable, AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -59,7 +58,7 @@ from meal_planner.summary import (
     summarise,
 )
 from meal_planner.week import replace_recipe, run_week, with_numbers
-from meal_planner.week_events import WeekDone, WeekEvent, WeekResult
+from meal_planner.week_events import StreamError, WeekDone, WeekEvent, WeekResult
 
 logger = get_logger(__name__)
 
@@ -315,7 +314,10 @@ async def _stop(pump: asyncio.Task[None]) -> None:
 
 
 async def _stream(
-    step: str, run: AsyncIterator[WeekEvent], settings: Settings, cleanup: AsyncExitStack
+    step: Literal["week", "replace"],
+    run: AsyncIterator[WeekEvent],
+    settings: Settings,
+    cleanup: AsyncExitStack,
 ) -> AsyncIterator[ServerSentEvent]:
     """The run's events as server-sent events, always ending with `week_done` or `error`.
 
@@ -356,8 +358,8 @@ async def _stream(
         raise
     except Exception as exc:
         logger.error("run_failed", extra={"task": step, "error_type": type(exc).__name__})
-        error = {"kind": "error", "step": step, "message": "the run stopped before it finished"}
-        yield ServerSentEvent(raw_data=json.dumps(error), event="error")
+        error = StreamError(step=step, message="the run stopped before it finished")
+        yield ServerSentEvent(raw_data=error.model_dump_json(), event=error.kind)
 
 
 @router.get("/healthz")

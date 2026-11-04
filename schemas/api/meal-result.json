@@ -1,0 +1,462 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "FoodSummary": {
+      "description": "Enough to identify a food and to pick a unit that fits it.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "ingredient",
+            "dish"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "regions": {
+          "items": {
+            "enum": [
+              "north",
+              "south",
+              "east",
+              "west"
+            ],
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "diet": {
+          "enum": [
+            "veg",
+            "egg",
+            "non_veg",
+            "vegan"
+          ],
+          "title": "Diet",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "units": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Every unit get_nutrition and compute_meal accept for this food, with the grams in one of each: g, the food's own measures, then the default katori for a dish served by the bowl and the volume units for a liquid.",
+          "title": "Units",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "aliases",
+        "regions",
+        "diet",
+        "source_ids",
+        "units"
+      ],
+      "title": "FoodSummary",
+      "type": "object"
+    },
+    "Nutrients": {
+      "additionalProperties": false,
+      "description": "Amounts of the 16 nutrients; null means not reported, which is not 0.",
+      "properties": {
+        "kcal": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kcal"
+        },
+        "protein_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protein G"
+        },
+        "fat_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fat G"
+        },
+        "sat_fat_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sat Fat G"
+        },
+        "carbs_available_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carbs Available G"
+        },
+        "sugars_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sugars G"
+        },
+        "fibre_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fibre G"
+        },
+        "sodium_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sodium Mg"
+        },
+        "iron_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Iron Mg"
+        },
+        "calcium_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calcium Mg"
+        },
+        "zinc_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zinc Mg"
+        },
+        "folate_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Folate Ug"
+        },
+        "vit_a_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit A Ug"
+        },
+        "vit_b12_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit B12 Ug"
+        },
+        "vit_c_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit C Mg"
+        },
+        "vit_d_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit D Ug"
+        }
+      },
+      "title": "Nutrients",
+      "type": "object"
+    },
+    "NutritionResult": {
+      "description": "The nutrients in one amount of one food, with how the amount was worked out.",
+      "properties": {
+        "food": {
+          "$ref": "#/$defs/FoodSummary"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "grams": {
+          "title": "Grams",
+          "type": "number"
+        },
+        "measure_assumption": {
+          "title": "Measure Assumption",
+          "type": "string"
+        },
+        "nutrients": {
+          "$ref": "#/$defs/Nutrients",
+          "description": "Nutrient amounts in `grams` of this food."
+        },
+        "incomplete": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Incomplete",
+          "type": "object"
+        },
+        "raw_ingredient_totals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw Ingredient Totals",
+          "type": "array"
+        },
+        "gi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gi"
+        },
+        "gi_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gi Ref"
+        },
+        "glycemic_load": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Glycemic Load"
+        },
+        "oil_assumption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Oil Assumption"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "food",
+        "amount",
+        "unit",
+        "grams",
+        "measure_assumption",
+        "nutrients",
+        "incomplete",
+        "raw_ingredient_totals",
+        "gi",
+        "gi_ref",
+        "glycemic_load",
+        "oil_assumption",
+        "sources"
+      ],
+      "title": "NutritionResult",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/NutritionResult"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "total": {
+      "$ref": "#/$defs/Nutrients",
+      "description": "Nutrient amounts, the sum over the items."
+    },
+    "total_incomplete": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": "Total Incomplete",
+      "type": "object"
+    },
+    "glycemic_load": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Glycemic Load"
+    },
+    "glycemic_load_missing": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Glycemic Load Missing",
+      "type": "array"
+    }
+  },
+  "required": [
+    "items",
+    "total",
+    "total_incomplete",
+    "glycemic_load",
+    "glycemic_load_missing"
+  ],
+  "title": "MealResult",
+  "type": "object"
+}

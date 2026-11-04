@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Catalogue",
+  "$defs": {
+    "CatalogueRow": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "grain",
+            "pulse",
+            "dairy",
+            "egg",
+            "meat",
+            "fish",
+            "veg",
+            "fruit",
+            "nut_seed",
+            "oil",
+            "spice",
+            "sauce",
+            "sweetener",
+            "other"
+          ],
+          "title": "Category",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category"
+      ],
+      "title": "CatalogueRow",
+      "type": "object"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/CatalogueRow"
+  },
+  "type": "array"
+}
