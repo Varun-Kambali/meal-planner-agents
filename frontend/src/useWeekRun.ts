@@ -17,6 +17,7 @@ import { advance, startProgress, type Progress } from './progress'
 import type { SaveOutcome } from './session'
 import type { State } from './storage'
 import type { WeekResult } from './types'
+import { DAY_NAMES, reasonWords } from './words'
 
 export type Running = { what: 'week' } | { what: 'replace'; day: DayKey; slotId: string }
 
@@ -134,6 +135,21 @@ export function useWeekRun(
           const result = await replaceRecipe(rules, before, what.day, what.slotId, onEvent, {
             signal: abort.signal,
           })
+          // No new recipe: the server kept the old one, or the meal stays unwritten. Nothing
+          // the person asked for changed, so nothing is saved.
+          const reason = result.unwritten.find(
+            ([day, slot]) => day === what.day && slot === what.slotId,
+          )?.[2]
+          if (reason !== undefined) {
+            const slot = rules.slots.find((s) => s.id === what.slotId)
+            const meal = `${DAY_NAMES[what.day]}'s ${slot?.name ?? what.slotId}`
+            setOutcome({
+              kind: 'failed',
+              run: what,
+              message: `No new recipe could be written for ${meal}: ${reasonWords(reason)}.`,
+            })
+            return
+          }
           week = {
             ...result,
             unwritten: mergeUnwritten(before.unwritten, result.unwritten, what.day, what.slotId),

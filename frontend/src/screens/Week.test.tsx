@@ -197,6 +197,29 @@ describe('the week', () => {
     expect(calls[0]!.body).toMatchObject({ day: 'mon', slot_id: 'lunch' })
   })
 
+  it('says so when no new recipe could be written, and keeps the one it had', async () => {
+    const before = failingWeek()
+    seed({ ...sampleState(), week: before })
+    const run = new FakeStream()
+    fakeApi({ '/v1/week/replace': () => run.response })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: "Replace Monday's Lunch" }))
+    // The server keeps the old recipe and names the meal as not written.
+    const result = sampleWeek()
+    result.unwritten = [['mon', 'lunch', 'rate_limited']]
+    run.send({ kind: 'week_done', week: result })
+    run.end()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "No new recipe could be written for Monday's Lunch: the model's rate limit was reached.",
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('The recipe you had is unchanged.')
+    expect(screen.queryByText("Monday's Lunch is written again.")).not.toBeInTheDocument()
+    expect(saved().week).toEqual(before)
+  })
+
   it('keeps the recipe when a replacement is refused before it starts', async () => {
     seed({ ...sampleState(), week: failingWeek() })
     fakeApi({
