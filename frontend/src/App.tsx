@@ -49,9 +49,8 @@ export function App() {
         <section className="notice" aria-labelledby="storage-heading">
           <h2 id="storage-heading">Where your data is kept</h2>
           <p>
-            Your plan, its week of recipes and your meal log are kept in this browser only. The
-            server keeps none of them. Clearing this browser&apos;s data deletes them, so export a
-            copy to keep one.
+            Your plan, its week of recipes and your meal log are saved in this browser only.
+            Clearing this browser&apos;s data deletes them, so export a copy to keep one.
           </p>
         </section>
       </main>

@@ -1,5 +1,5 @@
-import { IDBFactory } from 'fake-indexeddb'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { IDBDatabase, IDBFactory } from 'fake-indexeddb'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   EMPTY_STATE,
@@ -357,6 +357,19 @@ describe('storage', () => {
     await storage.saveState(newer)
     expect(localStorage.length).toBe(0)
     await expect(createStorage({ indexedDB, localStorage }).loadState()).resolves.toEqual(newer)
+  })
+
+  it('says so when what IndexedDB holds cannot be read, instead of starting empty', async () => {
+    const indexedDB = new IDBFactory()
+    await createStorage({ indexedDB, localStorage }).saveState(stateOf(exported()))
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(() => {
+      throw new DOMException('The database connection is closing.', 'InvalidStateError')
+    })
+
+    // An empty state here would let the next save write over the plan that is still there.
+    await expect(createStorage({ indexedDB, localStorage }).loadState()).rejects.toMatchObject({
+      name: 'InvalidStateError',
+    })
   })
 
   it('says so when the browser keeps nothing', async () => {

@@ -135,12 +135,14 @@ export function createStorage(backends: Backends): StateStore {
     (database ??= openDatabase(backends.indexedDB))
 
   return {
-    // Rejects with ValidationFailed, naming the place, when what was saved no longer fits.
+    // Rejects with ValidationFailed, naming the place, when what was saved no longer fits, and
+    // with IndexedDB's error when what it holds cannot be read.
     async loadState(): Promise<State> {
       const copy = readCopy(backends.localStorage)
       if (copy !== null) return fromStored(copy)
       const opened = await connection()
-      const text = opened === null ? undefined : await readRecord(opened).catch(() => undefined)
+      // A read that fails rejects: starting empty would let the next save write over the plan.
+      const text = opened === null ? undefined : await readRecord(opened)
       return text === undefined ? emptyState() : fromStored(text)
     },
 

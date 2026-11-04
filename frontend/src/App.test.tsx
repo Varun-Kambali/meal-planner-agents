@@ -42,5 +42,5 @@ it('renders the shell with what this browser saved', async () => {
   expect(container.querySelector('[aria-live]')?.textContent).toBe(
     'Plan saved in this browser: Office weekday, with 2 recipes and 3 logged meals.',
   )
-  expect(container.textContent).toContain('kept in this browser only')
+  expect(container.textContent).toContain('saved in this browser only')
 })
