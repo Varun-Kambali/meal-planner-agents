@@ -24,7 +24,7 @@ People open this to cook from and to note what they ate. They read it on a phone
 
 ### Color Palette
 
-Both themes follow `prefers-color-scheme`. Every text pair below is at least 4.5:1, and every control edge and focus ring at least 3:1 against what it sits on (checked 2026-11-04).
+Both themes follow `prefers-color-scheme`. Every text pair below is at least 4.5:1, and every control edge and focus ring at least 3:1 against what it sits on (checked 2026-11-04; the dark control edge raised the same day, from `#6E7E7B`, which was 2.9:1 on a selected row).
 
 | Role | CSS variable | Light | Dark | Use |
 |---|---|---|---|---|
@@ -35,7 +35,7 @@ Both themes follow `prefers-color-scheme`. Every text pair below is at least 4.5
 | Text | `--color-text` | `#142120` | `#E6EDEC` | Body, headings, numbers (15.8:1 / 15.7:1 on the page) |
 | Muted text | `--color-text-muted` | `#4B5A58` | `#A2B0AE` | Units, hints, meta (6.9:1 / 8.3:1) |
 | Rule | `--color-border` | `#D5DEDC` | `#2B3634` | Lines between rows and groups (decorative) |
-| Control edge | `--color-border-strong` | `#73817F` | `#6E7E7B` | Input and secondary button edges (3.6:1 or more) |
+| Control edge | `--color-border-strong` | `#73817F` | `#7A8A87` | Input and secondary button edges: at least 3.3:1 on every background here, the selected row included |
 | Primary | `--color-primary` | `#0F766E` | `#5CD6C4` | Primary buttons, links, focus rings, progress fill (5.2:1 / 10.5:1) |
 | Primary hover | `--color-primary-hover` | `#115E59` | `#8BE5D7` | Hover and pressed state of the above |
 | On primary | `--color-on-primary` | `#FFFFFF` | `#06302C` | Text on a primary button (5.5:1 / 8.1:1) |
