@@ -193,18 +193,31 @@ function described(error: ErrorObject): FieldProblem {
   }
 }
 
-// One problem per place. A value that may be null ("week": a week or null) fails both ways, and
-// an "anyOf" error says only that; the deepest problem is the one that says what to fix.
-function schemaProblems(errors: ErrorObject[]): FieldProblem[] {
-  const problems = errors
-    .filter((error) => error.keyword !== 'anyOf' && error.keyword !== 'oneOf')
-    .map(described)
-  const deeper = (a: string, b: string): boolean => b.startsWith(`${a}/`)
-  const kept = problems.filter(
-    (problem) => !problems.some((other) => deeper(problem.path, other.path)),
+// Pydantic writes a value that may be null as "anyOf: [the type, null]", so a wrong value fails
+// both: Ajv reports what the type wants, that it is not null, and that no branch matched. Only
+// the first says what to fix. The other two are dropped wherever a problem of the value itself,
+// or of something inside it, is also reported.
+function isNullBranch(error: ErrorObject): boolean {
+  return (
+    error.keyword === 'type' &&
+    (error.params as { type?: unknown }).type === 'null' &&
+    error.schemaPath.includes('/anyOf/')
   )
+}
+
+function schemaProblems(errors: ErrorObject[]): FieldProblem[] {
+  const real = errors.filter(
+    (error) => error.keyword !== 'anyOf' && error.keyword !== 'oneOf' && !isNullBranch(error),
+  )
+  const covered = (error: ErrorObject): boolean =>
+    real.some(
+      (other) =>
+        other.instancePath === error.instancePath ||
+        other.instancePath.startsWith(`${error.instancePath}/`),
+    )
+  const kept = errors.filter((error) => real.includes(error) || !covered(error))
   const seen = new Set<string>()
-  return kept.filter((problem) => {
+  return kept.map(described).filter((problem) => {
     const key = `${problem.path} ${problem.message}`
     if (seen.has(key)) return false
     seen.add(key)

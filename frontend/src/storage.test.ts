@@ -127,6 +127,30 @@ describe('import', () => {
     expect(paths(error)).toEqual(['/week/recipes/0/draft/title'])
   })
 
+  it('lists a problem of a list and a problem inside it together', async () => {
+    const file = exported()
+    const entry = file.log.entries[0]!
+    entry.items = Array.from({ length: 21 }, () => ({
+      food_id: 'banana',
+      amount: 1,
+      unit: 'piece',
+    }))
+    entry.items[3]!.amount = -1
+
+    const error = await rejection(importFile(fileOf(file)))
+
+    expect(paths(error)).toEqual(['/log/entries/0/items', '/log/entries/0/items/3/amount'])
+  })
+
+  it('says what a value that may be empty must be, without the empty part', async () => {
+    const file = exported()
+    ;(file.week as unknown as Record<string, unknown>).cost_usd = 'free'
+
+    const error = await rejection(importFile(fileOf(file)))
+
+    expect(error.problems).toEqual([{ path: '/week/cost_usd', message: 'must be a number' }])
+  })
+
   it('rejects a file that is not JSON', async () => {
     const error = await rejection(importFile(fileOf('{"version": 1,')))
 
