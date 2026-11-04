@@ -153,6 +153,20 @@ describe('import', () => {
     expect(error.problems).toEqual([{ path: '/week/cost_usd', message: 'must be a number' }])
   })
 
+  it('counts the length of a name as the server does, an emoji as one character', async () => {
+    const file = exported()
+    file.rules.name = '\u{1F35B}'.repeat(60)
+
+    await expect(importFile(fileOf(file))).resolves.toMatchObject({
+      rules: { name: file.rules.name },
+    })
+    file.rules.name += '\u{1F35B}'
+    const error = await rejection(importFile(fileOf(file)))
+    expect(error.problems).toEqual([
+      { path: '/rules/name', message: 'must have at most 60 characters' },
+    ])
+  })
+
   it('rejects a file that is not JSON', async () => {
     const error = await rejection(importFile(fileOf('{"version": 1,')))
 

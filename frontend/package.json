@@ -16,7 +16,9 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "types": "node scripts/generate-types.ts",
-    "types:check": "node scripts/generate-types.ts --check"
+    "types:check": "node scripts/generate-types.ts --check",
+    "validators": "node scripts/generate-validators.ts",
+    "validators:check": "node scripts/generate-validators.ts --check"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

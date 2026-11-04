@@ -8,9 +8,9 @@
 // tests/unit/test_export_schemas.py runs the server over src/test/invalid-exports.json, the files
 // these checks refuse, to keep the two in step.
 
-import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020'
+import type { ErrorObject, ValidateFunction } from 'ajv/dist/2020'
 
-import exportSchema from '../../schemas/export.json'
+import { exported, stored } from './generated/validators.js'
 import type { Export, MealLog, PlanRules, WeekResult } from './types'
 
 export interface FieldProblem {
@@ -52,62 +52,17 @@ const CORE_TARGET_FIELDS: Record<string, string> = {
   fat_g: 'fat_g',
 }
 
-// The formats as Pydantic reads them: a date on the calendar, and a time with or without
-// seconds (a plan says "08:00"), with an optional offset.
-function isDate(text: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
-  if (match === null) return false
-  const [year, month, day] = match.slice(1).map(Number) as [number, number, number]
-  const date = new Date(Date.UTC(year, month - 1, day))
-  return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-  )
-}
-
-const TIME = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,6})?)?(Z|[+-]([01]\d|2[0-3]):?[0-5]\d)?$/
-
-// The problems Ajv finds in some data; none when it fits.
-type Check = (data: unknown) => ErrorObject[]
-
-function errorsOf(validate: ValidateFunction): Check {
-  return (data) => (validate(data) ? [] : (validate.errors ?? []))
-}
-
-let checks: { exported: Check; stored: Check } | null = null
-
-// Compiled on first use, since it takes a moment and most page loads never import a file.
-function compiled(): { exported: Check; stored: Check } {
-  if (checks !== null) return checks
-  // useDefaults fills in a field the server has a default for, so the data matches its type.
-  const ajv = new Ajv2020({ allErrors: true, useDefaults: true, strict: true })
-  ajv.addFormat('date', { type: 'string', validate: isDate })
-  ajv.addFormat('time', { type: 'string', validate: (text: string) => TIME.test(text) })
-  // Added under a name, so that the schema for saved data can refer to its parts.
-  ajv.addSchema(exportSchema, 'export.json')
-  const exported = ajv.getSchema('export.json') as ValidateFunction | undefined
-  if (exported === undefined) throw new Error('schemas/export.json did not compile')
-  checks = {
-    exported: errorsOf(exported),
-    stored: errorsOf(
-      ajv.compile({
-        type: 'object',
-        additionalProperties: false,
-        required: ['version', 'rules', 'week', 'log'],
-        properties: {
-          version: { const: 1 },
-          rules: { anyOf: [{ $ref: 'export.json#/$defs/PlanRules' }, { type: 'null' }] },
-          week: { $ref: 'export.json#/properties/week' },
-          log: { $ref: 'export.json#/$defs/MealLog' },
-        },
-      }),
-    ),
-  }
-  return checks
+// The problems a validator finds in some data; none when it fits. The validators were compiled
+// from schemas/export.json ahead of time (scripts/generate-validators.ts), so nothing is compiled
+// in the browser. Each fills in a field the server has a default for, so the data matches its
+// type.
+function errorsOf(validate: ValidateFunction, data: unknown): ErrorObject[] {
+  return validate(data) ? [] : (validate.errors ?? [])
 }
 
 // An export file as it was saved, checked. Throws ValidationFailed with every problem found.
 export function checkExport(data: unknown): Export {
-  throwIfAny(schemaProblems(compiled().exported(data)))
+  throwIfAny(schemaProblems(errorsOf(exported, data)))
   const file = data as Export
   throwIfAny([
     ...blankProblems(file.rules, file.week),
@@ -119,7 +74,7 @@ export function checkExport(data: unknown): Export {
 
 // What this browser saved, checked the same way; it may have no plan rules yet.
 export function checkStored(data: unknown): State & { version: 1 } {
-  throwIfAny(schemaProblems(compiled().stored(data)))
+  throwIfAny(schemaProblems(errorsOf(stored, data)))
   const state = data as State & { version: 1 }
   const rules = state.rules === null ? [] : ruleProblems(state.rules)
   throwIfAny([
@@ -202,7 +157,7 @@ function described(error: ErrorObject): FieldProblem {
         message: p.format === 'date' ? 'must be a date (YYYY-MM-DD)' : 'must be a time (HH:MM)',
       }
     default:
-      return { path: at, message: error.message ?? 'is not valid' }
+      return { path: at, message: `does not meet the schema's ${error.keyword} rule` }
   }
 }
 

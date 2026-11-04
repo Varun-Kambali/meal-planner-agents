@@ -60,6 +60,8 @@ jobs:
       - run: npm ci
       - name: Check src/types.ts matches schemas/
         run: npm run types:check
+      - name: Check src/generated/validators.js matches schemas/
+        run: npm run validators:check
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck

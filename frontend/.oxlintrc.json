@@ -7,5 +7,5 @@
     "react/react-in-jsx-scope": "off",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
   },
-  "ignorePatterns": ["dist"]
+  "ignorePatterns": ["dist", "src/generated/validators.js"]
 }
