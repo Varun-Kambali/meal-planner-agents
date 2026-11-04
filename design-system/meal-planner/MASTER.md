@@ -8,9 +8,9 @@
 ---
 
 **Project:** Meal planner
-**Generated:** 2026-11-04 by the `ui-ux-pro-max` skill (v2.15.0), query "nutrition tracker productivity tool", then edited by hand against the Avoid list below. What changed from the generated file, and why, is in the last section.
+**Created:** 2026-11-04. It began from a stock palette, type and spacing for a nutrition-tracking productivity tool, and was then edited by hand against the Avoid list below. What changed from that starting point, and why, is in the last section.
 **Category:** Productivity tool
-**Design dials:** Variance 2/10 (centered, minimal) | Motion 1/10 (subtle) | Density 5/10 (standard)
+**Aim:** centered and minimal, almost no motion, standard density
 
 ---
 
@@ -196,11 +196,11 @@ Landmarks (`header`, `nav`, `main`), a skip link, full keyboard use with a visib
 
 ---
 
-## Changes from the generated system, and why
+## Changes from the starting point, and why
 
-The skill's first query ("meal planning nutrition tracker daily tool minimal accessible") returned a wedding palette (pink with gold) and a script font, so it was dropped and the narrower query above was run, as the skill's own retry rule says. Its result was kept where it fits a daily tool and changed where it conflicts with the portfolio's Avoid list or with this product.
+A first starting point, pink with gold and a script font made for wedding sites, did not fit a food tool and was dropped. The second, for a nutrition-tracking productivity tool, was kept where it fits a daily tool and changed by hand where it conflicts with the portfolio's Avoid list or with this product.
 
-| Generated | Now | Why |
+| Started as | Now | Why |
 |---|---|---|
 | Accent/CTA `#EA580C` orange with black text, used for the primary button | Removed; the primary button is teal | A burnt orange call to action is the terracotta-accent look the Avoid list names, and a second accent colour competes with the first. One accent keeps "this is an action" unambiguous |
 | Primary `#0D9488` with black text on it | `#0F766E` with white text (`#5CD6C4` with dark text in dark mode) | `#0D9488` is 3.7:1 on white, under AA for links and button text. `#0F766E` is 5.5:1 |
@@ -216,5 +216,5 @@ The skill's first query ("meal planning nutrition tracker daily tool minimal acc
 | Motion "Scroll Reveal" with GSAP (fade and rise on scroll) | No entrance motion and no GSAP | "Content hidden until an entrance animation runs" is on the Avoid list |
 | Typography loaded from Google Fonts by `@import` | The same family, self-hosted from npm | The app's promise is that the user's data stays in their browser; a font CDN request on every visit tells a third party who opened it, and the app should work offline once loaded |
 | Weights 300 to 700 | 400 to 700, nothing under 13px | 300 on small numbers fails readability in a kitchen |
-| Emoji markers in the generated anti-pattern and motion lists | Plain text | Emoji anywhere is on the Avoid list |
+| Emoji markers in the starting point's anti-pattern and motion lists | Plain text | Emoji anywhere is on the Avoid list |
 | Spacing scale, Minimalism and Swiss style, Plus Jakarta Sans as the one family | Kept | They fit a plain, readable tool and nothing on the Avoid list rules them out |
