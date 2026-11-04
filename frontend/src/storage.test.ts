@@ -539,3 +539,70 @@ describe('storage', () => {
     await expect(createStorage({ indexedDB, localStorage }).loadState()).resolves.toEqual(state)
   })
 })
+
+// What the page offers when the saved state cannot be opened: the stored text as it is, to save
+// as a file, and then a way to remove it.
+describe('the stored copy', () => {
+  it('reads the localStorage copy as it is, even when it does not fit', async () => {
+    const indexedDB = new IDBFactory()
+    await createStorage({ indexedDB, localStorage }).saveState(stateOf(exported()))
+    localStorage.setItem(STORAGE_KEY, '{"version": 1, "rules": "broken"')
+
+    const storage = createStorage({ indexedDB, localStorage })
+
+    await expect(storage.readStoredText()).resolves.toBe('{"version": 1, "rules": "broken"')
+  })
+
+  it('reads what IndexedDB holds when there is no localStorage copy', async () => {
+    const indexedDB = new IDBFactory()
+    const state = stateOf(exported())
+    await createStorage({ indexedDB, localStorage }).saveState(state)
+
+    const text = await createStorage({ indexedDB, localStorage }).readStoredText()
+
+    expect(JSON.parse(text!)).toEqual({ version: 1, ...state })
+  })
+
+  it('has no stored copy before anything is saved', async () => {
+    const storage = createStorage({ indexedDB: new IDBFactory(), localStorage })
+
+    await expect(storage.readStoredText()).resolves.toBeNull()
+  })
+
+  it('says so when IndexedDB cannot be opened to read it', async () => {
+    const storage = createStorage({ indexedDB: failingIndexedDB, localStorage })
+
+    await expect(storage.readStoredText()).rejects.toBeInstanceOf(SavedDataUnreadable)
+  })
+
+  it('removes the localStorage copy, so the older IndexedDB state opens', async () => {
+    const indexedDB = new IDBFactory()
+    const older = stateOf(exported())
+    await createStorage({ indexedDB, localStorage }).saveState(older)
+    localStorage.setItem(STORAGE_KEY, 'not json')
+    const storage = createStorage({ indexedDB, localStorage })
+
+    await storage.discardStoredText()
+
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+    await expect(storage.loadState()).resolves.toEqual(older)
+  })
+
+  it('removes what IndexedDB holds when there is no localStorage copy', async () => {
+    const indexedDB = new IDBFactory()
+    await createStorage({ indexedDB, localStorage }).saveState(stateOf(exported()))
+    const storage = createStorage({ indexedDB, localStorage })
+
+    await storage.discardStoredText()
+
+    await expect(createStorage({ indexedDB, localStorage }).loadState()).resolves.toEqual(
+      emptyState(),
+    )
+  })
+
+  it('removes nothing when IndexedDB cannot be opened', async () => {
+    const storage = createStorage({ indexedDB: failingIndexedDB, localStorage })
+
+    await expect(storage.discardStoredText()).rejects.toBeInstanceOf(SavedDataUnreadable)
+  })
+})
