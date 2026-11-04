@@ -233,6 +233,63 @@ describe('streamWeek', () => {
       name: 'AbortError',
     })
   })
+
+  // A body that sends one event, then fails as fetch's body does when the connection is lost,
+  // or, given a signal, when the call is aborted.
+  function dropping(error: () => unknown, signal?: AbortSignal): Response {
+    let pulls = 0
+    const failing = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        if (pulls++ === 0) {
+          controller.enqueue(new TextEncoder().encode(message(started)))
+          return
+        }
+        if (signal !== undefined && !signal.aborted) {
+          await new Promise((resolve) => signal.addEventListener('abort', resolve))
+        }
+        controller.error(error())
+      },
+    })
+    return new Response(failing, { status: 200 })
+  }
+
+  it('rejects with StreamFailed when the connection drops mid-stream', async () => {
+    serve(() => dropping(() => new TypeError('network error')))
+    const events: WeekEvent[] = []
+
+    const failure = streamWeek(rules, (event) => events.push(event))
+
+    await expect(failure).rejects.toBeInstanceOf(StreamFailed)
+    await expect(failure).rejects.toMatchObject({
+      step: 'week',
+      message: 'the connection closed before the week was done',
+    })
+    expect(events.map((event) => event.kind)).toEqual(['slot_started'])
+  })
+
+  it('names the replace step when its connection drops', async () => {
+    serve(() => dropping(() => new TypeError('Load failed')))
+
+    await expect(replaceRecipe(rules, week, 'mon', 'lunch', () => {})).rejects.toMatchObject({
+      name: 'StreamFailed',
+      step: 'replace',
+    })
+  })
+
+  it('passes an abort mid-stream through as an abort', async () => {
+    const controller = new AbortController()
+    serve(() =>
+      dropping(
+        () => new DOMException('The user aborted a request.', 'AbortError'),
+        controller.signal,
+      ),
+    )
+
+    const failure = streamWeek(rules, () => controller.abort(), { signal: controller.signal })
+
+    await expect(failure).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(failure).rejects.not.toBeInstanceOf(StreamFailed)
+  })
 })
 
 describe('replaceRecipe', () => {

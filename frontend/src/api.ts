@@ -97,14 +97,20 @@ async function refusal(response: Response): Promise<ApiError> {
   return new ApiError(response.status, text, [], requestId, retryAfter)
 }
 
+// An abort is the caller's own doing, so it passes through as the AbortError it is.
+function isAbort(error: unknown, options: CallOptions): boolean {
+  return (
+    options.signal?.aborted === true ||
+    (error instanceof DOMException && error.name === 'AbortError')
+  )
+}
+
 async function send(path: string, init: RequestInit, options: CallOptions): Promise<Response> {
   let response: Response
   try {
     response = await fetch(url(path), { ...init, signal: options.signal })
   } catch (error) {
-    if (options.signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
-      throw error
-    }
+    if (isAbort(error, options)) throw error
     throw new ApiError(0, 'the API could not be reached; check the connection and try again')
   }
   if (!response.ok) throw await refusal(response)
@@ -204,16 +210,33 @@ async function streamed(
     options,
   )
   if (response.body === null) throw new StreamFailed(step, 'the response had no stream')
-  for await (const message of serverSentEvents(response.body)) {
-    let event: StreamEvent
-    try {
-      event = JSON.parse(message.data) as StreamEvent
-    } catch {
-      throw new StreamFailed(step, 'the stream sent an event that could not be read')
+  const messages = serverSentEvents(response.body)
+  try {
+    for (;;) {
+      let next: IteratorResult<ServerSentEvent>
+      try {
+        next = await messages.next()
+      } catch (error) {
+        // The body fails when the connection is lost or the server dies mid-run: a phone that
+        // loses signal during a week, say. Only reading is caught here; an error thrown by
+        // onEvent is the caller's and passes through as it is.
+        if (isAbort(error, options)) throw error
+        throw new StreamFailed(step, 'the connection closed before the week was done')
+      }
+      if (next.done === true) break
+      let event: StreamEvent
+      try {
+        event = JSON.parse(next.value.data) as StreamEvent
+      } catch {
+        throw new StreamFailed(step, 'the stream sent an event that could not be read')
+      }
+      if (event.kind === 'error') throw new StreamFailed(event.step, event.message)
+      onEvent(event)
+      if (event.kind === 'week_done') return event.week
     }
-    if (event.kind === 'error') throw new StreamFailed(event.step, event.message)
-    onEvent(event)
-    if (event.kind === 'week_done') return event.week
+  } finally {
+    // Ends the reader, which closes the connection when the stream is still open.
+    await messages.return(undefined)
   }
   throw new StreamFailed(step, 'the stream ended before the week was done')
 }
