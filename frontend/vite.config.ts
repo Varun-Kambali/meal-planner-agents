@@ -8,6 +8,11 @@ const API = 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Vite inlines small files as data: URLs, which a Content-Security-Policy that allows fonts
+    // only from the page's own origin refuses. Fonts stay files.
+    assetsInlineLimit: (file) => (file.endsWith('.woff2') ? false : undefined),
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,
