@@ -49,6 +49,7 @@ export class FakeStream {
       status: 200,
       headers: { 'Content-Type': 'text/event-stream' },
     })
+    streams.set(this.response, this)
   }
 
   send(event: StreamEvent): void {
@@ -64,7 +65,15 @@ export class FakeStream {
   drop(): void {
     this.controller?.error(new TypeError('network error'))
   }
+
+  // As fetch's body fails once its call is aborted.
+  abort(): void {
+    this.controller?.error(new DOMException('The user aborted a request.', 'AbortError'))
+  }
 }
+
+// The fake stream behind each response, so that aborting the call fails its body.
+const streams = new WeakMap<Response, FakeStream>()
 
 export function json(
   content: unknown,
@@ -101,9 +110,7 @@ export function fakeApi(routes: Record<string, Answer>): Call[] {
       if (route === undefined) throw new Error(`the test gave no answer for ${path}`)
       const response = await routes[route]!(call)
       // fetch's body fails with an AbortError once the call is aborted.
-      init.signal?.addEventListener('abort', () => {
-        void response.body?.cancel().catch(() => undefined)
-      })
+      init.signal?.addEventListener('abort', () => streams.get(response)?.abort())
       return response
     }),
   )

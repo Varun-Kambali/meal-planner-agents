@@ -6,7 +6,7 @@
 import type { Allergen, DayKey, Diet } from './api'
 import type { DayType, MealLog, NutrientTarget, PlanRules, Problem, Slot } from './types'
 import { ValidationFailed, checkStored, type FieldProblem } from './validate'
-import { DAYS, type CookWhen, type Gear, type NutrientKey } from './words'
+import { DAYS, DAY_NAMES, type CookWhen, type Gear, type NutrientKey } from './words'
 
 export interface ExtraDraft {
   key: string
@@ -415,4 +415,64 @@ function canonical(value: unknown): string {
         )
       : inner,
   )
+}
+
+export const TARGET_LABELS: Record<TargetField, string> = {
+  kcal: 'Calories (kcal)',
+  protein_g: 'Protein, at least (g)',
+  carbs_g: 'Carbohydrate (g)',
+  fat_g: 'Fat (g)',
+  sat_fat_g_max: 'Saturated fat, at most (g)',
+  fibre_g_min: 'Fibre, at least (g)',
+}
+
+export const SLOT_LABELS: Record<Exclude<keyof SlotDraft, 'key' | 'id'>, string> = {
+  name: 'Name',
+  eat_at: 'Eaten at',
+  kcal_share: "Share of the day's calories (%)",
+  protein_share: "Share of the day's protein (%)",
+  style: 'Kind of dish',
+  cook_when: 'When it is cooked',
+  max_active_min: 'Most active minutes',
+  max_total_min: 'Most minutes in all',
+}
+
+export const FIELD_LABELS: Record<string, string> = {
+  name: 'Plan name',
+  day_types: 'Day types',
+  week: 'The week',
+  slots: 'Meals of the day',
+  gear: 'Kitchen gear you own',
+  'food.diet': 'Diet',
+  'food.exclude_allergens': 'Allergens to leave out',
+  'food.exclude_foods': 'Foods to leave out',
+  'food.liked_foods': 'Foods you like',
+  'food.cuisines': 'Cuisines to draw on',
+  shopping_days: 'Shopping days',
+}
+
+// What a problem's path is called in the list at the top of the form.
+export function labelOf(path: string): string {
+  if (path in FIELD_LABELS) return FIELD_LABELS[path]!
+  const parts = path.split('.')
+  if (parts[0] === 'week' && parts[1] !== undefined) {
+    return `The week, ${DAY_NAMES[parts[1] as keyof typeof DAY_NAMES] ?? parts[1]}`
+  }
+  if (parts[0] === 'day_types' && parts[1] !== undefined) {
+    const day = `Day type ${Number(parts[1]) + 1}`
+    if (parts[2] === undefined) return day
+    if (parts[2] === 'name') return `${day}, name`
+    if (parts[2] === 'extra') {
+      if (parts[3] === undefined) return `${day}, other daily targets`
+      return `${day}, other target ${Number(parts[3]) + 1}`
+    }
+    return `${day}, ${TARGET_LABELS[parts[2] as TargetField]?.toLowerCase() ?? parts[2]}`
+  }
+  if (parts[0] === 'slots' && parts[1] !== undefined) {
+    const meal = `Meal ${Number(parts[1]) + 1}`
+    if (parts[2] === undefined) return meal
+    const label = SLOT_LABELS[parts[2] as keyof typeof SLOT_LABELS]
+    return `${meal}, ${label?.toLowerCase() ?? parts[2]}`
+  }
+  return ''
 }
