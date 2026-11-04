@@ -2,12 +2,12 @@ import { IDBDatabase, IDBFactory } from 'fake-indexeddb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  EMPTY_STATE,
   STORAGE_KEY,
   ValidationFailed,
   StorageUnavailable,
   createStorage,
   exportFile,
+  emptyState,
   importFile,
   type State,
 } from './storage'
@@ -290,7 +290,7 @@ describe('export', () => {
   })
 
   it('has nothing to export before the plan rules are saved', () => {
-    expect(() => exportFile(EMPTY_STATE)).toThrow(/plan rules/)
+    expect(() => exportFile(emptyState())).toThrow(/plan rules/)
   })
 })
 
@@ -298,7 +298,7 @@ describe('storage', () => {
   it('starts empty', async () => {
     const storage = createStorage({ indexedDB: new IDBFactory(), localStorage })
 
-    await expect(storage.loadState()).resolves.toEqual(EMPTY_STATE)
+    await expect(storage.loadState()).resolves.toEqual(emptyState())
   })
 
   it('keeps the state in IndexedDB', async () => {
@@ -372,6 +372,13 @@ describe('storage', () => {
     })
   })
 
+  it('gives a new empty state each time', () => {
+    const first = emptyState()
+    first.log.entries.push(exported().log.entries[0]!)
+
+    expect(emptyState().log.entries).toEqual([])
+  })
+
   it('says so when the browser keeps nothing', async () => {
     const storage = createStorage({
       indexedDB: throwingIndexedDB,
@@ -379,7 +386,7 @@ describe('storage', () => {
     })
 
     await expect(storage.saveState(stateOf(exported()))).rejects.toBeInstanceOf(StorageUnavailable)
-    await expect(storage.loadState()).resolves.toEqual(EMPTY_STATE)
+    await expect(storage.loadState()).resolves.toEqual(emptyState())
   })
 
   it('refuses saved data that no longer fits the file format, with its path', async () => {
@@ -399,7 +406,7 @@ describe('storage', () => {
 
   it('keeps a state with no plan yet', async () => {
     const indexedDB = new IDBFactory()
-    const state: State = { ...EMPTY_STATE, log: exported().log }
+    const state: State = { ...emptyState(), log: exported().log }
 
     await createStorage({ indexedDB, localStorage }).saveState(state)
 

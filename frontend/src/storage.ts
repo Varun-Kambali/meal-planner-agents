@@ -9,8 +9,10 @@ import { ValidationFailed, checkExport, checkStored, type State } from './valida
 
 export { ValidationFailed, type FieldProblem, type State } from './validate'
 
-const NOTHING_SAVED: State = { rules: null, week: null, log: { version: 1, entries: [] } }
-export const EMPTY_STATE: Readonly<State> = Object.freeze(NOTHING_SAVED)
+// The state before anything is saved, made new each time so that no caller can change another's.
+export function emptyState(): State {
+  return { rules: null, week: null, log: { version: 1, entries: [] } }
+}
 
 // The saved record's format, which is the export file's with room for no rules yet.
 const STORED_VERSION = 1
@@ -35,10 +37,6 @@ export interface Backends {
 export interface StateStore {
   loadState(): Promise<State>
   saveState(state: State): Promise<void>
-}
-
-function emptyState(): State {
-  return structuredClone(EMPTY_STATE) as State
 }
 
 function done<T>(request: IDBRequest<T>): Promise<T> {
