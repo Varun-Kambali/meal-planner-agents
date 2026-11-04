@@ -28,7 +28,13 @@ export interface PlanRules {
    */
   day_types: DayType[]
   week: {
-    [k: string]: string | undefined
+    mon: string
+    tue: string
+    wed: string
+    thu: string
+    fri: string
+    sat: string
+    sun: string
   }
   /**
    * @minItems 1
