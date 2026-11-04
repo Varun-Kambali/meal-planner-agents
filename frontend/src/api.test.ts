@@ -422,6 +422,18 @@ describe('errors', () => {
     await expect(failure).rejects.toThrow(detail)
   })
 
+  it('says so when a 200 is not JSON, such as the fallback page of a host', async () => {
+    serve(() => new Response('<!doctype html><title>Meal planner</title>', { status: 200 }))
+
+    const failure = summarise(rules, file.log)
+
+    await expect(failure).rejects.toBeInstanceOf(ApiError)
+    await expect(failure).rejects.toMatchObject({
+      status: 200,
+      detail: 'the response was not JSON',
+    })
+  })
+
   it('reads a refusal that is not JSON, such as a proxy page', async () => {
     serve(
       () => new Response('<html>Bad gateway</html>', { status: 502, statusText: 'Bad Gateway' }),

@@ -117,13 +117,23 @@ async function send(path: string, init: RequestInit, options: CallOptions): Prom
   return response
 }
 
+// A 200 whose body is not JSON came from something other than the API, such as a host's
+// fallback page for an unknown path.
+async function jsonOf<T>(response: Response): Promise<T> {
+  try {
+    return (await response.json()) as T
+  } catch {
+    throw new ApiError(response.status, 'the response was not JSON')
+  }
+}
+
 async function getJson<T>(path: string, options: CallOptions = {}): Promise<T> {
   const response = await send(
     path,
     { method: 'GET', headers: { Accept: 'application/json' } },
     options,
   )
-  return (await response.json()) as T
+  return jsonOf<T>(response)
 }
 
 async function postJson<T>(path: string, body: unknown, options: CallOptions = {}): Promise<T> {
@@ -136,7 +146,7 @@ async function postJson<T>(path: string, body: unknown, options: CallOptions = {
     },
     options,
   )
-  return (await response.json()) as T
+  return jsonOf<T>(response)
 }
 
 interface ServerSentEvent {
