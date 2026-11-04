@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "LogItem": {
+      "additionalProperties": false,
+      "description": "One food that was eaten: an id from nutrition-mcp, how many of a unit, and the unit.",
+      "properties": {
+        "food_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Food Id",
+          "type": "string"
+        },
+        "amount": {
+          "exclusiveMinimum": 0,
+          "title": "Amount",
+          "type": "number"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "food_id",
+        "amount",
+        "unit"
+      ],
+      "title": "LogItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The foods of one meal as the log holds them: ids, amounts and units, and no number.",
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/LogItem"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "items"
+  ],
+  "title": "ComputeRequest",
+  "type": "object"
+}

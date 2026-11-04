@@ -1,0 +1,23 @@
+/* The page frame. */
+
+.page {
+  max-width: var(--width-content);
+  margin: 0 auto;
+  padding: var(--space-2xl) var(--space-md);
+}
+
+.notice {
+  max-width: var(--width-text);
+  margin-top: var(--space-xl);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notice h2 {
+  font-size: var(--text-subheading);
+}
+
+.notice p {
+  margin-bottom: 0;
+}

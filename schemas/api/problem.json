@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "loc": {
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ]
+      },
+      "title": "Loc",
+      "type": "array"
+    },
+    "msg": {
+      "title": "Msg",
+      "type": "string"
+    }
+  },
+  "required": [
+    "loc",
+    "msg"
+  ],
+  "title": "Problem",
+  "type": "object"
+}

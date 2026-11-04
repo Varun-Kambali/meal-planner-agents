@@ -119,8 +119,26 @@ class WeekDone(_Event):
     week: WeekResult
 
 
+class StreamError(_Event):
+    """Sent instead of `week_done` when a run fails after the stream has started.
+
+    It names the step and says only that the run stopped: the exception's text can quote the
+    request, so none of it is sent.
+    """
+
+    kind: Literal["error"] = "error"
+    step: Literal["week", "replace"]
+    message: str
+
+
 WeekEvent = Annotated[
     SlotStarted | SlotWritten | RecipeChecked | RepairStarted | SlotFailed | WeekDone,
     Field(discriminator="kind"),
 ]
 EVENTS: TypeAdapter[WeekEvent] = TypeAdapter(WeekEvent)
+
+# Every event a week or replace stream can carry: the run's own, and the API's error.
+StreamEvent = Annotated[
+    SlotStarted | SlotWritten | RecipeChecked | RepairStarted | SlotFailed | WeekDone | StreamError,
+    Field(discriminator="kind"),
+]

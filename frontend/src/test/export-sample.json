@@ -1,0 +1,657 @@
+{
+  "version": 1,
+  "rules": {
+    "version": 1,
+    "name": "Office weekday",
+    "day_types": [
+      {
+        "id": "training",
+        "name": "Training day",
+        "kcal": 2650,
+        "protein_g": 150,
+        "carbs_g": 340,
+        "fat_g": 80,
+        "sat_fat_g_max": 28,
+        "fibre_g_min": 35,
+        "extra": [
+          {
+            "nutrient": "calcium_mg",
+            "kind": "min",
+            "value": 1000
+          },
+          {
+            "nutrient": "sodium_mg",
+            "kind": "max",
+            "value": 2300
+          }
+        ]
+      },
+      {
+        "id": "rest",
+        "name": "Rest day",
+        "kcal": 2250,
+        "protein_g": 130,
+        "carbs_g": 270,
+        "fat_g": 75,
+        "sat_fat_g_max": 25,
+        "fibre_g_min": 30,
+        "extra": [
+          {
+            "nutrient": "iron_mg",
+            "kind": "min",
+            "value": 15
+          }
+        ]
+      }
+    ],
+    "week": {
+      "mon": "training",
+      "tue": "rest",
+      "wed": "training",
+      "thu": "rest",
+      "fri": "training",
+      "sat": "rest",
+      "sun": "rest"
+    },
+    "slots": [
+      {
+        "id": "breakfast",
+        "name": "Breakfast",
+        "eat_at": "08:00",
+        "kcal_share": 0.25,
+        "protein_share": 0.25,
+        "style": "overnight oats",
+        "cook_when": "night_before",
+        "max_active_min": 10,
+        "max_total_min": 600
+      },
+      {
+        "id": "lunch",
+        "name": "Lunch",
+        "eat_at": "13:00",
+        "kcal_share": 0.3,
+        "protein_share": 0.3,
+        "style": "packed lunch box",
+        "cook_when": "evening_before",
+        "max_active_min": 30,
+        "max_total_min": 60
+      },
+      {
+        "id": "snack",
+        "name": "Evening snack",
+        "eat_at": "17:00",
+        "kcal_share": 0.15,
+        "protein_share": 0.1,
+        "style": "no-cook snack",
+        "cook_when": "fresh",
+        "max_active_min": 10,
+        "max_total_min": 10
+      },
+      {
+        "id": "dinner",
+        "name": "Dinner",
+        "eat_at": "20:30",
+        "kcal_share": 0.3,
+        "protein_share": 0.35,
+        "style": "air-fryer dish",
+        "cook_when": "fresh",
+        "max_active_min": 30,
+        "max_total_min": 45
+      }
+    ],
+    "gear": [
+      "air_fryer",
+      "pressure_cooker",
+      "microwave",
+      "stovetop_pan",
+      "blender",
+      "jar_with_lid"
+    ],
+    "food": {
+      "diet": "veg",
+      "exclude_allergens": ["peanut"],
+      "exclude_foods": ["brinjal"],
+      "liked_foods": ["paneer", "moong_dal"],
+      "cuisines": ["South Indian", "Japanese", "Mediterranean"]
+    },
+    "shopping_days": ["sat", "wed"]
+  },
+  "week": {
+    "recipes": [
+      {
+        "spec": {
+          "day": "mon",
+          "day_type": "training",
+          "slot": {
+            "id": "breakfast",
+            "name": "Breakfast",
+            "eat_at": "08:00:00",
+            "kcal_share": 0.25,
+            "protein_share": 0.25,
+            "style": "overnight oats",
+            "cook_when": "night_before",
+            "max_active_min": 10,
+            "max_total_min": 600
+          },
+          "kcal": 662.5,
+          "protein_g": 37.5
+        },
+        "draft": {
+          "day": "mon",
+          "title": "Banana overnight oats",
+          "cuisine": "South Indian",
+          "ingredients": [
+            {
+              "id": "banana",
+              "grams": 182.19
+            },
+            {
+              "id": "oats",
+              "grams": 99.38
+            },
+            {
+              "id": "curd",
+              "grams": 49.69
+            }
+          ],
+          "steps": [
+            "Layer the oats, curd and banana in a jar.",
+            "Close the lid and chill overnight."
+          ],
+          "active_min": 5,
+          "total_min": 480,
+          "gear": ["jar_with_lid"],
+          "cook_when": "night_before",
+          "store": "Fridge, eat within two days.",
+          "swap": "Use any other fruit or nut from the list.",
+          "fits": "A no-cook breakfast that carries a quarter of the day."
+        },
+        "nutrition": {
+          "items": [
+            {
+              "food": {
+                "id": "banana",
+                "kind": "ingredient",
+                "name": "Banana",
+                "aliases": [],
+                "regions": [],
+                "diet": "veg",
+                "source_ids": ["fake"],
+                "units": {
+                  "g": 1.0
+                }
+              },
+              "amount": 182.19,
+              "unit": "g",
+              "grams": 182.19,
+              "measure_assumption": "182.2 g",
+              "nutrients": {
+                "kcal": 364.38,
+                "protein_g": 25.51,
+                "fat_g": 10.93,
+                "sat_fat_g": 1.82,
+                "carbs_available_g": 43.73,
+                "sugars_g": null,
+                "fibre_g": 9.11,
+                "sodium_mg": 182.19,
+                "iron_mg": 3.64,
+                "calcium_mg": 182.19,
+                "zinc_mg": null,
+                "folate_ug": null,
+                "vit_a_ug": null,
+                "vit_b12_ug": null,
+                "vit_c_mg": null,
+                "vit_d_ug": null
+              },
+              "incomplete": {},
+              "raw_ingredient_totals": [],
+              "gi": null,
+              "gi_ref": null,
+              "glycemic_load": null,
+              "oil_assumption": null,
+              "sources": ["fake"]
+            },
+            {
+              "food": {
+                "id": "oats",
+                "kind": "ingredient",
+                "name": "Oats",
+                "aliases": [],
+                "regions": [],
+                "diet": "veg",
+                "source_ids": ["fake"],
+                "units": {
+                  "g": 1.0
+                }
+              },
+              "amount": 99.38,
+              "unit": "g",
+              "grams": 99.38,
+              "measure_assumption": "99.4 g",
+              "nutrients": {
+                "kcal": 198.76,
+                "protein_g": 13.91,
+                "fat_g": 5.96,
+                "sat_fat_g": 0.99,
+                "carbs_available_g": 23.85,
+                "sugars_g": null,
+                "fibre_g": 4.97,
+                "sodium_mg": 99.38,
+                "iron_mg": 1.99,
+                "calcium_mg": 99.38,
+                "zinc_mg": null,
+                "folate_ug": null,
+                "vit_a_ug": null,
+                "vit_b12_ug": null,
+                "vit_c_mg": null,
+                "vit_d_ug": null
+              },
+              "incomplete": {},
+              "raw_ingredient_totals": [],
+              "gi": null,
+              "gi_ref": null,
+              "glycemic_load": null,
+              "oil_assumption": null,
+              "sources": ["fake"]
+            },
+            {
+              "food": {
+                "id": "curd",
+                "kind": "ingredient",
+                "name": "Curd",
+                "aliases": [],
+                "regions": [],
+                "diet": "veg",
+                "source_ids": ["fake"],
+                "units": {
+                  "g": 1.0
+                }
+              },
+              "amount": 49.69,
+              "unit": "g",
+              "grams": 49.69,
+              "measure_assumption": "49.7 g",
+              "nutrients": {
+                "kcal": 99.38,
+                "protein_g": 6.96,
+                "fat_g": 2.98,
+                "sat_fat_g": 0.5,
+                "carbs_available_g": 11.93,
+                "sugars_g": null,
+                "fibre_g": 2.48,
+                "sodium_mg": 49.69,
+                "iron_mg": 0.99,
+                "calcium_mg": 49.69,
+                "zinc_mg": null,
+                "folate_ug": null,
+                "vit_a_ug": null,
+                "vit_b12_ug": null,
+                "vit_c_mg": null,
+                "vit_d_ug": null
+              },
+              "incomplete": {},
+              "raw_ingredient_totals": [],
+              "gi": null,
+              "gi_ref": null,
+              "glycemic_load": null,
+              "oil_assumption": null,
+              "sources": ["fake"]
+            }
+          ],
+          "total": {
+            "kcal": 662.52,
+            "protein_g": 46.38,
+            "fat_g": 19.88,
+            "sat_fat_g": 3.31,
+            "carbs_available_g": 79.5,
+            "sugars_g": null,
+            "fibre_g": 16.56,
+            "sodium_mg": 331.26,
+            "iron_mg": 6.63,
+            "calcium_mg": 331.26,
+            "zinc_mg": null,
+            "folate_ug": null,
+            "vit_a_ug": null,
+            "vit_b12_ug": null,
+            "vit_c_mg": null,
+            "vit_d_ug": null
+          },
+          "total_incomplete": {
+            "sugars_g": ["banana", "oats", "curd"],
+            "zinc_mg": ["banana", "oats", "curd"],
+            "folate_ug": ["banana", "oats", "curd"],
+            "vit_a_ug": ["banana", "oats", "curd"],
+            "vit_b12_ug": ["banana", "oats", "curd"],
+            "vit_c_mg": ["banana", "oats", "curd"],
+            "vit_d_ug": ["banana", "oats", "curd"]
+          },
+          "glycemic_load": null,
+          "glycemic_load_missing": ["banana", "oats", "curd"]
+        },
+        "failures": [],
+        "attempts": 1,
+        "portion_scale": 1.0
+      },
+      {
+        "spec": {
+          "day": "mon",
+          "day_type": "training",
+          "slot": {
+            "id": "lunch",
+            "name": "Lunch",
+            "eat_at": "13:00:00",
+            "kcal_share": 0.3,
+            "protein_share": 0.3,
+            "style": "packed lunch box",
+            "cook_when": "evening_before",
+            "max_active_min": 30,
+            "max_total_min": 60
+          },
+          "kcal": 795.0,
+          "protein_g": 45.0
+        },
+        "draft": {
+          "day": "mon",
+          "title": "Paneer rice box",
+          "cuisine": "South Indian",
+          "ingredients": [
+            {
+              "id": "paneer",
+              "grams": 218.63
+            },
+            {
+              "id": "white_rice",
+              "grams": 119.25
+            },
+            {
+              "id": "toor_dal",
+              "grams": 59.62
+            }
+          ],
+          "steps": [
+            "Pressure cook the rice and dal together.",
+            "Saute the paneer and pack it beside the rice."
+          ],
+          "active_min": 20,
+          "total_min": 45,
+          "gear": ["pressure_cooker", "stovetop_pan"],
+          "cook_when": "evening_before",
+          "store": "Fridge in a lunch box, reheat in the office microwave.",
+          "swap": "Swap the rice for roti if you prefer.",
+          "fits": "A packed lunch that carries its share of the day's protein."
+        },
+        "nutrition": {
+          "items": [
+            {
+              "food": {
+                "id": "paneer",
+                "kind": "ingredient",
+                "name": "Paneer",
+                "aliases": [],
+                "regions": [],
+                "diet": "veg",
+                "source_ids": ["fake"],
+                "units": {
+                  "g": 1.0
+                }
+              },
+              "amount": 218.63,
+              "unit": "g",
+              "grams": 218.63,
+              "measure_assumption": "218.6 g",
+              "nutrients": {
+                "kcal": 437.26,
+                "protein_g": 30.61,
+                "fat_g": 13.12,
+                "sat_fat_g": 2.19,
+                "carbs_available_g": 52.47,
+                "sugars_g": null,
+                "fibre_g": 10.93,
+                "sodium_mg": 218.63,
+                "iron_mg": 4.37,
+                "calcium_mg": 218.63,
+                "zinc_mg": null,
+                "folate_ug": null,
+                "vit_a_ug": null,
+                "vit_b12_ug": null,
+                "vit_c_mg": null,
+                "vit_d_ug": null
+              },
+              "incomplete": {},
+              "raw_ingredient_totals": [],
+              "gi": null,
+              "gi_ref": null,
+              "glycemic_load": null,
+              "oil_assumption": null,
+              "sources": ["fake"]
+            },
+            {
+              "food": {
+                "id": "white_rice",
+                "kind": "ingredient",
+                "name": "White rice",
+                "aliases": [],
+                "regions": [],
+                "diet": "veg",
+                "source_ids": ["fake"],
+                "units": {
+                  "g": 1.0
+                }
+              },
+              "amount": 119.25,
+              "unit": "g",
+              "grams": 119.25,
+              "measure_assumption": "119.2 g",
+              "nutrients": {
+                "kcal": 238.5,
+                "protein_g": 16.7,
+                "fat_g": 7.15,
+                "sat_fat_g": 1.19,
+                "carbs_available_g": 28.62,
+                "sugars_g": null,
+                "fibre_g": 5.96,
+                "sodium_mg": 119.25,
+                "iron_mg": 2.38,
+                "calcium_mg": 119.25,
+                "zinc_mg": null,
+                "folate_ug": null,
+                "vit_a_ug": null,
+                "vit_b12_ug": null,
+                "vit_c_mg": null,
+                "vit_d_ug": null
+              },
+              "incomplete": {},
+              "raw_ingredient_totals": [],
+              "gi": null,
+              "gi_ref": null,
+              "glycemic_load": null,
+              "oil_assumption": null,
+              "sources": ["fake"]
+            },
+            {
+              "food": {
+                "id": "toor_dal",
+                "kind": "ingredient",
+                "name": "Toor dal",
+                "aliases": [],
+                "regions": [],
+                "diet": "veg",
+                "source_ids": ["fake"],
+                "units": {
+                  "g": 1.0
+                }
+              },
+              "amount": 59.62,
+              "unit": "g",
+              "grams": 59.62,
+              "measure_assumption": "59.6 g",
+              "nutrients": {
+                "kcal": 119.24,
+                "protein_g": 8.35,
+                "fat_g": 3.58,
+                "sat_fat_g": 0.6,
+                "carbs_available_g": 14.31,
+                "sugars_g": null,
+                "fibre_g": 2.98,
+                "sodium_mg": 59.62,
+                "iron_mg": 1.19,
+                "calcium_mg": 59.62,
+                "zinc_mg": null,
+                "folate_ug": null,
+                "vit_a_ug": null,
+                "vit_b12_ug": null,
+                "vit_c_mg": null,
+                "vit_d_ug": null
+              },
+              "incomplete": {},
+              "raw_ingredient_totals": [],
+              "gi": null,
+              "gi_ref": null,
+              "glycemic_load": null,
+              "oil_assumption": null,
+              "sources": ["fake"]
+            }
+          ],
+          "total": {
+            "kcal": 795.0,
+            "protein_g": 55.65,
+            "fat_g": 23.85,
+            "sat_fat_g": 3.98,
+            "carbs_available_g": 95.4,
+            "sugars_g": null,
+            "fibre_g": 19.88,
+            "sodium_mg": 397.5,
+            "iron_mg": 7.95,
+            "calcium_mg": 397.5,
+            "zinc_mg": null,
+            "folate_ug": null,
+            "vit_a_ug": null,
+            "vit_b12_ug": null,
+            "vit_c_mg": null,
+            "vit_d_ug": null
+          },
+          "total_incomplete": {
+            "sugars_g": ["paneer", "white_rice", "toor_dal"],
+            "zinc_mg": ["paneer", "white_rice", "toor_dal"],
+            "folate_ug": ["paneer", "white_rice", "toor_dal"],
+            "vit_a_ug": ["paneer", "white_rice", "toor_dal"],
+            "vit_b12_ug": ["paneer", "white_rice", "toor_dal"],
+            "vit_c_mg": ["paneer", "white_rice", "toor_dal"],
+            "vit_d_ug": ["paneer", "white_rice", "toor_dal"]
+          },
+          "glycemic_load": null,
+          "glycemic_load_missing": ["paneer", "white_rice", "toor_dal"]
+        },
+        "failures": [],
+        "attempts": 1,
+        "portion_scale": 1.0
+      }
+    ],
+    "days": [
+      {
+        "day": "mon",
+        "totals": {
+          "kcal": 2650.0,
+          "protein_g": 185.5,
+          "fat_g": 79.5,
+          "sat_fat_g": 13.26,
+          "carbs_available_g": 318.0,
+          "sugars_g": null,
+          "fibre_g": 66.26,
+          "sodium_mg": 1325.0,
+          "iron_mg": 26.5,
+          "calcium_mg": 1325.0,
+          "zinc_mg": null,
+          "folate_ug": null,
+          "vit_a_ug": null,
+          "vit_b12_ug": null,
+          "vit_c_mg": null,
+          "vit_d_ug": null
+        },
+        "failures": [],
+        "unsettled": [],
+        "soft": {
+          "carbs_available_g": -0.06470588235294118,
+          "fat_g": -0.00625
+        }
+      }
+    ],
+    "no_waste": [],
+    "unwritten": [],
+    "calls": 4,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0
+  },
+  "log": {
+    "version": 1,
+    "entries": [
+      {
+        "date": "2026-10-26",
+        "slot_id": "breakfast",
+        "status": "as_planned",
+        "items": [
+          {
+            "food_id": "rolled_oats",
+            "amount": 80,
+            "unit": "g"
+          },
+          {
+            "food_id": "whole_milk",
+            "amount": 250,
+            "unit": "ml"
+          },
+          {
+            "food_id": "chia_seeds",
+            "amount": 1,
+            "unit": "tbsp"
+          },
+          {
+            "food_id": "banana",
+            "amount": 1,
+            "unit": "piece"
+          }
+        ]
+      },
+      {
+        "date": "2026-10-26",
+        "slot_id": "lunch",
+        "status": "as_planned",
+        "items": [
+          {
+            "food_id": "paneer",
+            "amount": 120,
+            "unit": "g"
+          },
+          {
+            "food_id": "white_rice",
+            "amount": 90,
+            "unit": "g"
+          },
+          {
+            "food_id": "moong_dal",
+            "amount": 60,
+            "unit": "g"
+          }
+        ]
+      },
+      {
+        "date": "2026-10-26",
+        "slot_id": "snack",
+        "status": "different_amount",
+        "items": [
+          {
+            "food_id": "curd",
+            "amount": 250,
+            "unit": "g"
+          },
+          {
+            "food_id": "almonds",
+            "amount": 40,
+            "unit": "g"
+          }
+        ]
+      }
+    ]
+  }
+}

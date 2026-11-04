@@ -1,0 +1,1289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StreamEvent",
+  "$defs": {
+    "CheckedRecipe": {
+      "additionalProperties": false,
+      "description": "A draft with its numbers from nutrition-mcp and the checks it has failed so far.",
+      "properties": {
+        "spec": {
+          "$ref": "#/$defs/SlotSpec"
+        },
+        "draft": {
+          "$ref": "#/$defs/DraftRecipe"
+        },
+        "nutrition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MealResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failures": {
+          "items": {
+            "$ref": "#/$defs/Failure"
+          },
+          "title": "Failures",
+          "type": "array"
+        },
+        "attempts": {
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "portion_scale": {
+          "default": 1.0,
+          "title": "Portion Scale",
+          "type": "number"
+        }
+      },
+      "required": [
+        "spec",
+        "draft",
+        "nutrition",
+        "failures",
+        "attempts"
+      ],
+      "title": "CheckedRecipe",
+      "type": "object"
+    },
+    "DayReport": {
+      "additionalProperties": false,
+      "description": "A day's totals against its day type. Keys are nutrition-mcp's nutrient names.",
+      "properties": {
+        "day": {
+          "enum": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "title": "Day",
+          "type": "string"
+        },
+        "totals": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Totals",
+          "type": "object"
+        },
+        "failures": {
+          "items": {
+            "$ref": "#/$defs/Failure"
+          },
+          "title": "Failures",
+          "type": "array"
+        },
+        "unsettled": {
+          "items": {
+            "$ref": "#/$defs/Failure"
+          },
+          "title": "Unsettled",
+          "type": "array"
+        },
+        "soft": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Soft",
+          "type": "object"
+        }
+      },
+      "required": [
+        "day",
+        "totals",
+        "failures",
+        "unsettled",
+        "soft"
+      ],
+      "title": "DayReport",
+      "type": "object"
+    },
+    "DraftIngredient": {
+      "additionalProperties": false,
+      "description": "One catalogue ingredient and how much of it, in grams.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "grams": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Grams",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "grams"
+      ],
+      "title": "DraftIngredient",
+      "type": "object"
+    },
+    "DraftRecipe": {
+      "additionalProperties": false,
+      "description": "A recipe as the model writes it. It carries no nutrition numbers: those come from code.",
+      "properties": {
+        "day": {
+          "enum": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "title": "Day",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "cuisine": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Cuisine",
+          "type": "string"
+        },
+        "ingredients": {
+          "items": {
+            "$ref": "#/$defs/DraftIngredient"
+          },
+          "maxItems": 15,
+          "minItems": 1,
+          "title": "Ingredients",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "active_min": {
+          "minimum": 0,
+          "title": "Active Min",
+          "type": "integer"
+        },
+        "total_min": {
+          "minimum": 0,
+          "title": "Total Min",
+          "type": "integer"
+        },
+        "gear": {
+          "items": {
+            "enum": [
+              "air_fryer",
+              "pressure_cooker",
+              "microwave",
+              "oven",
+              "stovetop_pan",
+              "kadhai",
+              "blender",
+              "jar_with_lid",
+              "rice_cooker",
+              "steamer",
+              "kettle"
+            ],
+            "type": "string"
+          },
+          "title": "Gear",
+          "type": "array"
+        },
+        "cook_when": {
+          "enum": [
+            "fresh",
+            "evening_before",
+            "night_before"
+          ],
+          "title": "Cook When",
+          "type": "string"
+        },
+        "store": {
+          "title": "Store",
+          "type": "string"
+        },
+        "swap": {
+          "title": "Swap",
+          "type": "string"
+        },
+        "fits": {
+          "title": "Fits",
+          "type": "string"
+        }
+      },
+      "required": [
+        "day",
+        "title",
+        "cuisine",
+        "ingredients",
+        "steps",
+        "active_min",
+        "total_min",
+        "gear",
+        "cook_when",
+        "store",
+        "swap",
+        "fits"
+      ],
+      "title": "DraftRecipe",
+      "type": "object"
+    },
+    "Failure": {
+      "additionalProperties": false,
+      "description": "A rule a recipe or day misses, in words the writer can act on.",
+      "properties": {
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check",
+        "message"
+      ],
+      "title": "Failure",
+      "type": "object"
+    },
+    "FoodSummary": {
+      "description": "Enough to identify a food and to pick a unit that fits it.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "ingredient",
+            "dish"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "regions": {
+          "items": {
+            "enum": [
+              "north",
+              "south",
+              "east",
+              "west"
+            ],
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "diet": {
+          "enum": [
+            "veg",
+            "egg",
+            "non_veg",
+            "vegan"
+          ],
+          "title": "Diet",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "units": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Every unit get_nutrition and compute_meal accept for this food, with the grams in one of each: g, the food's own measures, then the default katori for a dish served by the bowl and the volume units for a liquid.",
+          "title": "Units",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "aliases",
+        "regions",
+        "diet",
+        "source_ids",
+        "units"
+      ],
+      "title": "FoodSummary",
+      "type": "object"
+    },
+    "MealResult": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/NutritionResult"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "total": {
+          "$ref": "#/$defs/Nutrients",
+          "description": "Nutrient amounts, the sum over the items."
+        },
+        "total_incomplete": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Total Incomplete",
+          "type": "object"
+        },
+        "glycemic_load": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Glycemic Load"
+        },
+        "glycemic_load_missing": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Glycemic Load Missing",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "total_incomplete",
+        "glycemic_load",
+        "glycemic_load_missing"
+      ],
+      "title": "MealResult",
+      "type": "object"
+    },
+    "NoWasteRow": {
+      "properties": {
+        "ingredient": {
+          "title": "Ingredient",
+          "type": "string"
+        },
+        "window_start": {
+          "enum": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "title": "Window Start",
+          "type": "string"
+        },
+        "failure": {
+          "$ref": "#/$defs/Failure"
+        }
+      },
+      "required": [
+        "ingredient",
+        "window_start",
+        "failure"
+      ],
+      "title": "NoWasteRow",
+      "type": "object"
+    },
+    "Nutrients": {
+      "additionalProperties": false,
+      "description": "Amounts of the 16 nutrients; null means not reported, which is not 0.",
+      "properties": {
+        "kcal": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kcal"
+        },
+        "protein_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protein G"
+        },
+        "fat_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fat G"
+        },
+        "sat_fat_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sat Fat G"
+        },
+        "carbs_available_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carbs Available G"
+        },
+        "sugars_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sugars G"
+        },
+        "fibre_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fibre G"
+        },
+        "sodium_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sodium Mg"
+        },
+        "iron_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Iron Mg"
+        },
+        "calcium_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calcium Mg"
+        },
+        "zinc_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zinc Mg"
+        },
+        "folate_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Folate Ug"
+        },
+        "vit_a_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit A Ug"
+        },
+        "vit_b12_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit B12 Ug"
+        },
+        "vit_c_mg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit C Mg"
+        },
+        "vit_d_ug": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vit D Ug"
+        }
+      },
+      "title": "Nutrients",
+      "type": "object"
+    },
+    "NutritionResult": {
+      "description": "The nutrients in one amount of one food, with how the amount was worked out.",
+      "properties": {
+        "food": {
+          "$ref": "#/$defs/FoodSummary"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "grams": {
+          "title": "Grams",
+          "type": "number"
+        },
+        "measure_assumption": {
+          "title": "Measure Assumption",
+          "type": "string"
+        },
+        "nutrients": {
+          "$ref": "#/$defs/Nutrients",
+          "description": "Nutrient amounts in `grams` of this food."
+        },
+        "incomplete": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Incomplete",
+          "type": "object"
+        },
+        "raw_ingredient_totals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Raw Ingredient Totals",
+          "type": "array"
+        },
+        "gi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gi"
+        },
+        "gi_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gi Ref"
+        },
+        "glycemic_load": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Glycemic Load"
+        },
+        "oil_assumption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Oil Assumption"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "food",
+        "amount",
+        "unit",
+        "grams",
+        "measure_assumption",
+        "nutrients",
+        "incomplete",
+        "raw_ingredient_totals",
+        "gi",
+        "gi_ref",
+        "glycemic_load",
+        "oil_assumption",
+        "sources"
+      ],
+      "title": "NutritionResult",
+      "type": "object"
+    },
+    "RecipeChecked": {
+      "additionalProperties": false,
+      "description": "A recipe was checked, or its failures changed. `attempt` counts this recipe's tries.",
+      "properties": {
+        "kind": {
+          "const": "recipe_checked",
+          "default": "recipe_checked",
+          "title": "Kind",
+          "type": "string"
+        },
+        "day": {
+          "enum": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "title": "Day",
+          "type": "string"
+        },
+        "slot_id": {
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "failures": {
+          "items": {
+            "$ref": "#/$defs/Failure"
+          },
+          "title": "Failures",
+          "type": "array"
+        }
+      },
+      "required": [
+        "day",
+        "slot_id",
+        "attempt",
+        "failures"
+      ],
+      "title": "RecipeChecked",
+      "type": "object"
+    },
+    "RepairStarted": {
+      "additionalProperties": false,
+      "description": "A model call to rewrite a slot's failing recipes has begun.",
+      "properties": {
+        "kind": {
+          "const": "repair_started",
+          "default": "repair_started",
+          "title": "Kind",
+          "type": "string"
+        },
+        "slot_id": {
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "days": {
+          "items": {
+            "enum": [
+              "mon",
+              "tue",
+              "wed",
+              "thu",
+              "fri",
+              "sat",
+              "sun"
+            ],
+            "type": "string"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "slot_id",
+        "days",
+        "attempt"
+      ],
+      "title": "RepairStarted",
+      "type": "object"
+    },
+    "Slot": {
+      "additionalProperties": false,
+      "description": "One meal of the day, with its share of the day's calories and protein.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,29}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "eat_at": {
+          "format": "time",
+          "title": "Eat At",
+          "type": "string"
+        },
+        "kcal_share": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Kcal Share",
+          "type": "number"
+        },
+        "protein_share": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Protein Share",
+          "type": "number"
+        },
+        "style": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Style",
+          "type": "string"
+        },
+        "cook_when": {
+          "enum": [
+            "fresh",
+            "evening_before",
+            "night_before"
+          ],
+          "title": "Cook When",
+          "type": "string"
+        },
+        "max_active_min": {
+          "maximum": 240,
+          "minimum": 1,
+          "title": "Max Active Min",
+          "type": "integer"
+        },
+        "max_total_min": {
+          "maximum": 1440,
+          "minimum": 1,
+          "title": "Max Total Min",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "eat_at",
+        "kcal_share",
+        "protein_share",
+        "style",
+        "cook_when",
+        "max_active_min",
+        "max_total_min"
+      ],
+      "title": "Slot",
+      "type": "object"
+    },
+    "SlotFailed": {
+      "additionalProperties": false,
+      "description": "A model call gave nothing usable. `final` is false when the slot will be tried again.",
+      "properties": {
+        "kind": {
+          "const": "slot_failed",
+          "default": "slot_failed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "slot_id": {
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "days": {
+          "items": {
+            "enum": [
+              "mon",
+              "tue",
+              "wed",
+              "thu",
+              "fri",
+              "sat",
+              "sun"
+            ],
+            "type": "string"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "final": {
+          "title": "Final",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "slot_id",
+        "days",
+        "attempt",
+        "reason",
+        "final"
+      ],
+      "title": "SlotFailed",
+      "type": "object"
+    },
+    "SlotSpec": {
+      "additionalProperties": false,
+      "description": "One slot on one day, with the calories and protein its share of that day type comes to.",
+      "properties": {
+        "day": {
+          "enum": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "title": "Day",
+          "type": "string"
+        },
+        "day_type": {
+          "title": "Day Type",
+          "type": "string"
+        },
+        "slot": {
+          "$ref": "#/$defs/Slot"
+        },
+        "kcal": {
+          "title": "Kcal",
+          "type": "number"
+        },
+        "protein_g": {
+          "title": "Protein G",
+          "type": "number"
+        }
+      },
+      "required": [
+        "day",
+        "day_type",
+        "slot",
+        "kcal",
+        "protein_g"
+      ],
+      "title": "SlotSpec",
+      "type": "object"
+    },
+    "SlotStarted": {
+      "additionalProperties": false,
+      "description": "A model call to write recipes for a slot has begun. `attempt` counts the slot's calls.",
+      "properties": {
+        "kind": {
+          "const": "slot_started",
+          "default": "slot_started",
+          "title": "Kind",
+          "type": "string"
+        },
+        "slot_id": {
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "days": {
+          "items": {
+            "enum": [
+              "mon",
+              "tue",
+              "wed",
+              "thu",
+              "fri",
+              "sat",
+              "sun"
+            ],
+            "type": "string"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "slot_id",
+        "days",
+        "attempt"
+      ],
+      "title": "SlotStarted",
+      "type": "object"
+    },
+    "SlotWritten": {
+      "additionalProperties": false,
+      "description": "The model's reply for the slot had the recipes asked for. They have not been checked.",
+      "properties": {
+        "kind": {
+          "const": "slot_written",
+          "default": "slot_written",
+          "title": "Kind",
+          "type": "string"
+        },
+        "slot_id": {
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "days": {
+          "items": {
+            "enum": [
+              "mon",
+              "tue",
+              "wed",
+              "thu",
+              "fri",
+              "sat",
+              "sun"
+            ],
+            "type": "string"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "slot_id",
+        "days",
+        "attempt"
+      ],
+      "title": "SlotWritten",
+      "type": "object"
+    },
+    "StreamError": {
+      "additionalProperties": false,
+      "description": "Sent instead of `week_done` when a run fails after the stream has started.\n\nIt names the step and says only that the run stopped: the exception's text can quote the\nrequest, so none of it is sent.",
+      "properties": {
+        "kind": {
+          "const": "error",
+          "default": "error",
+          "title": "Kind",
+          "type": "string"
+        },
+        "step": {
+          "enum": [
+            "week",
+            "replace"
+          ],
+          "title": "Step",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "message"
+      ],
+      "title": "StreamError",
+      "type": "object"
+    },
+    "WeekDone": {
+      "additionalProperties": false,
+      "description": "The last event of every run.",
+      "properties": {
+        "kind": {
+          "const": "week_done",
+          "default": "week_done",
+          "title": "Kind",
+          "type": "string"
+        },
+        "week": {
+          "$ref": "#/$defs/WeekResult"
+        }
+      },
+      "required": [
+        "week"
+      ],
+      "title": "WeekDone",
+      "type": "object"
+    },
+    "WeekResult": {
+      "additionalProperties": false,
+      "description": "The week as the graph leaves it: every recipe with its numbers, and what still fails.",
+      "properties": {
+        "recipes": {
+          "items": {
+            "$ref": "#/$defs/CheckedRecipe"
+          },
+          "title": "Recipes",
+          "type": "array"
+        },
+        "days": {
+          "items": {
+            "$ref": "#/$defs/DayReport"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "no_waste": {
+          "items": {
+            "$ref": "#/$defs/NoWasteRow"
+          },
+          "title": "No Waste",
+          "type": "array"
+        },
+        "unwritten": {
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "enum": [
+                  "mon",
+                  "tue",
+                  "wed",
+                  "thu",
+                  "fri",
+                  "sat",
+                  "sun"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Unwritten",
+          "type": "array"
+        },
+        "calls": {
+          "title": "Calls",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cost Usd"
+        }
+      },
+      "required": [
+        "recipes",
+        "days",
+        "no_waste",
+        "unwritten",
+        "calls",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd"
+      ],
+      "title": "WeekResult",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "error": "#/$defs/StreamError",
+      "recipe_checked": "#/$defs/RecipeChecked",
+      "repair_started": "#/$defs/RepairStarted",
+      "slot_failed": "#/$defs/SlotFailed",
+      "slot_started": "#/$defs/SlotStarted",
+      "slot_written": "#/$defs/SlotWritten",
+      "week_done": "#/$defs/WeekDone"
+    },
+    "propertyName": "kind"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SlotStarted"
+    },
+    {
+      "$ref": "#/$defs/SlotWritten"
+    },
+    {
+      "$ref": "#/$defs/RecipeChecked"
+    },
+    {
+      "$ref": "#/$defs/RepairStarted"
+    },
+    {
+      "$ref": "#/$defs/SlotFailed"
+    },
+    {
+      "$ref": "#/$defs/WeekDone"
+    },
+    {
+      "$ref": "#/$defs/StreamError"
+    }
+  ]
+}

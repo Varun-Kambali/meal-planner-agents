@@ -1,0 +1,132 @@
+[
+  {
+    "case": "version 2",
+    "changes": [{ "at": "/version", "value": 2 }],
+    "path": "/version",
+    "refused_by": "model"
+  },
+  {
+    "case": "a food id that is a number",
+    "changes": [{ "at": "/log/entries/0/items/0/food_id", "value": 42 }],
+    "path": "/log/entries/0/items/0/food_id",
+    "refused_by": "model"
+  },
+  {
+    "case": "a plan name of spaces",
+    "changes": [{ "at": "/rules/name", "value": "   " }],
+    "path": "/rules/name",
+    "refused_by": "model"
+  },
+  {
+    "case": "a day type name of spaces",
+    "changes": [{ "at": "/rules/day_types/0/name", "value": "  " }],
+    "path": "/rules/day_types/0/name",
+    "refused_by": "model"
+  },
+  {
+    "case": "a slot name of spaces",
+    "changes": [{ "at": "/rules/slots/0/name", "value": " " }],
+    "path": "/rules/slots/0/name",
+    "refused_by": "model"
+  },
+  {
+    "case": "a cuisine of spaces",
+    "changes": [{ "at": "/rules/food/cuisines/0", "value": "\t " }],
+    "path": "/rules/food/cuisines/0",
+    "refused_by": "model"
+  },
+  {
+    "case": "a recipe title of spaces",
+    "changes": [{ "at": "/week/recipes/0/draft/title", "value": "   " }],
+    "path": "/week/recipes/0/draft/title",
+    "refused_by": "model"
+  },
+  {
+    "case": "a recipe cuisine of spaces",
+    "changes": [{ "at": "/week/recipes/0/draft/cuisine", "value": " " }],
+    "path": "/week/recipes/0/draft/cuisine",
+    "refused_by": "model"
+  },
+  {
+    "case": "a recipe step of spaces",
+    "changes": [{ "at": "/week/recipes/0/draft/steps/0", "value": "  " }],
+    "path": "/week/recipes/0/draft/steps/0",
+    "refused_by": "model"
+  },
+  {
+    "case": "a skipped meal that lists foods",
+    "changes": [{ "at": "/log/entries/0/status", "value": "skipped" }],
+    "path": "/log/entries/0/items",
+    "refused_by": "model"
+  },
+  {
+    "case": "an eaten meal that lists none",
+    "changes": [{ "at": "/log/entries/1/items", "value": [] }],
+    "path": "/log/entries/1/items",
+    "refused_by": "model"
+  },
+  {
+    "case": "a meal logged twice for one date and slot",
+    "changes": [{ "at": "/log/entries/-", "copy": "/log/entries/0" }],
+    "path": "/log/entries/3",
+    "refused_by": "model"
+  },
+  {
+    "case": "a log longer than a week",
+    "changes": [{ "at": "/log/entries/2/date", "value": "2026-11-02" }],
+    "path": "/log/entries",
+    "refused_by": "model"
+  },
+  {
+    "case": "a day of the week with a day type the plan does not define",
+    "changes": [{ "at": "/rules/week/sun", "value": "holiday" }],
+    "path": "/rules/week/sun",
+    "refused_by": "model"
+  },
+  {
+    "case": "two day types with one id",
+    "changes": [{ "at": "/rules/day_types/1/id", "value": "training" }],
+    "path": "/rules/day_types/1/id",
+    "refused_by": "model"
+  },
+  {
+    "case": "two slots with one id",
+    "changes": [{ "at": "/rules/slots/1/id", "value": "breakfast" }],
+    "path": "/rules/slots/1/id",
+    "refused_by": "model"
+  },
+  {
+    "case": "slot shares that do not add up to a day",
+    "changes": [{ "at": "/rules/slots/0/kcal_share", "value": 0.2 }],
+    "path": "/rules/slots",
+    "refused_by": "model"
+  },
+  {
+    "case": "an extra target that repeats one the day type has",
+    "changes": [
+      {
+        "at": "/rules/day_types/0/extra/-",
+        "value": { "nutrient": "protein_g", "kind": "min", "value": 100 }
+      }
+    ],
+    "path": "/rules/day_types/0/extra/2/nutrient",
+    "refused_by": "model"
+  },
+  {
+    "case": "an extra target listed twice",
+    "changes": [
+      {
+        "at": "/rules/day_types/0/extra/-",
+        "value": { "nutrient": "calcium_mg", "kind": "max", "value": 2500 }
+      }
+    ],
+    "path": "/rules/day_types/0/extra/2/nutrient",
+    "refused_by": "model"
+  },
+  {
+    "case": "a log entry for a slot the plan does not have",
+    "changes": [{ "at": "/log/entries/1/slot_id", "value": "brunch" }],
+    "path": "/log/entries/1/slot_id",
+    "refused_by": "summary"
+  }
+]

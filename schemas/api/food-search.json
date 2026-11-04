@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FoodSearchResult",
+  "$defs": {
+    "FoodOption": {
+      "description": "A food a name found, and the units an amount of it can be given in.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "ingredient",
+            "dish"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "units": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Units",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "units"
+      ],
+      "title": "FoodOption",
+      "type": "object"
+    }
+  },
+  "items": {
+    "$ref": "#/$defs/FoodOption"
+  },
+  "type": "array"
+}

@@ -1,0 +1,77 @@
+/* The design tokens of design-system/meal-planner/MASTER.md. Build from these, never from
+   ad-hoc values; change MASTER.md first when one has to change. */
+
+:root {
+  color-scheme: light;
+
+  --color-bg: #f8faf9;
+  --color-surface: #ffffff;
+  --color-surface-2: #edf2f1;
+  --color-selected: #d7efec;
+  --color-text: #142120;
+  --color-text-muted: #4b5a58;
+  --color-border: #d5dedc;
+  --color-border-strong: #73817f;
+  --color-primary: #0f766e;
+  --color-primary-hover: #115e59;
+  --color-on-primary: #ffffff;
+  --color-ok: #166534;
+  --color-fail: #b42318;
+  --color-warn: #8a5300;
+  --color-unsettled: #4b5a58;
+
+  --font-sans: 'Plus Jakarta Sans Variable', system-ui, sans-serif;
+  --text-title: 1.75rem; /* 28px */
+  --text-heading: 1.375rem; /* 22px */
+  --text-subheading: 1.125rem; /* 18px */
+  --text-body: 1rem; /* 16px */
+  --text-meta: 0.875rem; /* 14px */
+  --text-small: 0.8125rem; /* 13px, the smallest size */
+  --leading-body: 1.6;
+  --leading-meta: 1.5;
+
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+  --width-content: 72rem;
+  --width-text: 40rem;
+  --target-min: 44px;
+  --duration: 120ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-bg: #0e1413;
+    --color-surface: #151c1b;
+    --color-surface-2: #1d2625;
+    --color-selected: #163a36;
+    --color-text: #e6edec;
+    --color-text-muted: #a2b0ae;
+    --color-border: #2b3634;
+    --color-border-strong: #7a8a87;
+    --color-primary: #5cd6c4;
+    --color-primary-hover: #8be5d7;
+    --color-on-primary: #06302c;
+    --color-ok: #86efac;
+    --color-fail: #fda29b;
+    --color-warn: #f7c46c;
+    --color-unsettled: #a2b0ae;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration: 0ms;
+  }
+}
