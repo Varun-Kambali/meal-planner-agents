@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   STORAGE_KEY,
+  SavedDataUnreadable,
   ValidationFailed,
   StorageUnavailable,
   createStorage,
@@ -324,13 +325,68 @@ describe('storage', () => {
     await expect(reloaded.loadState()).resolves.toEqual(state)
   })
 
-  it('falls back to localStorage when IndexedDB fails to open', async () => {
+  // An open request that fails may hide a plan saved earlier (iOS Safari loses its connection
+  // to the database server, say), unlike an open that throws at once, which means none was.
+  it('does not start empty when IndexedDB fails to open, since it may hold a plan', async () => {
+    const storage = createStorage({ indexedDB: failingIndexedDB, localStorage })
+
+    await expect(storage.loadState()).rejects.toBeInstanceOf(SavedDataUnreadable)
+  })
+
+  it('does not save over a plan IndexedDB may hold when it fails to open', async () => {
+    const storage = createStorage({ indexedDB: failingIndexedDB, localStorage })
+
+    await expect(storage.saveState(stateOf(exported()))).rejects.toBeInstanceOf(SavedDataUnreadable)
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('keeps using the localStorage copy when IndexedDB fails to open, since it is newer', async () => {
     const state = stateOf(exported())
+    await createStorage({ indexedDB: throwingIndexedDB, localStorage }).saveState(state)
+    const storage = createStorage({ indexedDB: failingIndexedDB, localStorage })
 
-    await createStorage({ indexedDB: failingIndexedDB, localStorage }).saveState(state)
+    await expect(storage.loadState()).resolves.toEqual(state)
+    const changed: State = { ...state, week: null }
+    await storage.saveState(changed)
+    await expect(storage.loadState()).resolves.toEqual(changed)
+  })
 
-    const reloaded = createStorage({ indexedDB: failingIndexedDB, localStorage })
-    await expect(reloaded.loadState()).resolves.toEqual(state)
+  it('tries IndexedDB again after it failed to open', async () => {
+    const real = new IDBFactory()
+    const state = stateOf(exported())
+    await createStorage({ indexedDB: real, localStorage }).saveState(state)
+    let opens = 0
+    const flaky = {
+      open: (name: string, version?: number) =>
+        opens++ === 0 ? failingIndexedDB.open(name, version) : real.open(name, version),
+    } as unknown as IDBFactory
+    const storage = createStorage({ indexedDB: flaky, localStorage })
+
+    await expect(storage.loadState()).rejects.toBeInstanceOf(SavedDataUnreadable)
+    await expect(storage.loadState()).resolves.toEqual(state)
+  })
+
+  it('stops writing to a connection another tab has closed to upgrade the database', async () => {
+    const indexedDB = new IDBFactory()
+    const state = stateOf(exported())
+    const storage = createStorage({ indexedDB, localStorage })
+    await storage.saveState(state)
+    // A newer version of the page, in another tab, upgrades the database.
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('meal-planner', 2)
+      request.onsuccess = () => {
+        request.result.close()
+        resolve()
+      }
+      request.onerror = () => reject(request.error)
+    })
+
+    // This tab's version cannot open the upgraded database, and must not hide that by saving
+    // a copy to localStorage that the newer tab would never read.
+    await expect(storage.saveState({ ...state, week: null })).rejects.toBeInstanceOf(
+      SavedDataUnreadable,
+    )
+    expect(localStorage.length).toBe(0)
   })
 
   it('falls back to localStorage when the browser has no IndexedDB', async () => {
@@ -367,9 +423,9 @@ describe('storage', () => {
     })
 
     // An empty state here would let the next save write over the plan that is still there.
-    await expect(createStorage({ indexedDB, localStorage }).loadState()).rejects.toMatchObject({
-      name: 'InvalidStateError',
-    })
+    await expect(createStorage({ indexedDB, localStorage }).loadState()).rejects.toBeInstanceOf(
+      SavedDataUnreadable,
+    )
   })
 
   it('refuses to save a state that would not load again, and keeps the last good one', async () => {

@@ -17,6 +17,7 @@ export function emptyState(): State {
 // The saved record's format, which is the export file's with room for no rules yet.
 const STORED_VERSION = 1
 const DATABASE = 'meal-planner'
+const DATABASE_VERSION = 1
 const STORE = 'state'
 const RECORD = 'current'
 export const STORAGE_KEY = 'meal-planner-state'
@@ -26,6 +27,18 @@ export class StorageUnavailable extends Error {
   constructor() {
     super('this browser does not let the page keep data; export the file to keep a copy')
     this.name = 'StorageUnavailable'
+  }
+}
+
+// IndexedDB may hold a saved state that cannot be read now: its open request failed, a read
+// failed, or a newer version of the page in another tab has upgraded the database. Starting
+// empty, or saving a copy elsewhere, could lose that state, so neither is done.
+export class SavedDataUnreadable extends Error {
+  constructor(cause: unknown) {
+    super('what this browser saved cannot be read right now; reload the page to try again', {
+      cause,
+    })
+    this.name = 'SavedDataUnreadable'
   }
 }
 
@@ -46,25 +59,40 @@ function done<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
-// The database, or null when IndexedDB is missing, refused or fails to open. `open` itself
-// throws in some browsers that block site data; the promise turns that into a rejection.
-async function openDatabase(factory: IDBFactory | undefined): Promise<IDBDatabase | null> {
-  if (factory === undefined) return null
+// What opening IndexedDB came to. `absent`: the browser has none, or `open` threw at once, as
+// it does where site data is blocked, so nothing can have been saved there. `failed`: the open
+// request was made and then failed, so a state saved earlier may still be there.
+type Opened =
+  { kind: 'open'; database: IDBDatabase } | { kind: 'absent' } | { kind: 'failed'; error: unknown }
+
+// `closed` is called when the browser closes the connection, or another tab asks for it to be
+// closed so that it can upgrade the database, so that the next call opens it again.
+function openDatabase(factory: IDBFactory | undefined, closed: () => void): Promise<Opened> {
+  if (factory === undefined) return Promise.resolve({ kind: 'absent' })
+  let request: IDBOpenDBRequest
   try {
-    return await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = factory.open(DATABASE, 1)
-      request.onupgradeneeded = () => request.result.createObjectStore(STORE)
-      request.onsuccess = () => {
-        const database = request.result
-        // A newer version of the page in another tab needs this connection closed to upgrade.
-        database.onversionchange = () => database.close()
-        resolve(database)
-      }
-      request.onerror = () => reject(request.error ?? new Error('IndexedDB did not open'))
-    })
+    request = factory.open(DATABASE, DATABASE_VERSION)
   } catch {
-    return null
+    return Promise.resolve({ kind: 'absent' })
   }
+  return new Promise((resolve) => {
+    request.onupgradeneeded = (event) => {
+      // Each later version adds its own step here, from the version the browser has.
+      if (event.oldVersion < 1) request.result.createObjectStore(STORE)
+    }
+    request.onsuccess = () => {
+      const database = request.result
+      database.onversionchange = () => {
+        database.close()
+        closed()
+      }
+      database.onclose = closed
+      resolve({ kind: 'open', database })
+    }
+    request.onerror = () => {
+      resolve({ kind: 'failed', error: request.error ?? new Error('IndexedDB did not open') })
+    }
+  })
 }
 
 async function readRecord(database: IDBDatabase): Promise<string | undefined> {
@@ -128,37 +156,56 @@ function fromStored(text: string): State {
 // Storage over the given backends. The page uses the browser's (`loadState` and `saveState`
 // below); tests pass their own.
 export function createStorage(backends: Backends): StateStore {
-  let database: Promise<IDBDatabase | null> | undefined
-  const connection = (): Promise<IDBDatabase | null> =>
-    (database ??= openDatabase(backends.indexedDB))
+  let database: Promise<Opened> | undefined
+  const forget = (): void => {
+    database = undefined
+  }
+  // A connection that failed to open is not kept, so the next call tries again.
+  const connection = async (): Promise<Opened> => {
+    database ??= openDatabase(backends.indexedDB, forget)
+    const opened = await database
+    if (opened.kind === 'failed') forget()
+    return opened
+  }
 
   return {
     // Rejects with ValidationFailed, naming the place, when what was saved no longer fits, and
-    // with IndexedDB's error when what it holds cannot be read.
+    // with SavedDataUnreadable when IndexedDB may hold a state it cannot read now. Starting
+    // empty in either case would let the next save write over the plan.
     async loadState(): Promise<State> {
       const copy = readCopy(backends.localStorage)
       if (copy !== null) return fromStored(copy)
       const opened = await connection()
-      // A read that fails rejects: starting empty would let the next save write over the plan.
-      const text = opened === null ? undefined : await readRecord(opened)
+      if (opened.kind === 'absent') return emptyState()
+      if (opened.kind === 'failed') throw new SavedDataUnreadable(opened.error)
+      let text: string | undefined
+      try {
+        text = await readRecord(opened.database)
+      } catch (error) {
+        forget()
+        throw new SavedDataUnreadable(error)
+      }
       return text === undefined ? emptyState() : fromStored(text)
     },
 
     // The state is checked first, as loadState will check it: one that would not load again is
-    // refused with ValidationFailed and nothing is written, so the last good state stays.
-    // Rejects with StorageUnavailable when neither backend keeps it.
+    // refused with ValidationFailed and nothing is written, so the last good state stays. Rejects
+    // with SavedDataUnreadable rather than write a localStorage copy over a state IndexedDB may
+    // hold, and with StorageUnavailable when neither backend keeps it.
     async saveState(state: State): Promise<void> {
       const text = JSON.stringify({ version: STORED_VERSION, ...state })
       checkStored(JSON.parse(text))
       const opened = await connection()
-      if (opened !== null) {
+      if (opened.kind === 'open') {
         try {
-          await writeRecord(opened, text)
+          await writeRecord(opened.database, text)
           removeCopy(backends.localStorage)
           return
         } catch {
-          // Full or failing: keep it in localStorage instead.
+          // Full or failing: keep it in localStorage instead. The copy is the newer one now.
         }
+      } else if (opened.kind === 'failed' && readCopy(backends.localStorage) === null) {
+        throw new SavedDataUnreadable(opened.error)
       }
       if (!writeCopy(backends.localStorage, text)) throw new StorageUnavailable()
     },
