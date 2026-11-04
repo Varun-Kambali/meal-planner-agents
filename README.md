@@ -64,12 +64,13 @@ CI replays a recorded slice of three plans and ten meals on every PR, with no ke
 
 ## Status
 
-Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. The browser app and a deployed demo come with milestone 5.
+Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. Milestone 5 has begun with the browser app's base: its design system, storage in the browser with export and import, and a typed API client. Its screens and a deployed demo come next.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
-make setup
+make setup   # needs uv and Node 24 or later
 make test
+npm --prefix frontend test
 ```
 
 Each command and the API start nutrition-mcp themselves. `week`, `read` and the API also need the model's key: copy `.env.example` to `.env` and set `GEMINI_API_KEY`. `summary` calls no model and needs no key.
@@ -78,7 +79,7 @@ Each command and the API start nutrition-mcp themselves. `week`, `read` and the 
 uv run --env-file .env meal-planner week tests/fixtures/plans/office_weekday.json --out week.json
 uv run --env-file .env meal-planner read "2 rotis and a katori of dal"
 uv run meal-planner summary tests/fixtures/plans/office_weekday.json tests/fixtures/logs/office_weekday_log.json
-make run   # the API on 127.0.0.1:8000
+make run-api   # the API on 127.0.0.1:8000
 ```
 
 To trace `week`, `read` and the API in [Langfuse](https://langfuse.com), set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env`. Each run's steps, model calls, tokens, cost and failed checks are sent with the plan's words and the typed text masked; without the keys nothing is sent ([0010](docs/decisions/0010-masked-langfuse-tracing.md)). [`docs/media/trace.png`](docs/media/trace.png) shows a traced week and meal read in Langfuse.
