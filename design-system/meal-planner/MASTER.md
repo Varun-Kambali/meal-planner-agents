@@ -67,6 +67,8 @@ Both themes follow `prefers-color-scheme`. Every text pair below is at least 4.5
 | `--space-2xl` | `48px` / `3rem` | Page top and bottom |
 | `--space-3xl` | `64px` / `4rem` | Rarely; wide screens only |
 
+Layout widths (`tokens.css`): `--width-content` 72rem and `--width-text` 40rem (see Layout), `--width-table` 28rem for a recipe's tables, `--width-label` 9rem for the week's day column and the labels beside a recipe's facts, `--width-field` 12rem and `--width-field-narrow` 10rem for the narrowest field in a row of fields, and `--size-check` 1.25rem for checkboxes and radio buttons.
+
 ### Shape and depth
 
 | Token | Value | Usage |
@@ -159,7 +161,7 @@ The native `<dialog>` element, `--color-surface`, `--radius-md`, `--shadow-overl
 
 ### Print (one recipe per A4 page)
 
-`@page { size: A4; margin: 15mm; }`, black text on white whatever the theme, navigation and buttons hidden, each recipe starting a new page (`break-before: page`), grams in a table and short numbered steps.
+`@page { size: A4; margin: 15mm; }`, black text on white whatever the theme (in print the colour tokens take the light theme's values, with `--color-text` black), navigation and buttons hidden, each recipe starting a new page (`break-before: page`), grams in a table and short numbered steps. The body is set at `--text-meta`, and the nutrients go into one line of the six core values so that a recipe fits its page; the full table of 16 stays on screen.
 
 ---
 

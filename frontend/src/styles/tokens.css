@@ -44,6 +44,11 @@
 
   --width-content: 72rem;
   --width-text: 40rem;
+  --width-table: 28rem; /* a recipe's tables of grams and nutrients */
+  --width-label: 9rem; /* the day column of the week, the labels beside a recipe's facts */
+  --width-field: 12rem; /* the narrowest a field in a row of fields gets */
+  --width-field-narrow: 10rem; /* the same, for the seven days of the week */
+  --size-check: 1.25rem; /* checkboxes and radio buttons */
   --target-min: 44px;
   --duration: 120ms;
 }
@@ -67,6 +72,29 @@
     --color-fail: #fda29b;
     --color-warn: #f7c46c;
     --color-unsettled: #a2b0ae;
+  }
+}
+
+/* Print is black on white whatever the screen's theme: the light theme, with black text. */
+@media print {
+  :root {
+    color-scheme: light;
+
+    --color-bg: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-2: #edf2f1;
+    --color-selected: #d7efec;
+    --color-text: #000000;
+    --color-text-muted: #4b5a58;
+    --color-border: #d5dedc;
+    --color-border-strong: #73817f;
+    --color-primary: #0f766e;
+    --color-primary-hover: #115e59;
+    --color-on-primary: #ffffff;
+    --color-ok: #166534;
+    --color-fail: #b42318;
+    --color-warn: #8a5300;
+    --color-unsettled: #4b5a58;
   }
 }
 

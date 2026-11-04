@@ -1,0 +1,704 @@
+/* The screens: the header, forms, buttons, tables, status words, the week, the recipe page and
+   its print layout. Every colour, size and space is a token from tokens.css. */
+
+/* Header and navigation */
+
+.site-header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-lg);
+  max-width: var(--width-content);
+  margin: 0 auto;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.app-name {
+  margin: 0;
+  font-weight: 700;
+}
+
+.site-header ul {
+  display: flex;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-header nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  padding: 0 var(--space-sm);
+}
+
+.site-header nav a[aria-current='page'] {
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+
+@media (max-width: 47.99rem) {
+  .app-name {
+    flex-basis: 100%;
+    padding-top: var(--space-sm);
+  }
+
+  .site-header nav a:first-child {
+    padding-left: 0;
+  }
+}
+
+.page {
+  padding-top: var(--space-xl);
+}
+
+/* Headings and sections that take the focus when a screen opens or a form has problems. */
+[tabindex='-1']:focus {
+  outline: none;
+}
+
+.group {
+  margin-top: var(--space-xl);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+}
+
+.block {
+  display: block;
+}
+
+.hint {
+  margin: 0 0 var(--space-xs);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+}
+
+code {
+  font-size: var(--text-meta);
+}
+
+/* Buttons */
+
+.button-primary,
+.button-secondary {
+  min-height: var(--target-min);
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--duration) ease,
+    border-color var(--duration) ease;
+}
+
+.button-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.button-primary:hover:enabled {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.button-secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+}
+
+.button-secondary:hover:enabled {
+  background: var(--color-surface-2);
+}
+
+.button-text {
+  min-height: var(--target-min);
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--color-primary);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+  transition: color var(--duration) ease;
+}
+
+.button-text:hover:enabled {
+  color: var(--color-primary-hover);
+}
+
+.button-primary:disabled,
+.button-secondary:disabled,
+.button-text:disabled {
+  background: var(--color-surface-2);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.button-text:disabled {
+  background: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  margin: var(--space-md) 0;
+}
+
+.actions .hint {
+  margin: 0;
+}
+
+/* Forms */
+
+fieldset {
+  min-width: 0;
+  margin: 0 0 var(--space-xl);
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  padding: 0;
+  margin-bottom: var(--space-sm);
+  font-weight: 600;
+}
+
+fieldset.section > legend {
+  font-size: var(--text-heading);
+  line-height: 1.25;
+}
+
+fieldset.row {
+  margin: var(--space-md) 0;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+fieldset.row > legend {
+  float: left;
+  width: 100%;
+  font-size: var(--text-subheading);
+}
+
+fieldset.row > legend + * {
+  clear: left;
+}
+
+fieldset.subsection {
+  margin: var(--space-md) 0;
+}
+
+.field {
+  margin-bottom: var(--space-md);
+}
+
+.field > label {
+  display: block;
+  margin-bottom: var(--space-xs);
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  max-width: var(--width-text);
+  min-height: var(--target-min);
+  padding: 0 var(--space-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--text-body);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-fail);
+}
+
+.textarea {
+  padding: var(--space-sm);
+  line-height: var(--leading-body);
+}
+
+.field-error {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-fail);
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--width-field), 1fr));
+  gap: 0 var(--space-md);
+}
+
+.field-grid.days {
+  grid-template-columns: repeat(auto-fill, minmax(var(--width-field-narrow), 1fr));
+}
+
+.field-grid.target {
+  align-items: end;
+}
+
+.field-grid.target .button-text {
+  justify-self: start;
+  margin-bottom: var(--space-md);
+}
+
+.choice-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-lg);
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--target-min);
+  cursor: pointer;
+}
+
+.choice input {
+  width: var(--size-check);
+  height: var(--size-check);
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.choices .field-error {
+  margin-bottom: var(--space-xs);
+}
+
+.inline {
+  display: flex;
+  gap: var(--space-sm);
+  max-width: var(--width-text);
+}
+
+.inline .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.chosen {
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chosen li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.file {
+  max-width: 100%;
+  min-height: var(--target-min);
+  font: inherit;
+  font-size: var(--text-meta);
+}
+
+.file::file-selector-button {
+  min-height: var(--target-min);
+  margin-right: var(--space-sm);
+  padding: 0 var(--space-md);
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.save-status,
+output {
+  display: block;
+  margin: var(--space-sm) 0;
+}
+
+.save-status.failed {
+  color: var(--color-fail);
+}
+
+/* The problems of a form, listed at its top */
+
+.problems {
+  max-width: var(--width-text);
+  margin: var(--space-lg) 0;
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.problems h2 {
+  font-size: var(--text-subheading);
+}
+
+.problems ul {
+  margin: 0;
+  padding-left: var(--space-lg);
+}
+
+.problems a {
+  color: var(--color-fail);
+}
+
+.notice ul,
+.problem ul {
+  padding-left: var(--space-lg);
+}
+
+.notice.warning h2 {
+  color: var(--color-warn);
+}
+
+.confirm {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.confirm h3 {
+  font-size: var(--text-body);
+}
+
+/* Status words: the word carries the meaning, the colour repeats it. */
+
+.status {
+  font-weight: 600;
+}
+
+.status-ok {
+  color: var(--color-ok);
+}
+
+.status-fail {
+  color: var(--color-fail);
+}
+
+.status-warn {
+  color: var(--color-warn);
+}
+
+.status-unsettled {
+  color: var(--color-unsettled);
+}
+
+.reasons {
+  margin: 0 0 var(--space-sm);
+  padding-left: var(--space-md);
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+}
+
+/* Tables of numbers */
+
+table {
+  border-collapse: collapse;
+}
+
+caption {
+  margin-bottom: var(--space-sm);
+  font-weight: 600;
+  text-align: left;
+}
+
+th,
+td {
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+thead th {
+  background: var(--color-surface-2);
+  font-size: var(--text-meta);
+}
+
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.unit {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Live progress */
+
+.progress {
+  max-width: var(--width-text);
+  margin: var(--space-lg) 0;
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.progress h2 {
+  font-size: var(--text-subheading);
+}
+
+.progress ul {
+  margin: var(--space-sm) 0 0;
+  padding-left: var(--space-lg);
+}
+
+progress {
+  width: 100%;
+  height: var(--space-sm);
+  appearance: none;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+  background: var(--color-surface-2);
+}
+
+progress::-webkit-progress-value {
+  background: var(--color-primary);
+}
+
+progress::-moz-progress-bar {
+  background: var(--color-primary);
+}
+
+/* The week */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.week-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.week-table thead th:first-child {
+  width: var(--width-label);
+}
+
+.week-table tbody th {
+  font-weight: 600;
+}
+
+.week-table td {
+  font-size: var(--text-meta);
+  line-height: var(--leading-meta);
+}
+
+.recipe-cell p {
+  margin: 0 0 var(--space-xs);
+}
+
+.recipe-link {
+  display: inline-block;
+  margin-bottom: var(--space-xs);
+  font-weight: 600;
+}
+
+.day .meal {
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.day .meal h3 {
+  margin-bottom: var(--space-xs);
+}
+
+.day-checks {
+  margin: 0;
+}
+
+.day-checks > div {
+  display: grid;
+  grid-template-columns: var(--width-label) 1fr;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.day-checks dt {
+  font-weight: 600;
+}
+
+.day-checks dd {
+  margin: 0;
+}
+
+.day-checks dd p {
+  margin-bottom: var(--space-xs);
+}
+
+@media (max-width: 47.99rem) {
+  .day-checks > div {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+/* A recipe */
+
+.recipe {
+  max-width: var(--width-text);
+}
+
+.recipe h2 {
+  margin-top: var(--space-lg);
+  font-size: var(--text-subheading);
+}
+
+.recipe h3 {
+  margin-top: var(--space-lg);
+  font-size: var(--text-body);
+}
+
+.recipe-status p {
+  margin-bottom: var(--space-xs);
+}
+
+.facts {
+  margin: var(--space-md) 0;
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: var(--width-label) 1fr;
+  gap: var(--space-md);
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.facts dt {
+  color: var(--color-text-muted);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.ingredients,
+.nutrients {
+  width: 100%;
+  max-width: var(--width-table);
+  margin-top: var(--space-lg);
+}
+
+.steps li {
+  margin-bottom: var(--space-sm);
+}
+
+.print-only {
+  display: none;
+}
+
+/* Print: one recipe to an A4 page, black on white whatever the theme (tokens.css), with the
+   navigation, buttons and data section left out. */
+
+@page {
+  size: A4;
+  margin: 15mm;
+}
+
+@media print {
+  .screen-only,
+  .site-header,
+  .skip-link,
+  .data,
+  .actions,
+  button {
+    display: none;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .recipe {
+    max-width: none;
+    font-size: var(--text-meta);
+    line-height: var(--leading-meta);
+    break-before: page;
+  }
+
+  .recipe:first-of-type {
+    break-before: auto;
+  }
+
+  .recipe h1,
+  .recipe h2:first-child {
+    margin-top: 0;
+    font-size: var(--text-heading);
+  }
+
+  .recipe h2,
+  .recipe h3 {
+    margin-top: var(--space-md);
+    font-size: var(--text-body);
+    break-after: avoid;
+  }
+
+  .recipe p,
+  .facts {
+    margin-bottom: var(--space-xs);
+  }
+
+  .facts > div,
+  th,
+  td {
+    padding-top: var(--space-xs);
+    padding-bottom: var(--space-xs);
+  }
+
+  .ingredients {
+    margin-top: var(--space-sm);
+  }
+
+  .steps li {
+    margin-bottom: var(--space-xs);
+  }
+
+  a {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+}
