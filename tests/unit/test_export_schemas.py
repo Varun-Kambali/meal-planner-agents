@@ -1,16 +1,23 @@
 """The committed JSON Schemas are the ones the models give, so the frontend checks against what
 the server accepts. CI runs the script and fails on a difference too; this says so sooner."""
 
+import copy
 import json
+from typing import Any
 
 import pytest
 from export_schemas import SCHEMAS_DIR, schema_texts
+from pydantic import ValidationError
 
-from meal_planner.summary import Export
+from meal_planner.summary import Export, log_problems
 from meal_planner.week_events import StreamError
 
 # The export file the frontend's tests load, written by the API with the test fakes.
 FRONTEND_SAMPLE = SCHEMAS_DIR.parent / "frontend" / "src" / "test" / "export-sample.json"
+# Changes to that file that the frontend's import check refuses, each with the place it names.
+INVALID_EXPORTS: list[dict[str, Any]] = json.loads(
+    (FRONTEND_SAMPLE.parent / "invalid-exports.json").read_text(encoding="utf-8")
+)
 
 API_SCHEMAS = [
     "api/catalogue.json",
@@ -54,6 +61,44 @@ def test_the_frontend_sample_export_is_a_file_the_server_accepts() -> None:
     """The browser's storage tests start from this file and change one thing at a time, so it
     has to be a file the server accepts as it is."""
     Export.model_validate_json(FRONTEND_SAMPLE.read_text(encoding="utf-8"))
+
+
+def _at(data: Any, pointer: str) -> Any:
+    for key in pointer.split("/")[1:]:
+        data = data[int(key)] if isinstance(data, list) else data[key]
+    return data
+
+
+def _changed(case: dict[str, Any]) -> dict[str, Any]:
+    """The sample with the case's changes made. "-" as the last key appends to a list."""
+    data: dict[str, Any] = json.loads(FRONTEND_SAMPLE.read_text(encoding="utf-8"))
+    for change in case["changes"]:
+        *parents, last = change["at"].split("/")[1:]
+        parent = _at(data, "/" + "/".join(parents)) if parents else data
+        value = copy.deepcopy(_at(data, change["copy"])) if "copy" in change else change["value"]
+        if isinstance(parent, list):
+            if last == "-":
+                parent.append(value)
+            else:
+                parent[int(last)] = value
+        else:
+            parent[last] = value
+    return data
+
+
+@pytest.mark.parametrize("case", INVALID_EXPORTS, ids=[case["case"] for case in INVALID_EXPORTS])
+def test_the_server_refuses_every_file_the_browser_refuses(case: dict[str, Any]) -> None:
+    """The browser copies the server's checks (frontend/src/validate.ts); its tests refuse the
+    same files. A case the model refuses fails Export. The one the summary refuses (a log entry
+    for a slot the plan lacks) passes Export and is a problem of summary.log_problems."""
+    data = _changed(case)
+    if case["refused_by"] == "model":
+        with pytest.raises(ValidationError):
+            Export.model_validate(data)
+    else:
+        assert case["refused_by"] == "summary"
+        export = Export.model_validate(data)
+        assert log_problems(export.rules, export.log)
 
 
 @pytest.mark.parametrize("file_name", API_SCHEMAS)

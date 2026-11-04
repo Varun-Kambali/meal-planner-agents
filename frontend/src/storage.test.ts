@@ -13,6 +13,7 @@ import {
   type State,
 } from './storage'
 import sample from './test/export-sample.json'
+import invalidExports from './test/invalid-exports.json'
 import type { Export } from './types'
 
 // A valid export, written by the API with the test fakes (tests/unit/test_export_schemas.py
@@ -182,6 +183,47 @@ describe('import', () => {
     const state = await importFile(fileOf(file))
 
     expect(state.week!.recipes[0]!.portion_scale).toBe(1)
+  })
+})
+
+// The files in test/invalid-exports.json, each the sample with a change or two. The server's
+// tests (tests/unit/test_export_schemas.py) check that it refuses each one too, so the browser's
+// copy of the server's rules cannot drift from them for these cases without a suite failing.
+interface InvalidExport {
+  case: string
+  changes: { at: string; value?: unknown; copy?: string }[]
+  path: string
+  refused_by: 'model' | 'summary'
+}
+
+function at(data: unknown, pointer: string): unknown {
+  return pointer
+    .split('/')
+    .slice(1)
+    .reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], data)
+}
+
+function withChanges(cases: InvalidExport): unknown {
+  const file = exported() as unknown
+  for (const change of cases.changes) {
+    const keys = change.at.split('/').slice(1)
+    const last = keys.pop()!
+    const parent = at(file, keys.length === 0 ? '' : `/${keys.join('/')}`) as Record<
+      string,
+      unknown
+    >
+    const value = change.copy === undefined ? change.value : structuredClone(at(file, change.copy))
+    if (Array.isArray(parent) && last === '-') parent.push(value)
+    else parent[last] = value
+  }
+  return file
+}
+
+describe('import refuses every file the server refuses', () => {
+  it.each(invalidExports as InvalidExport[])('$case, at $path', async (cases) => {
+    const error = await rejection(importFile(fileOf(withChanges(cases))))
+
+    expect(paths(error)).toContain(cases.path)
   })
 })
 

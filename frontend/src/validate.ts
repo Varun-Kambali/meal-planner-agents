@@ -1,7 +1,12 @@
-// Checks that a file a person loads, or what this browser saved before, is data the server
-// accepts: first against schemas/export.json, then the rules a JSON Schema cannot say, which the
-// server's models check in code (src/meal_planner/rules.py and summary.py). Each problem names
-// its place as a JSON Pointer, such as /log/entries/0/items/0/food_id, so a person can find it.
+// Checks a file a person loads, and what this browser saved before, in three steps: against
+// schemas/export.json; then the rules a JSON Schema cannot say, which the server's models check
+// in code (src/meal_planner/rules.py, recipes.py and summary.py); then one rule the models do
+// not make, that each log entry's slot is one the plan has. That last is the summary's check
+// (summary.log_problems): the model would accept such a file, but every summary of it would be
+// refused, so it is refused here, when the file is loaded. Each problem names its place as a
+// JSON Pointer, such as /log/entries/0/items/0/food_id, so a person can find it.
+// tests/unit/test_export_schemas.py runs the server over src/test/invalid-exports.json, the files
+// these checks refuse, to keep the two in step.
 
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020'
 
@@ -104,7 +109,11 @@ function compiled(): { exported: Check; stored: Check } {
 export function checkExport(data: unknown): Export {
   throwIfAny(schemaProblems(compiled().exported(data)))
   const file = data as Export
-  throwIfAny([...ruleProblems(file.rules), ...logProblems(file.log, file.rules)])
+  throwIfAny([
+    ...blankProblems(file.rules, file.week),
+    ...ruleProblems(file.rules),
+    ...logProblems(file.log, file.rules),
+  ])
   return file
 }
 
@@ -113,7 +122,11 @@ export function checkStored(data: unknown): State & { version: 1 } {
   throwIfAny(schemaProblems(compiled().stored(data)))
   const state = data as State & { version: 1 }
   const rules = state.rules === null ? [] : ruleProblems(state.rules)
-  throwIfAny([...rules, ...logProblems(state.log, state.rules)])
+  throwIfAny([
+    ...blankProblems(state.rules, state.week),
+    ...rules,
+    ...logProblems(state.log, state.rules),
+  ])
   return state
 }
 
@@ -225,6 +238,31 @@ function schemaProblems(errors: ErrorObject[]): FieldProblem[] {
   })
 }
 
+// The server strips the whitespace from these strings before it checks their length (Name and
+// Label in rules.py, Title, Cuisine and Step in recipes.py), which JSON Schema cannot say: "   "
+// fits the schema's minLength of 1 and is still blank to the server.
+function blankProblems(rules: PlanRules | null, week: WeekResult | null): FieldProblem[] {
+  const strings: [string, string][] = []
+  if (rules !== null) {
+    strings.push(['/rules/name', rules.name])
+    rules.day_types.forEach((dayType, i) =>
+      strings.push([`/rules/day_types/${i}/name`, dayType.name]),
+    )
+    rules.slots.forEach((slot, i) => strings.push([`/rules/slots/${i}/name`, slot.name]))
+    rules.food.cuisines.forEach((cuisine, i) =>
+      strings.push([`/rules/food/cuisines/${i}`, cuisine]),
+    )
+  }
+  week?.recipes.forEach(({ draft }, i) => {
+    const at = `/week/recipes/${i}/draft`
+    strings.push([`${at}/title`, draft.title], [`${at}/cuisine`, draft.cuisine])
+    draft.steps.forEach((step, j) => strings.push([`${at}/steps/${j}`, step]))
+  })
+  return strings
+    .filter(([, text]) => text.trim() === '')
+    .map(([path]) => ({ path, message: 'must not be blank' }))
+}
+
 // PlanRules' validators: unique ids, a defined day type for each day, extra targets that are
 // new, and slot shares that add up to a day.
 function ruleProblems(rules: PlanRules, at = '/rules'): FieldProblem[] {
@@ -283,7 +321,8 @@ function ruleProblems(rules: PlanRules, at = '/rules'): FieldProblem[] {
   return problems
 }
 
-// MealLog's and LogEntry's validators, and the summary's check that each slot is the plan's.
+// MealLog's and LogEntry's validators, and the summary's check that each slot is the plan's,
+// which the model does not make (see the top of this file).
 function logProblems(log: MealLog, rules: PlanRules | null, at = '/log'): FieldProblem[] {
   const problems: FieldProblem[] = []
   const entries = pointer(at, 'entries')
