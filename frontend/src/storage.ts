@@ -144,9 +144,12 @@ export function createStorage(backends: Backends): StateStore {
       return text === undefined ? emptyState() : fromStored(text)
     },
 
+    // The state is checked first, as loadState will check it: one that would not load again is
+    // refused with ValidationFailed and nothing is written, so the last good state stays.
     // Rejects with StorageUnavailable when neither backend keeps it.
     async saveState(state: State): Promise<void> {
       const text = JSON.stringify({ version: STORED_VERSION, ...state })
+      checkStored(JSON.parse(text))
       const opened = await connection()
       if (opened !== null) {
         try {

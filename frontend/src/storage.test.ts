@@ -372,6 +372,20 @@ describe('storage', () => {
     })
   })
 
+  it('refuses to save a state that would not load again, and keeps the last good one', async () => {
+    const indexedDB = new IDBFactory()
+    const good = stateOf(exported())
+    const storage = createStorage({ indexedDB, localStorage })
+    await storage.saveState(good)
+    const bad = stateOf(exported())
+    bad.log.entries[2]!.date = '2026-11-02'
+
+    const error = await rejection(storage.saveState(bad))
+
+    expect(paths(error)).toEqual(['/log/entries'])
+    await expect(createStorage({ indexedDB, localStorage }).loadState()).resolves.toEqual(good)
+  })
+
   it('gives a new empty state each time', () => {
     const first = emptyState()
     first.log.entries.push(exported().log.entries[0]!)
