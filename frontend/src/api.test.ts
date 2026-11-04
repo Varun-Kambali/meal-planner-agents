@@ -438,14 +438,14 @@ describe('errors', () => {
     const controller = new AbortController()
     // A body that sends the start of the JSON, then fails as fetch's body does on an abort.
     const half = new ReadableStream<Uint8Array>({
-      start(stream) {
-        stream.enqueue(new TextEncoder().encode('[{"id": "dal"'))
+      start(source) {
+        source.enqueue(new TextEncoder().encode('[{"id": "dal"'))
       },
-      async pull(stream) {
+      async pull(source) {
         if (!controller.signal.aborted) {
           await new Promise((resolve) => controller.signal.addEventListener('abort', resolve))
         }
-        stream.error(new DOMException('The user aborted a request.', 'AbortError'))
+        source.error(new DOMException('The user aborted a request.', 'AbortError'))
       },
     })
     serve(() => new Response(half, { status: 200 }))

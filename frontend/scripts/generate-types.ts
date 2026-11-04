@@ -90,8 +90,8 @@ function forTypes(value: unknown): unknown {
     isSchema(schema.additionalProperties) &&
     schema.minProperties === names.length
   ) {
-    const value = schema.additionalProperties
-    schema.properties = Object.fromEntries(names.map((name) => [String(name), value]))
+    const each = schema.additionalProperties
+    schema.properties = Object.fromEntries(names.map((name) => [String(name), each]))
     schema.required = names.map(String)
     schema.additionalProperties = false
     delete schema.propertyNames
