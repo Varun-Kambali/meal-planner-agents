@@ -56,7 +56,10 @@ export function DataSection({
     setPending(null)
     const outcome = await onReplace(next)
     if (outcome.ok) setStatus(`Loaded ${name}.`)
-    else setStatus(`Loaded ${name} on this page, but it was not saved in this browser.`)
+    // A state that would not load again is refused before anything changes.
+    else if (outcome.error instanceof ValidationFailed) {
+      setProblem({ message: `${name} was not loaded: ${outcome.error.message}.`, problems: [] })
+    } else setStatus(`Loaded ${name} on this page, but it was not saved in this browser.`)
   }
 
   // Never rejects: a file that cannot be read or does not fit is said to.
