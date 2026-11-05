@@ -140,6 +140,28 @@ describe('the week', () => {
     expect(saved().week).toEqual(before)
   })
 
+  it('says the connection closed when the stream drops mid-run, and keeps the week', async () => {
+    const before = failingWeek()
+    seed({ ...sampleState(), week: before })
+    const run = new FakeStream()
+    fakeApi({ '/v1/week': () => run.response })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Write a new week' }))
+    run.send({ kind: 'slot_started', slot_id: 'lunch', days: ['mon'], attempt: 1 })
+    await screen.findByText('Lunch: Writing')
+    run.drop()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'The run stopped before the week was done: the connection closed before the week was done.',
+    )
+    expect(alert).toHaveTextContent('The week you had is unchanged.')
+    expect(cell('Monday', 'Lunch')).toHaveTextContent('Misses:')
+    expect(saved().week).toEqual(before)
+  })
+
   it('stops the run when asked, and closes the connection', async () => {
     seed({ ...sampleState(), week: null })
     const run = new FakeStream()
