@@ -37,6 +37,7 @@ import {
   EXTRA_NUTRIENTS,
   GEAR,
   NUTRIENTS,
+  messageOf,
 } from '../words'
 import { byField, errorId, fieldId, focusSoon, type Errors } from './fields'
 import { Choices, FieldError, ProblemList, SelectField, TextField } from './parts'
@@ -120,7 +121,7 @@ export function PlanForm({ state, refused, onSave, blocked }: PlanFormProps) {
       },
       (error: unknown) => {
         if (controller.signal.aborted) return
-        const message = error instanceof Error ? error.message : String(error)
+        const message = messageOf(error)
         setFood({ status: 'failed', message })
       },
     )
@@ -175,7 +176,7 @@ export function PlanForm({ state, refused, onSave, blocked }: PlanFormProps) {
       setSaving({ status: 'idle' })
       return
     }
-    const message = outcome.error instanceof Error ? outcome.error.message : String(outcome.error)
+    const message = messageOf(outcome.error)
     setSaving({ status: 'failed', message })
   }
 

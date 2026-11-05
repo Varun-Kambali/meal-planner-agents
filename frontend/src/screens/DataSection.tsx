@@ -6,7 +6,7 @@ import { useId, useState, type ChangeEvent } from 'react'
 import { saveFile, today } from '../download'
 import type { SaveOutcome } from '../session'
 import { ValidationFailed, exportFile, importFile, type FieldProblem, type State } from '../storage'
-import { sentence } from '../words'
+import { messageOf, sentence } from '../words'
 
 interface Problem {
   message: string
@@ -44,7 +44,7 @@ export function DataSection({
       saveFile(exportFile(state), name)
       setStatus(`Exported ${name}.`)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = messageOf(error)
       setProblem({ message: `The copy could not be made: ${message}.`, problems: [] })
     }
   }
@@ -75,7 +75,7 @@ export function DataSection({
           problems: error.problems,
         })
       } else {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = messageOf(error)
         setProblem({ message: `${file.name} could not be read: ${message}.`, problems: [] })
       }
       return

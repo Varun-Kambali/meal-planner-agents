@@ -24,6 +24,7 @@ import {
   type StateStore,
 } from './storage'
 import { useWeekRun } from './useWeekRun'
+import { messageOf } from './words'
 
 const browserStore: StateStore = { loadState, saveState, readStoredText, discardStoredText }
 
@@ -71,7 +72,7 @@ export function App({ store = browserStore }: { store?: StateStore }) {
       } catch (error) {
         if (error instanceof ValidationFailed) return { ok: false, error }
         setLoaded({ status: 'ready', state: next })
-        setUnsaved(error instanceof Error ? error.message : String(error))
+        setUnsaved(messageOf(error))
         return { ok: false, error }
       }
       setLoaded({ status: 'ready', state: next })
@@ -223,7 +224,7 @@ function Unsaved({ message, state }: { message: string; state: State }) {
             try {
               saveFile(exportFile(state), `meal-planner-${today()}.json`)
             } catch (error) {
-              setProblem(error instanceof Error ? error.message : String(error))
+              setProblem(messageOf(error))
             }
           }}
         >

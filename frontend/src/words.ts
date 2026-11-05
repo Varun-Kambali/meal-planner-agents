@@ -132,3 +132,10 @@ export function reasonWords(reason: string): string {
 export function sentence(text: string): string {
   return text.length === 0 ? text : text[0]!.toUpperCase() + text.slice(1)
 }
+
+// What went wrong, in the error's own words. A browser's storage and download errors are
+// DOMExceptions, which are not always Error objects, so anything with a message gives it.
+export function messageOf(error: unknown): string {
+  const message = (error as { message?: unknown } | null)?.message
+  return typeof message === 'string' ? message : String(error)
+}

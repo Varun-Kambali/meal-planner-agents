@@ -17,7 +17,7 @@ import { advance, startProgress, type Progress } from './progress'
 import type { SaveOutcome } from './session'
 import type { State } from './storage'
 import type { WeekResult } from './types'
-import { DAY_NAMES, reasonWords } from './words'
+import { DAY_NAMES, messageOf, reasonWords } from './words'
 
 export type Running = { what: 'week' } | { what: 'replace'; day: DayKey; slotId: string }
 
@@ -89,7 +89,7 @@ function failure(error: unknown, run: Running): Outcome {
       message: `The run stopped before ${what} was done: ${error.message}.`,
     }
   }
-  const message = error instanceof Error ? error.message : String(error)
+  const message = messageOf(error)
   return { kind: 'failed', run, message: `Something went wrong: ${message}.` }
 }
 

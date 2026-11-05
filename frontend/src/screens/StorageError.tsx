@@ -6,7 +6,7 @@ import { useState } from 'react'
 
 import { saveFile, today } from '../download'
 import { SavedDataUnreadable, ValidationFailed, type StateStore } from '../storage'
-import { sentence } from '../words'
+import { messageOf, sentence } from '../words'
 
 export interface StorageErrorProps {
   error: unknown
@@ -22,10 +22,6 @@ type Copy =
   | { status: 'unreadable'; message: string }
 
 const SHOWN_PROBLEMS = 10
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
 
 function What({ error }: { error: unknown }) {
   if (error instanceof ValidationFailed) {
