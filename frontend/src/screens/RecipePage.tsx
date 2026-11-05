@@ -181,7 +181,7 @@ function Recipe({
           <dt>Gear</dt>
           <dd>{draft.gear.map((gear) => GEAR[gear]).join(', ')}</dd>
         </div>
-        <div>
+        <div className="screen-only">
           <dt>Meal target</dt>
           <dd>
             {shown(spec.kcal)} kcal and at least {shown(spec.protein_g)} g protein, its share of a{' '}
@@ -189,40 +189,46 @@ function Recipe({
           </dd>
         </div>
       </dl>
-      <table className="numbers ingredients">
-        <caption>Ingredients for one serving</caption>
-        <thead>
-          <tr>
-            <th scope="col">Ingredient</th>
-            <th scope="col" className="num">
-              Weight
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {draft.ingredients.map((ingredient) => (
-            <tr key={ingredient.id}>
-              <td>{nameOf(ingredient.id)}</td>
-              <td className="num">
-                {shown(ingredient.grams)} <span className="unit">g</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {recipe.portion_scale !== 1 && (
-        <p className="meta">
-          Amounts scaled by{' '}
-          {recipe.portion_scale.toLocaleString(undefined, { maximumFractionDigits: 2 })} to fit the
-          meal&apos;s calories.
-        </p>
-      )}
-      <Section id={stepsId}>Steps</Section>
-      <ol className="steps" aria-labelledby={stepsId}>
-        {draft.steps.map((step, index) => (
-          <li key={index}>{step}</li>
-        ))}
-      </ol>
+      <div className="cook">
+        <div>
+          <table className="numbers ingredients">
+            <caption>Ingredients for one serving</caption>
+            <thead>
+              <tr>
+                <th scope="col">Ingredient</th>
+                <th scope="col" className="num">
+                  Weight
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {draft.ingredients.map((ingredient) => (
+                <tr key={ingredient.id}>
+                  <td>{nameOf(ingredient.id)}</td>
+                  <td className="num">
+                    {shown(ingredient.grams)} <span className="unit">g</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {recipe.portion_scale !== 1 && (
+            <p className="meta">
+              Amounts scaled by{' '}
+              {recipe.portion_scale.toLocaleString(undefined, { maximumFractionDigits: 2 })} to fit
+              the meal&apos;s calories.
+            </p>
+          )}
+        </div>
+        <div>
+          <Section id={stepsId}>Steps</Section>
+          <ol className="steps" aria-labelledby={stepsId}>
+            {draft.steps.map((step, index) => (
+              <li key={index}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      </div>
       <Section>Keeping it</Section>
       <p>
         <strong>Store:</strong> {draft.store}
@@ -265,7 +271,8 @@ function Recipe({
             </tbody>
           </table>
           {partial.map((key) => (
-            <p key={key} className="meta">
+            // A printed page keeps the note only for the six numbers it prints.
+            <p key={key} className={PRINTED.includes(key) ? 'meta' : 'meta screen-only'}>
               {NUTRIENTS[key].name} is at least this: no value for{' '}
               {(nutrition.total_incomplete[key] ?? []).map(nameOf).join(', ')} in the data.
             </p>
@@ -278,7 +285,7 @@ function Recipe({
           </p>
         </>
       )}
-      {recipe.attempts > 1 && <p className="meta">Tried {recipe.attempts} times.</p>}
+      {recipe.attempts > 1 && <p className="meta screen-only">Tried {recipe.attempts} times.</p>}
     </article>
   )
 }

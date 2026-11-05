@@ -641,7 +641,11 @@ progress::-moz-progress-bar {
 }
 
 @media print {
-  .screen-only,
+  /* important: a utility that has to win over the layout rules of what it is on. */
+  .screen-only {
+    display: none !important;
+  }
+
   .site-header,
   .skip-link,
   .data,
@@ -670,8 +674,8 @@ progress::-moz-progress-bar {
     break-before: auto;
   }
 
-  .recipe h1,
-  .recipe h2:first-child {
+  .recipe > h1,
+  .recipe > h2:first-child {
     margin-top: 0;
     font-size: var(--text-heading);
   }
@@ -695,8 +699,22 @@ progress::-moz-progress-bar {
     padding-bottom: var(--space-xs);
   }
 
+  /* Grams beside the steps, so that a long recipe still fits its page. */
+  .cook {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+    gap: var(--space-lg);
+    align-items: start;
+  }
+
   .ingredients {
-    margin-top: var(--space-sm);
+    margin-top: 0;
+  }
+
+  .cook .steps,
+  .recipe .cook h2,
+  .recipe .cook h3 {
+    margin-top: 0;
   }
 
   .steps li {
