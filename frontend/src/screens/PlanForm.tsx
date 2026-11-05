@@ -38,7 +38,7 @@ import {
   GEAR,
   NUTRIENTS,
 } from '../words'
-import { byField, errorId, fieldId, type Errors } from './fields'
+import { byField, errorId, fieldId, focusSoon, type Errors } from './fields'
 import { Choices, FieldError, ProblemList, SelectField, TextField } from './parts'
 
 export interface PlanFormProps {
@@ -439,7 +439,14 @@ function DayTypes({ draft, change, errors }: SectionProps) {
             </div>
             <ExtraTargets at={at} row={row} errors={errors} update={update} />
             {draft.dayTypes.length > 1 && (
-              <button type="button" className="button-text" onClick={() => remove(row.key)}>
+              <button
+                type="button"
+                className="button-text"
+                onClick={() => {
+                  remove(row.key)
+                  focusSoon(fieldId('day_types'))
+                }}
+              >
                 Remove day type {i + 1}
               </button>
             )}
@@ -521,11 +528,12 @@ function ExtraTargets({
           <button
             type="button"
             className="button-text"
-            onClick={() =>
+            onClick={() => {
               update(row.key, (r) => ({ ...r, extra: r.extra.filter((t) => t.key !== target.key) }))
-            }
+              focusSoon(fieldId(path))
+            }}
           >
-            Remove this target
+            Remove target {j + 1}
           </button>
         </div>
       ))}
@@ -673,9 +681,10 @@ function Slots({ draft, change, errors }: SectionProps) {
               <button
                 type="button"
                 className="button-text"
-                onClick={() =>
+                onClick={() => {
                   change((d) => ({ ...d, slots: d.slots.filter((slot) => slot.key !== row.key) }))
-                }
+                  focusSoon(fieldId('slots'))
+                }}
               >
                 Remove meal {i + 1}
               </button>
@@ -806,7 +815,10 @@ function FoodList({ path, label, hint, chosen, food, errors, onChange }: FoodLis
                   type="button"
                   className="button-text"
                   aria-label={`Remove ${name} from ${label.toLowerCase()}`}
-                  onClick={() => onChange(chosen.filter((item) => item !== foodId))}
+                  onClick={() => {
+                    onChange(chosen.filter((item) => item !== foodId))
+                    focusSoon(id)
+                  }}
                 >
                   Remove
                 </button>

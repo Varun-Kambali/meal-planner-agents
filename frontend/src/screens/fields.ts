@@ -29,3 +29,9 @@ export function goToField(id: string): void {
   target.scrollIntoView?.({ block: 'center' })
   target.focus()
 }
+
+// After a control the focus was on is removed, such as a row's Remove button, the focus goes to
+// the element with this id once the page has updated, rather than to the page itself.
+export function focusSoon(id: string): void {
+  setTimeout(() => document.getElementById(id)?.focus(), 0)
+}

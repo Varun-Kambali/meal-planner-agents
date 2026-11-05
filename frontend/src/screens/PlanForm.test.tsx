@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -218,6 +218,29 @@ describe('the plan form', () => {
     expect(await screen.findByText(/Not saved in this browser/)).toHaveTextContent(
       'this browser does not let the page keep data',
     )
+  })
+
+  it('keeps the focus in the form when a row it was on is removed', async () => {
+    fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })
+    const user = userEvent.setup()
+    show({ ...sampleState(), week: null })
+    await screen.findAllByRole('option', { name: 'Brinjal' })
+
+    await user.click(screen.getByRole('button', { name: 'Remove Paneer from foods you like' }))
+    await waitFor(() => expect(screen.getByLabelText('Foods you like')).toHaveFocus())
+
+    await user.click(screen.getByRole('button', { name: 'Remove meal 2' }))
+    await waitFor(() => expect(group('Meals of the day')).toHaveFocus())
+
+    await user.click(within(group('Day type 1')).getByRole('button', { name: 'Remove target 1' }))
+    await waitFor(() =>
+      expect(
+        within(group('Day type 1')).getByRole('group', { name: 'Other daily targets' }),
+      ).toHaveFocus(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Remove day type 2' }))
+    await waitFor(() => expect(group('Day types')).toHaveFocus())
   })
 
   it('says when the food list cannot be loaded, and loads it on asking again', async () => {
