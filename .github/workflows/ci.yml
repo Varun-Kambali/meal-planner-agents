@@ -58,6 +58,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+        env:
+          # pa11y-ci's puppeteer would download a Chrome; the a11y job uses the runner's own.
+          PUPPETEER_SKIP_DOWNLOAD: "true"
       - name: Check src/types.ts matches schemas/
         run: npm run types:check
       - name: Check src/generated/validators.js matches schemas/
@@ -67,6 +70,28 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+  # pa11y-ci with axe over the built site: every screen in frontend/pa11y.json, at desktop and
+  # phone width, in the light theme and then the dark one (scripts/a11y.ts). The week and recipe
+  # screens open on a recorded week, and the API is a stand-in, so no model is called.
+  a11y:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+      - run: npm run build
+      - run: npm run a11y
+        env:
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
   secrets-scan:
     runs-on: ubuntu-latest
     steps:

@@ -50,6 +50,8 @@ export interface Backends {
 export interface StateStore {
   loadState(): Promise<State>
   saveState(state: State): Promise<void>
+  readStoredText(): Promise<string | null>
+  discardStoredText(): Promise<void>
 }
 
 function done<T>(request: IDBRequest<T>): Promise<T> {
@@ -101,15 +103,22 @@ async function readRecord(database: IDBDatabase): Promise<string | undefined> {
   return typeof value === 'string' ? value : undefined
 }
 
-// Resolves once the transaction has committed, not only once the put was accepted.
-function writeRecord(database: IDBDatabase, text: string): Promise<void> {
+// Resolves once the transaction has committed, not only once the change was accepted.
+function changeRecord(
+  database: IDBDatabase,
+  change: (store: IDBObjectStore) => void,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE, 'readwrite')
     transaction.oncomplete = () => resolve()
     transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB write failed'))
     transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB write aborted'))
-    transaction.objectStore(STORE).put(text, RECORD)
+    change(transaction.objectStore(STORE))
   })
+}
+
+function writeRecord(database: IDBDatabase, text: string): Promise<void> {
+  return changeRecord(database, (store) => store.put(text, RECORD))
 }
 
 // localStorage throws when it is blocked or full; each of these says so by its result instead.
@@ -131,11 +140,13 @@ function writeCopy(storage: Storage | undefined, text: string): boolean {
   }
 }
 
-function removeCopy(storage: Storage | undefined): void {
+// Whether the copy is gone: false when localStorage holds one and refused to remove it.
+function removeCopy(storage: Storage | undefined): boolean {
   try {
     storage?.removeItem(STORAGE_KEY)
+    return true
   } catch {
-    // Nothing was kept there, then.
+    return readCopy(storage) === null
   }
 }
 
@@ -168,24 +179,54 @@ export function createStorage(backends: Backends): StateStore {
     return opened
   }
 
+  // The text loadState reads: the localStorage copy when there is one, since it is the newer,
+  // and otherwise what IndexedDB holds. Null when nothing was saved.
+  const storedText = async (): Promise<string | null> => {
+    const copy = readCopy(backends.localStorage)
+    if (copy !== null) return copy
+    const opened = await connection()
+    if (opened.kind === 'absent') return null
+    if (opened.kind === 'failed') throw new SavedDataUnreadable(opened.error)
+    try {
+      return (await readRecord(opened.database)) ?? null
+    } catch (error) {
+      forget()
+      throw new SavedDataUnreadable(error)
+    }
+  }
+
   return {
     // Rejects with ValidationFailed, naming the place, when what was saved no longer fits, and
     // with SavedDataUnreadable when IndexedDB may hold a state it cannot read now. Starting
     // empty in either case would let the next save write over the plan.
     async loadState(): Promise<State> {
-      const copy = readCopy(backends.localStorage)
-      if (copy !== null) return fromStored(copy)
+      const text = await storedText()
+      return text === null ? emptyState() : fromStored(text)
+    },
+
+    // The stored text as it is, checked or not, so that the person can keep a copy of a state
+    // the page refuses to open. Rejects with SavedDataUnreadable as loadState does.
+    readStoredText: storedText,
+
+    // Removes the text loadState reads, and nothing else. When that was the localStorage copy,
+    // the next load opens the older state IndexedDB may hold. Rejects with SavedDataUnreadable,
+    // removing nothing, when IndexedDB cannot be opened.
+    async discardStoredText(): Promise<void> {
+      if (readCopy(backends.localStorage) !== null) {
+        if (!removeCopy(backends.localStorage)) {
+          throw new Error('this browser did not let the page remove its stored copy')
+        }
+        return
+      }
       const opened = await connection()
-      if (opened.kind === 'absent') return emptyState()
       if (opened.kind === 'failed') throw new SavedDataUnreadable(opened.error)
-      let text: string | undefined
+      if (opened.kind === 'absent') return
       try {
-        text = await readRecord(opened.database)
+        await changeRecord(opened.database, (store) => store.delete(RECORD))
       } catch (error) {
         forget()
         throw new SavedDataUnreadable(error)
       }
-      return text === undefined ? emptyState() : fromStored(text)
     },
 
     // The state is checked first, as loadState will check it: one that would not load again is
@@ -197,13 +238,16 @@ export function createStorage(backends: Backends): StateStore {
       checkStored(JSON.parse(text))
       const opened = await connection()
       if (opened.kind === 'open') {
+        let written = false
         try {
           await writeRecord(opened.database, text)
-          removeCopy(backends.localStorage)
-          return
+          written = true
         } catch {
           // Full or failing: keep it in localStorage instead. The copy is the newer one now.
         }
+        // A copy left in localStorage would be read first next time, so one that cannot be
+        // removed is made the newer state too.
+        if (written && removeCopy(backends.localStorage)) return
       } else if (opened.kind === 'failed' && readCopy(backends.localStorage) === null) {
         throw new SavedDataUnreadable(opened.error)
       }
@@ -239,6 +283,14 @@ export function loadState(): Promise<State> {
 
 export function saveState(state: State): Promise<void> {
   return browser().saveState(state)
+}
+
+export function readStoredText(): Promise<string | null> {
+  return browser().readStoredText()
+}
+
+export function discardStoredText(): Promise<void> {
+  return browser().discardStoredText()
 }
 
 // The export file: the state as one JSON file in the format of schemas/export.json.

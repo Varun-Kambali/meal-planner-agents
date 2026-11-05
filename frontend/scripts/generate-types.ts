@@ -81,6 +81,22 @@ function forTypes(value: unknown): unknown {
     }
     if (required.size > 0) schema.required = [...required]
   }
+  // A map whose keys come from a list and must all be there (PlanRules.week names all seven
+  // days) would become an index signature, with every value possibly missing. Its type lists
+  // the keys instead.
+  const names = isSchema(schema.propertyNames) ? schema.propertyNames.enum : undefined
+  if (
+    Array.isArray(names) &&
+    isSchema(schema.additionalProperties) &&
+    schema.minProperties === names.length
+  ) {
+    const each = schema.additionalProperties
+    schema.properties = Object.fromEntries(names.map((name) => [String(name), each]))
+    schema.required = names.map(String)
+    schema.additionalProperties = false
+    delete schema.propertyNames
+    delete schema.minProperties
+  }
   // A reference with a description beside it ("total": Nutrients, "the sum over the items")
   // would become a second copy of the type it refers to (Nutrients1).
   if (typeof schema.$ref === 'string') {

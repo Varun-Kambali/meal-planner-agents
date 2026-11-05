@@ -434,6 +434,29 @@ describe('errors', () => {
     })
   })
 
+  it('passes an abort while a JSON body is read through as an abort', async () => {
+    const controller = new AbortController()
+    // A body that sends the start of the JSON, then fails as fetch's body does on an abort.
+    const half = new ReadableStream<Uint8Array>({
+      start(source) {
+        source.enqueue(new TextEncoder().encode('[{"id": "dal"'))
+      },
+      async pull(source) {
+        if (!controller.signal.aborted) {
+          await new Promise((resolve) => controller.signal.addEventListener('abort', resolve))
+        }
+        source.error(new DOMException('The user aborted a request.', 'AbortError'))
+      },
+    })
+    serve(() => new Response(half, { status: 200 }))
+
+    const failure = searchFoods('dal', { signal: controller.signal })
+    controller.abort()
+
+    await expect(failure).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(failure).rejects.not.toBeInstanceOf(ApiError)
+  })
+
   it('reads a refusal that is not JSON, such as a proxy page', async () => {
     serve(
       () => new Response('<html>Bad gateway</html>', { status: 502, statusText: 'Bad Gateway' }),
