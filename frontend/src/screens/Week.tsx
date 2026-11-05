@@ -2,7 +2,7 @@
 // with each meal's step on show. A recipe that still misses a check says what it misses; a meal
 // that could not be written says why. One recipe can be written again on its own.
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import type { DayKey } from '../api'
 import { labelOf } from '../planForm'
@@ -41,6 +41,13 @@ function mealName(day: DayKey, slot: { name: string }): string {
 export function Week({ state, run }: WeekProps) {
   const { rules, week } = state
   const reasonId = useId()
+  const writeButton = useRef<HTMLButtonElement>(null)
+  const busy = run.running !== null
+  // The Stop button goes once a run ends; the focus then goes back to the Write button rather
+  // than to the page.
+  useEffect(() => {
+    if (!busy && document.activeElement === document.body) writeButton.current?.focus()
+  }, [busy])
   if (rules === null) {
     return (
       <>
@@ -54,7 +61,6 @@ export function Week({ state, run }: WeekProps) {
       </>
     )
   }
-  const busy = run.running !== null
   return (
     <>
       <h1 tabIndex={-1} data-screen-title>
@@ -65,14 +71,25 @@ export function Week({ state, run }: WeekProps) {
         <button
           type="button"
           className="button-primary"
-          disabled={busy}
+          ref={writeButton}
+          // aria-disabled, not disabled, so that the focus stays on the button while a run goes.
+          aria-disabled={busy}
           aria-describedby={reasonId}
-          onClick={run.write}
+          onClick={() => {
+            if (!busy) run.write()
+          }}
         >
           {week === null ? 'Write the week' : 'Write a new week'}
         </button>
         {busy && (
-          <button type="button" className="button-secondary" onClick={run.stop}>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => {
+              writeButton.current?.focus()
+              run.stop()
+            }}
+          >
             Stop
           </button>
         )}
@@ -451,9 +468,11 @@ function Meal({
       <button
         type="button"
         className="button-text"
-        disabled={busy}
+        aria-disabled={busy}
         aria-label={recipe === undefined ? `Write again: ${name}` : `Replace ${name}`}
-        onClick={() => run.replace(day, slot.id)}
+        onClick={() => {
+          if (!busy) run.replace(day, slot.id)
+        }}
       >
         {recipe === undefined ? 'Write again' : 'Replace'}
       </button>

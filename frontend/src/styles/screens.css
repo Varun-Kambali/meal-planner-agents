@@ -111,7 +111,7 @@ code {
   border: 1px solid var(--color-primary);
 }
 
-.button-primary:hover:enabled {
+.button-primary:hover:enabled:not([aria-disabled='true']) {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
 }
@@ -122,7 +122,7 @@ code {
   border: 1px solid var(--color-border-strong);
 }
 
-.button-secondary:hover:enabled {
+.button-secondary:hover:enabled:not([aria-disabled='true']) {
   background: var(--color-surface-2);
 }
 
@@ -139,20 +139,24 @@ code {
   transition: color var(--duration) ease;
 }
 
-.button-text:hover:enabled {
+.button-text:hover:enabled:not([aria-disabled='true']) {
   color: var(--color-primary-hover);
 }
 
 .button-primary:disabled,
 .button-secondary:disabled,
-.button-text:disabled {
+.button-text:disabled,
+.button-primary[aria-disabled='true'],
+.button-secondary[aria-disabled='true'],
+.button-text[aria-disabled='true'] {
   background: var(--color-surface-2);
   border-color: var(--color-border);
   color: var(--color-text-muted);
   cursor: not-allowed;
 }
 
-.button-text:disabled {
+.button-text:disabled,
+.button-text[aria-disabled='true'] {
   background: none;
 }
 
@@ -308,6 +312,7 @@ fieldset.subsection {
 }
 
 .chosen {
+  max-width: var(--width-text);
   margin: var(--space-sm) 0 0;
   padding: 0;
   list-style: none;
@@ -564,8 +569,17 @@ progress::-moz-progress-bar {
   margin-bottom: var(--space-xs);
 }
 
+.facts > div {
+  display: grid;
+  grid-template-columns: var(--width-label) 1fr;
+  gap: var(--space-md);
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
 @media (max-width: 47.99rem) {
-  .day-checks > div {
+  .day-checks > div,
+  .facts > div {
     grid-template-columns: 1fr;
     gap: 0;
   }
@@ -593,14 +607,6 @@ progress::-moz-progress-bar {
 
 .facts {
   margin: var(--space-md) 0;
-}
-
-.facts > div {
-  display: grid;
-  grid-template-columns: var(--width-label) 1fr;
-  gap: var(--space-md);
-  padding: var(--space-xs) 0;
-  border-bottom: 1px solid var(--color-border);
 }
 
 .facts dt {

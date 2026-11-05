@@ -94,7 +94,11 @@ describe('the week', () => {
     expect(progress).toHaveTextContent('Breakfast: Checking')
     expect(progress).toHaveTextContent('Dinner: Writing')
     expect(within(progress).getByRole('progressbar')).toHaveAttribute('value', '1')
-    expect(screen.getByRole('button', { name: 'Write the week' })).toBeDisabled()
+    const write = screen.getByRole('button', { name: 'Write the week' })
+    expect(write).toHaveAttribute('aria-disabled', 'true')
+    // Pressed again while the run goes, it starts nothing.
+    await user.click(write)
+    expect(calls).toHaveLength(1)
     expect(calls[0]!.body).toEqual(sampleState().rules)
 
     run.send({ kind: 'week_done', week: failingWeek() })
@@ -136,7 +140,9 @@ describe('the week', () => {
 
     expect(await screen.findByText('Stopped. Nothing was changed.')).toBeInTheDocument()
     expect(calls[0]!.signal?.aborted).toBe(true)
-    expect(screen.getByRole('button', { name: 'Write the week' })).toBeEnabled()
+    const write = screen.getByRole('button', { name: 'Write the week' })
+    expect(write).toHaveAttribute('aria-disabled', 'false')
+    expect(write).toHaveFocus()
   })
 
   it('says when the API cannot be reached', async () => {

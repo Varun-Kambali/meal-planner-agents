@@ -257,7 +257,9 @@ function Recipe({
               {NUTRIENT_KEYS.map((key) => (
                 <tr key={key}>
                   <th scope="row">{NUTRIENTS[key].name}</th>
-                  <td className="num">{amount(key)}</td>
+                  <td className="num">
+                    <Amount nutrition={nutrition} nutrient={key} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -278,5 +280,25 @@ function Recipe({
       )}
       {recipe.attempts > 1 && <p className="meta">Tried {recipe.attempts} times.</p>}
     </article>
+  )
+}
+
+// A total in the table: the number, then its unit in muted text, with "at least" for a lower
+// bound and "not known" when no food has a value.
+function Amount({
+  nutrition,
+  nutrient,
+}: {
+  nutrition: NonNullable<CheckedRecipe['nutrition']>
+  nutrient: NutrientKey
+}) {
+  const value = nutrition.total[nutrient]
+  if (value === null) return <>not known</>
+  const lower = (nutrition.total_incomplete[nutrient] ?? []).length > 0
+  return (
+    <>
+      {lower && 'at least '}
+      {shown(value)} <span className="unit">{NUTRIENTS[nutrient].unit}</span>
+    </>
   )
 }
