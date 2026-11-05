@@ -218,8 +218,11 @@ export function App({ store = browserStore }: { store?: StateStore }) {
 function Unsaved({ message, state }: { message: string; state: State }) {
   const [problem, setProblem] = useState<string | null>(null)
   return (
-    <section role="alert" className="notice warning" aria-labelledby="unsaved-heading">
-      <h2 id="unsaved-heading">Not saved in this browser</h2>
+    // Shown above the screen, so it is not a heading: the screen's own heading comes first.
+    <section role="alert" className="notice warning" aria-labelledby="unsaved-title">
+      <p id="unsaved-title" className="notice-title">
+        Not saved in this browser
+      </p>
       <p>
         The last change was not saved: {message}. It is kept on this page until the page is closed.
         Export a copy to keep it.

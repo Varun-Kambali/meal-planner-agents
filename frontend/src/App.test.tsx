@@ -130,6 +130,10 @@ describe('the shell', () => {
 
     const alert = await screen.findByRole('alert', { name: 'Not saved in this browser' })
     expect(alert).toHaveTextContent('this browser does not let the page keep data')
+    // The screen's own heading still comes first.
+    const headings = within(screen.getByRole('main')).getAllByRole('heading')
+    expect(headings[0]).toHaveAccessibleName('Your plan')
+    expect(headings[0]!.tagName).toBe('H1')
     await user.click(within(alert).getByRole('button', { name: 'Export a copy' }))
     expect(downloads.map((file) => file.name)).toEqual([
       expect.stringMatching(/^meal-planner-\d{4}-\d{2}-\d{2}\.json$/),
