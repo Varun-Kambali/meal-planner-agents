@@ -1,0 +1,199 @@
+{
+  "defaults": {
+    "runners": ["axe"],
+    "standard": "WCAG2AA",
+    "levelCapWhenNeedsReview": "warning",
+    "timeout": 30000,
+    "chromeLaunchConfig": {
+      "args": ["--no-sandbox", "--blink-settings=preferredColorScheme=1"]
+    }
+  },
+  "urls": [
+    {
+      "url": "http://127.0.0.1:4173/?view=desktop&screen=plan-empty#/plan",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": ["wait for element #main h1 to be visible"]
+    },
+    {
+      "url": "http://127.0.0.1:4173/?view=desktop&screen=plan-problems#/plan",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "wait for element #main h1 to be visible",
+        "click element button[type=submit]",
+        "wait for element .problems to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=desktop&screen=plan-saved",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/plan",
+        "wait for element #main h1 to be visible",
+        "wait for element #f-food-liked_foods option + option to be added"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=desktop&screen=week",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/week",
+        "wait for element #main h1 to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=desktop&screen=week-refused",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/week",
+        "wait for element #main h1 to be visible",
+        "click element .button-primary",
+        "wait for element [role=alert] to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=desktop&screen=recipe",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/recipe/mon/lunch",
+        "wait for element #main h1 to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=desktop&screen=recipes",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/recipes",
+        "wait for element #main h1 to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/unreadable?view=desktop&screen=saved-data-unreadable",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/week",
+        "wait for element #main h1 to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/?view=phone&screen=plan-empty#/plan",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": ["wait for element #main h1 to be visible"]
+    },
+    {
+      "url": "http://127.0.0.1:4173/?view=phone&screen=plan-problems#/plan",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "wait for element #main h1 to be visible",
+        "click element button[type=submit]",
+        "wait for element .problems to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=phone&screen=plan-saved",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/plan",
+        "wait for element #main h1 to be visible",
+        "wait for element #f-food-liked_foods option + option to be added"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=phone&screen=week",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/week",
+        "wait for element #main h1 to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=phone&screen=week-refused",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/week",
+        "wait for element #main h1 to be visible",
+        "click element .button-primary",
+        "wait for element [role=alert] to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=phone&screen=recipe",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/recipe/mon/lunch",
+        "wait for element #main h1 to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/week?view=phone&screen=recipes",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/recipes",
+        "wait for element #main h1 to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/unreadable?view=phone&screen=saved-data-unreadable",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/week",
+        "wait for element #main h1 to be visible"
+      ]
+    }
+  ]
+}

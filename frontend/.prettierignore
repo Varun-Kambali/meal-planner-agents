@@ -2,3 +2,5 @@ dist
 node_modules
 package-lock.json
 src/generated/validators.js
+# Written by scripts/record_week_fixture.py.
+src/test/recorded-week.json
