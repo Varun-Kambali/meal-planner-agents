@@ -81,6 +81,24 @@ describe('the shell', () => {
     expect(document.title).toBe('Your plan: Meal planner')
   })
 
+  it("titles a recipe page with the recipe's name", async () => {
+    seed(sampleState())
+    window.location.hash = '#/recipe/mon/lunch'
+    render(<App />)
+
+    await screen.findByRole('heading', { level: 1, name: 'Paneer rice box' })
+    expect(document.title).toBe('Paneer rice box: Meal planner')
+  })
+
+  it('titles a recipe page the week does not have', async () => {
+    seed(sampleState())
+    window.location.hash = '#/recipe/tue/dinner'
+    render(<App />)
+
+    await screen.findByRole('heading', { level: 1, name: 'No recipe here' })
+    expect(document.title).toBe('No recipe here: Meal planner')
+  })
+
   it('shows the field the API refused in the plan form after writing the week', async () => {
     seed({ ...sampleState(), week: null })
     fakeApi({

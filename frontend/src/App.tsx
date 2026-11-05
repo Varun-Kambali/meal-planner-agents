@@ -112,7 +112,14 @@ export function App({ store = browserStore }: { store?: StateStore }) {
   }
   const name = shown(route, state)
 
-  const title = TITLES[name]
+  // A recipe page is titled with the recipe, so that tabs and history tell recipes apart.
+  let title = TITLES[name]
+  if (route.name === 'recipe' && state !== null) {
+    const recipe = state.week?.recipes.find(
+      (r) => r.spec.day === route.day && r.spec.slot.id === route.slotId,
+    )
+    title = recipe?.draft.title ?? 'No recipe here'
+  }
   useEffect(() => {
     document.title = title === TITLES.home ? title : `${title}: Meal planner`
   }, [title])
