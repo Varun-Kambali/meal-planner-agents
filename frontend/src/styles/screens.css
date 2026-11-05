@@ -58,9 +58,21 @@
   padding-top: var(--space-xl);
 }
 
-/* Headings and sections that take the focus when a screen opens or a form has problems. */
-[tabindex='-1']:focus {
+/* A screen's heading and the main region take the focus when the screen opens or the skip link
+   is used, so a screen reader starts there; they need no ring. The groups, the form and the list
+   of problems that a problem's link or a removed row moves the focus to keep one, so a sighted
+   keyboard user sees where they are. */
+h1[tabindex='-1']:focus,
+h2[tabindex='-1']:focus,
+main:focus {
   outline: none;
+}
+
+fieldset[tabindex='-1']:focus,
+form[tabindex='-1']:focus,
+.problems:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .group {
