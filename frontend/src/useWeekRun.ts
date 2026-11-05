@@ -15,7 +15,7 @@ import {
 import { fromServer, sameRules, type FormError } from './planForm'
 import { advance, startProgress, type Progress } from './progress'
 import type { SaveOutcome } from './session'
-import type { State } from './storage'
+import { ValidationFailed, type State } from './storage'
 import type { WeekResult } from './types'
 import { DAY_NAMES, messageOf, reasonWords } from './words'
 
@@ -170,7 +170,18 @@ export function useWeekRun(
           })
           return
         }
-        await save({ ...now, rules, week })
+        const saved = await save({ ...now, rules, week })
+        // A save the browser could not make (StorageUnavailable, say) still keeps the week on the
+        // page, and the shell says it was not saved. One that would not load again keeps nothing.
+        if (!saved.ok && saved.error instanceof ValidationFailed) {
+          const noun = what.what === 'week' ? 'week' : 'recipe'
+          setOutcome({
+            kind: 'failed',
+            run: what,
+            message: `The ${noun} could not be saved: ${saved.error.message}.`,
+          })
+          return
+        }
         setOutcome({ kind: 'written', run: what })
       } catch (error) {
         const ended = failure(error, what)

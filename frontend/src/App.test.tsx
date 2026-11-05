@@ -7,6 +7,7 @@ import {
   STORAGE_KEY,
   SavedDataUnreadable,
   StorageUnavailable,
+  ValidationFailed,
   emptyState,
   type State,
   type StateStore,
@@ -133,6 +134,38 @@ describe('the shell', () => {
     expect(downloads.map((file) => file.name)).toEqual([
       expect.stringMatching(/^meal-planner-\d{4}-\d{2}-\d{2}\.json$/),
     ])
+  })
+})
+
+describe('a week the browser refuses to save', () => {
+  it('says why, with the place, and does not say the week is written', async () => {
+    const run = new FakeStream()
+    fakeApi({ '/v1/week': () => run.response })
+    const store = memoryStore(
+      { ...sampleState(), week: null },
+      {
+        saveState: async () => {
+          throw new ValidationFailed([
+            { path: '/week/recipes/0/draft/title', message: 'must not be blank' },
+          ])
+        },
+      },
+    )
+    const user = userEvent.setup()
+    window.location.hash = '#/week'
+    render(<App store={store} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Write the week' }))
+    run.send({ kind: 'week_done', week: sampleExport().week! })
+    run.end()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'The week could not be saved: the data does not fit the file format: /week/recipes/0/draft/title must not be blank.',
+    )
+    expect(alert).toHaveTextContent('No week was saved.')
+    expect(screen.queryByText('The week is written.')).not.toBeInTheDocument()
+    expect(screen.getByText('No week has been written for this plan yet.')).toBeInTheDocument()
   })
 })
 
