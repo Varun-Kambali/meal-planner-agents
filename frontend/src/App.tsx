@@ -196,7 +196,15 @@ export function App({ store = browserStore }: { store?: StateStore }) {
               </>
             )}
             {(name === 'plan' || name === 'week') && (
-              <DataSection state={state} onReplace={replaceAll} />
+              <DataSection
+                state={state}
+                onReplace={replaceAll}
+                blocked={
+                  run.running === null
+                    ? null
+                    : `A file can be loaded once the ${run.running.what === 'week' ? 'week' : 'recipe'} being written is done.`
+                }
+              />
             )}
           </>
         )}

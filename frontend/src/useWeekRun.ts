@@ -12,7 +12,7 @@ import {
   type DayKey,
   type WeekEvent,
 } from './api'
-import { fromServer, type FormError } from './planForm'
+import { fromServer, sameRules, type FormError } from './planForm'
 import { advance, startProgress, type Progress } from './progress'
 import type { SaveOutcome } from './session'
 import type { State } from './storage'
@@ -155,7 +155,22 @@ export function useWeekRun(
             unwritten: mergeUnwritten(before.unwritten, result.unwritten, what.day, what.slotId),
           }
         }
-        await save({ ...(latest.current ?? start), rules, week })
+        // The plan, or the week a replacement was written into, may have been replaced since the
+        // run began. A week written for other rules is not saved over them.
+        const now = latest.current ?? start
+        if (!sameRules(now.rules, rules) || (what.what === 'replace' && now.week !== start.week)) {
+          const written =
+            what.what === 'week'
+              ? 'the week was being written, so this week'
+              : 'the recipe was being written, so it'
+          setOutcome({
+            kind: 'failed',
+            run: what,
+            message: `The plan changed while ${written} was not kept.`,
+          })
+          return
+        }
+        await save({ ...now, rules, week })
         setOutcome({ kind: 'written', run: what })
       } catch (error) {
         const ended = failure(error, what)

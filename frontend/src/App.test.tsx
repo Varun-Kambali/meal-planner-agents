@@ -11,7 +11,15 @@ import {
   type State,
   type StateStore,
 } from './storage'
-import { CATALOGUE, catchDownloads, fakeApi, json, sampleExport, sampleState } from './test/helpers'
+import {
+  CATALOGUE,
+  FakeStream,
+  catchDownloads,
+  fakeApi,
+  json,
+  sampleExport,
+  sampleState,
+} from './test/helpers'
 
 function seed(state: State): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, ...state }))
@@ -176,6 +184,27 @@ describe('export and import', () => {
     await user.click(within(question).getByRole('button', { name: 'Replace with the file' }))
 
     expect(await screen.findByText('Loaded coach-plan.json.')).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).week).toEqual(sampleExport().week)
+  })
+
+  it('loads no file while a week is being written, so the run cannot save over it', async () => {
+    seed({ ...sampleState(), week: null })
+    const run = new FakeStream()
+    fakeApi({ '/v1/week': () => run.response })
+    const user = userEvent.setup()
+    window.location.hash = '#/week'
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Write the week' }))
+    const input = await screen.findByLabelText('Load a file')
+    expect(input).toBeDisabled()
+    expect(input).toHaveAccessibleDescription(
+      expect.stringContaining('A file can be loaded once the week being written is done.'),
+    )
+    run.send({ kind: 'week_done', week: sampleExport().week! })
+    run.end()
+
+    await waitFor(() => expect(screen.getByLabelText('Load a file')).toBeEnabled())
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).week).toEqual(sampleExport().week)
   })
 

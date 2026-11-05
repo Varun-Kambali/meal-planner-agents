@@ -27,9 +27,12 @@ function isEmpty(state: State): boolean {
 export function DataSection({
   state,
   onReplace,
+  blocked,
 }: {
   state: State
   onReplace: (state: State) => Promise<SaveOutcome>
+  // Why no file can be loaded now: a run would save its week over the loaded plan.
+  blocked: string | null
 }) {
   const [problem, setProblem] = useState<Problem | null>(null)
   const [pending, setPending] = useState<{ state: State; name: string } | null>(null)
@@ -112,12 +115,20 @@ export function DataSection({
         <p id={`${inputId}-hint`} className="hint">
           A copy exported from this app, or a plan file from a coach.
         </p>
+        {blocked !== null && (
+          <p id={`${inputId}-blocked`} className="hint">
+            {blocked}
+          </p>
+        )}
         <input
           id={inputId}
           type="file"
           className="file"
           accept="application/json,.json"
-          aria-describedby={`${inputId}-hint`}
+          disabled={blocked !== null}
+          aria-describedby={
+            blocked === null ? `${inputId}-hint` : `${inputId}-hint ${inputId}-blocked`
+          }
           onChange={(event) => void choose(event)}
         />
       </div>
@@ -132,7 +143,10 @@ export function DataSection({
             <button
               type="button"
               className="button-primary"
-              onClick={() => void replace(pending.state, pending.name)}
+              aria-disabled={blocked !== null}
+              onClick={() => {
+                if (blocked === null) void replace(pending.state, pending.name)
+              }}
             >
               Replace with the file
             </button>
