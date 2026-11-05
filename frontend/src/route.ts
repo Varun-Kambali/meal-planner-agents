@@ -18,7 +18,13 @@ export type Route =
 export function parseRoute(hash: string): Route | null {
   if (hash === '' || hash === '#') return { name: 'home' }
   if (!hash.startsWith('#/')) return null
-  const parts = hash.slice(2).split('/').map(decodeURIComponent)
+  let parts: string[]
+  try {
+    parts = hash.slice(2).split('/').map(decodeURIComponent)
+  } catch {
+    // A "%" not followed by two hex digits, say: no screen has such an address.
+    return { name: 'missing' }
+  }
   const [screen, day, slotId] = parts
   if (parts.length === 1 && screen === '') return { name: 'home' }
   if (parts.length === 1 && screen === 'plan') return { name: 'plan' }
