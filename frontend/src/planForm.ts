@@ -43,6 +43,9 @@ export interface SlotDraft {
   // Percentages of the day, as typed: "25" is a quarter.
   kcal_share: string
   protein_share: string
+  // The shares as saved. The form shows them to two decimals of a percent, so a share it shows
+  // rounded (a third, say) is kept as it was unless its text is edited.
+  saved: { kcal_share: number; protein_share: number } | null
   style: string
   cook_when: CookWhen
   max_active_min: string
@@ -111,12 +114,13 @@ export function emptySlot(): SlotDraft {
     cook_when: 'fresh',
     max_active_min: '',
     max_total_min: '',
+    saved: null,
   }
 }
 
-// A share of the day (0.25) as the percentage the form shows (25), without float noise.
+// A share of the day (0.25) as the percentage the form shows (25), to two decimals at most.
 function percent(share: number): string {
-  return String(Math.round(share * 1000) / 10)
+  return String(Math.round(share * 10000) / 100)
 }
 
 export function draftOf(rules: PlanRules | null): PlanDraft {
@@ -173,6 +177,7 @@ export function draftOf(rules: PlanRules | null): PlanDraft {
       cook_when: slot.cook_when,
       max_active_min: String(slot.max_active_min),
       max_total_min: String(slot.max_total_min),
+      saved: { kcal_share: slot.kcal_share, protein_share: slot.protein_share },
     })),
     gear: [...rules.gear],
     diet: rules.food.diet,
@@ -284,6 +289,7 @@ export function buildRules(draft: PlanDraft, log: MealLog): Built {
     named(`${at}.name`, row.name, 'meal')
     if (row.eat_at.trim() === '') add(`${at}.eat_at`, 'Enter the time this meal is eaten.')
     const share = (field: 'kcal_share' | 'protein_share'): number => {
+      if (row.saved !== null && row[field] === percent(row.saved[field])) return row.saved[field]
       const parsed = parse(row[field])
       const least = field === 'kcal_share' ? 'above 0%' : 'from 0%'
       if (!parsed.ok || parsed.value > 100 || (field === 'kcal_share' && parsed.value === 0)) {
@@ -426,7 +432,7 @@ export const TARGET_LABELS: Record<TargetField, string> = {
   fibre_g_min: 'Fibre, at least (g)',
 }
 
-export const SLOT_LABELS: Record<Exclude<keyof SlotDraft, 'key' | 'id'>, string> = {
+export const SLOT_LABELS: Record<Exclude<keyof SlotDraft, 'key' | 'id' | 'saved'>, string> = {
   name: 'Name',
   eat_at: 'Eaten at',
   kcal_share: "Share of the day's calories (%)",

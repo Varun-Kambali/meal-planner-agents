@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildRules, draftOf, fromServer } from './planForm'
 import { sampleState } from './test/helpers'
+import type { MealLog, PlanRules } from './types'
 
 describe("the server's problems with the rules", () => {
   it('places a check on the rules as a whole at the field it names', () => {
@@ -73,6 +74,44 @@ describe('building the rules', () => {
     const { rules, log } = sampleState()
 
     expect(buildRules(draftOf(rules), log)).toEqual({ rules, errors: [] })
+  })
+
+  it('keeps shares the form shows rounded as they were saved, such as thirds', () => {
+    const { rules } = sampleState()
+    const log: MealLog = { version: 1, entries: [] }
+    const thirds: [number[], string[]][] = [
+      [
+        [0.3333, 0.3333, 0.3334],
+        ['33.33', '33.33', '33.34'],
+      ],
+      [
+        [1 / 3, 1 / 3, 1 / 3],
+        ['33.33', '33.33', '33.33'],
+      ],
+    ]
+    for (const [shares, shown] of thirds) {
+      const plan: PlanRules = {
+        ...rules!,
+        slots: rules!.slots
+          .filter((slot) => slot.id !== 'snack')
+          .map((slot, i) => ({ ...slot, kcal_share: shares[i]!, protein_share: shares[i]! })),
+      }
+      const draft = draftOf(plan)
+
+      expect(draft.slots.map((slot) => slot.kcal_share)).toEqual(shown)
+      expect(buildRules(draft, log)).toEqual({ rules: plan, errors: [] })
+    }
+  })
+
+  it('reads a share again once it is edited', () => {
+    const { rules, log } = sampleState()
+    const draft = draftOf(rules)
+    draft.slots[0]!.kcal_share = '20'
+    draft.slots[1]!.kcal_share = '35'
+
+    const built = buildRules(draft, log)
+
+    expect(built.rules?.slots.map((slot) => slot.kcal_share)).toEqual([0.2, 0.35, 0.15, 0.3])
   })
 
   it('names each field that is not a number yet', () => {
