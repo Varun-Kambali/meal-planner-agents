@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from './App'
 import {
@@ -140,6 +140,22 @@ describe('export and import', () => {
 
     expect(downloads).toHaveLength(1)
     expect(JSON.parse(await downloads[0]!.text())).toEqual(sampleExport())
+  })
+
+  it('says so when the browser will not make the file', async () => {
+    seed(sampleState())
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      throw new DOMException('Downloads are blocked.', 'SecurityError')
+    })
+    const user = userEvent.setup()
+    window.location.hash = '#/week'
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Export a copy' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The copy could not be made: Downloads are blocked.',
+    )
   })
 
   it('asks before a file replaces a saved plan, then loads it', async () => {

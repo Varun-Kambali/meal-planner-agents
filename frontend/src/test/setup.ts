@@ -8,7 +8,7 @@ afterEach(() => {
   cleanup()
 })
 
-// jsdom has no object URLs; a download test replaces these with its own (helpers.ts).
+// Older jsdom has no object URLs; a download test replaces these with its own (helpers.ts).
 URL.createObjectURL ??= () => {
   throw new Error('URL.createObjectURL is not available in this test')
 }
