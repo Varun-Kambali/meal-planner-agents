@@ -44,9 +44,13 @@ export function Week({ state, run }: WeekProps) {
   const writeButton = useRef<HTMLButtonElement>(null)
   const busy = run.running !== null
   // The Stop button goes once a run ends; the focus then goes back to the Write button rather
-  // than to the page.
+  // than to the page. Only then: opening the screen leaves the focus where it is.
+  const wasBusy = useRef(false)
   useEffect(() => {
-    if (!busy && document.activeElement === document.body) writeButton.current?.focus()
+    if (wasBusy.current && !busy && document.activeElement === document.body) {
+      writeButton.current?.focus()
+    }
+    wasBusy.current = busy
   }, [busy])
   if (rules === null) {
     return (

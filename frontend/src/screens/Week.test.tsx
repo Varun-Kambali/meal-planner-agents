@@ -44,8 +44,10 @@ async function findCell(day: string, meal: string): Promise<HTMLElement> {
   return cell(day, meal)
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   window.location.hash = '#/week'
+  // jsdom fires hashchange a moment later; let it go before the app is there to hear it.
+  await new Promise((resolve) => setTimeout(resolve, 0))
 })
 
 afterEach(() => {
@@ -72,6 +74,16 @@ describe('the week', () => {
     expect(cell('Tuesday', 'Lunch')).toHaveTextContent(
       'Could not write: the model did not answer in time',
     )
+  })
+
+  it('leaves the focus where it is when the screen opens', async () => {
+    seed({ ...sampleState(), week: failingWeek() })
+
+    render(<App />)
+    await findCell('Monday', 'Lunch')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(document.body).toHaveFocus()
   })
 
   it('shows each meal as it is written, checked and repaired, then the week', async () => {
