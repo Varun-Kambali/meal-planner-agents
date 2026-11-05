@@ -140,11 +140,13 @@ function writeCopy(storage: Storage | undefined, text: string): boolean {
   }
 }
 
-function removeCopy(storage: Storage | undefined): void {
+// Whether the copy is gone: false when localStorage holds one and refused to remove it.
+function removeCopy(storage: Storage | undefined): boolean {
   try {
     storage?.removeItem(STORAGE_KEY)
+    return true
   } catch {
-    // Nothing was kept there, then.
+    return readCopy(storage) === null
   }
 }
 
@@ -211,7 +213,9 @@ export function createStorage(backends: Backends): StateStore {
     // removing nothing, when IndexedDB cannot be opened.
     async discardStoredText(): Promise<void> {
       if (readCopy(backends.localStorage) !== null) {
-        removeCopy(backends.localStorage)
+        if (!removeCopy(backends.localStorage)) {
+          throw new Error('this browser did not let the page remove its stored copy')
+        }
         return
       }
       const opened = await connection()
@@ -234,13 +238,16 @@ export function createStorage(backends: Backends): StateStore {
       checkStored(JSON.parse(text))
       const opened = await connection()
       if (opened.kind === 'open') {
+        let written = false
         try {
           await writeRecord(opened.database, text)
-          removeCopy(backends.localStorage)
-          return
+          written = true
         } catch {
           // Full or failing: keep it in localStorage instead. The copy is the newer one now.
         }
+        // A copy left in localStorage would be read first next time, so one that cannot be
+        // removed is made the newer state too.
+        if (written && removeCopy(backends.localStorage)) return
       } else if (opened.kind === 'failed' && readCopy(backends.localStorage) === null) {
         throw new SavedDataUnreadable(opened.error)
       }

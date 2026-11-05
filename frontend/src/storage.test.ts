@@ -606,3 +606,45 @@ describe('the stored copy', () => {
     await expect(storage.discardStoredText()).rejects.toBeInstanceOf(SavedDataUnreadable)
   })
 })
+
+// localStorage that reads and writes but will not remove anything.
+function keepingLocalStorage(): Storage {
+  return {
+    get length() {
+      return localStorage.length
+    },
+    clear: () => localStorage.clear(),
+    getItem: (key) => localStorage.getItem(key),
+    key: (index) => localStorage.key(index),
+    setItem: (key, value) => localStorage.setItem(key, value),
+    removeItem: () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError')
+    },
+  }
+}
+
+describe('a localStorage copy that cannot be removed', () => {
+  it('says the stored copy was not removed', async () => {
+    localStorage.setItem(STORAGE_KEY, 'not json')
+    const storage = createStorage({
+      indexedDB: new IDBFactory(),
+      localStorage: keepingLocalStorage(),
+    })
+
+    await expect(storage.discardStoredText()).rejects.toThrow(
+      'this browser did not let the page remove its stored copy',
+    )
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('not json')
+  })
+
+  it('is written over by a save, so the next load still reads the newest state', async () => {
+    const indexedDB = new IDBFactory()
+    const backends = { indexedDB, localStorage: keepingLocalStorage() }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, ...emptyState() }))
+    const newer = stateOf(exported())
+
+    await createStorage(backends).saveState(newer)
+
+    await expect(createStorage(backends).loadState()).resolves.toEqual(newer)
+  })
+})
