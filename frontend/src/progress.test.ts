@@ -36,7 +36,7 @@ describe('the progress of a run', () => {
       failures: [{ check: 'slot_kcal', message: 'too much' }],
     })
 
-    expect(stepOf(progress, 'lunch')).toBe('Checked: 1 recipe of 2 miss a check')
+    expect(stepOf(progress, 'lunch')).toBe('Checked: 1 of 2 recipes miss a check')
     expect(stepOf(progress, 'breakfast')).toBe('Waiting to start')
     expect(progress.meals.filter((meal) => meal.written)).toHaveLength(1)
   })

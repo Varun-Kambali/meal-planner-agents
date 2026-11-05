@@ -81,10 +81,6 @@ export function advance(progress: Progress, event: WeekEvent): Progress {
   }
 }
 
-function recipes(count: number): string {
-  return count === 1 ? '1 recipe' : `${count} recipes`
-}
-
 export function stepWords(step: Step): string {
   switch (step.kind) {
     case 'waiting':
@@ -96,7 +92,9 @@ export function stepWords(step: Step): string {
     case 'checked':
       return step.failing === 0
         ? `Checked: ${step.checked === 1 ? 'the recipe passes' : `all ${step.checked} recipes pass`}`
-        : `Checked: ${recipes(step.failing)} of ${step.checked} miss a check`
+        : step.checked === 1
+          ? 'Checked: the recipe misses a check'
+          : `Checked: ${step.failing} of ${step.checked} recipes miss a check`
     case 'repairing':
       return `Repairing, try ${step.attempt} of ${MAX_TRIES}`
     case 'retrying':

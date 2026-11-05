@@ -111,6 +111,25 @@ describe('the shell', () => {
     )
   })
 
+  it('says why the plan cannot be saved while one recipe is written again', async () => {
+    seed(sampleState())
+    const run = new FakeStream()
+    fakeApi({ '/v1/catalogue': () => json(CATALOGUE), '/v1/week/replace': () => run.response })
+    const user = userEvent.setup()
+    window.location.hash = '#/week'
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: "Replace Monday's Lunch" }))
+    await user.click(screen.getByRole('link', { name: 'Plan' }))
+
+    const save = await screen.findByRole('button', { name: 'Save the plan' })
+    expect(save).toBeDisabled()
+    expect(save).toHaveAccessibleDescription(
+      "Monday's Lunch is being written again for the saved plan; save changes once it is done.",
+    )
+    run.end()
+  })
+
   it('says a change was not saved and offers the export, when the browser keeps nothing', async () => {
     const downloads = catchDownloads()
     fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })

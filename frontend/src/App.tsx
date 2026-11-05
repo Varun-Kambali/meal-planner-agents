@@ -24,7 +24,7 @@ import {
   type StateStore,
 } from './storage'
 import { useWeekRun } from './useWeekRun'
-import { messageOf } from './words'
+import { DAY_NAMES, messageOf } from './words'
 
 const browserStore: StateStore = { loadState, saveState, readStoredText, discardStoredText }
 
@@ -102,6 +102,14 @@ export function App({ store = browserStore }: { store?: StateStore }) {
 
   const state = loaded.status === 'ready' ? loaded.state : null
   const run = useWeekRun(state, save, setRefused)
+  // What a run is doing, for the reasons other screens give for waiting on it.
+  let running: string | null = null
+  if (run.running?.what === 'week') running = 'A week is being written'
+  if (run.running?.what === 'replace') {
+    const { day, slotId } = run.running
+    const slot = state?.rules?.slots.find((s) => s.id === slotId)
+    running = `${DAY_NAMES[day]}'s ${slot?.name ?? slotId} is being written again`
+  }
   const name = shown(route, state)
 
   const title = TITLES[name]
@@ -173,9 +181,9 @@ export function App({ store = browserStore }: { store?: StateStore }) {
                 refused={refused}
                 onSave={savePlan}
                 blocked={
-                  run.running === null
+                  running === null
                     ? null
-                    : 'A week is being written for the saved plan; save changes once it is done.'
+                    : `${running} for the saved plan; save changes once it is done.`
                 }
               />
             )}
