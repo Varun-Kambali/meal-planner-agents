@@ -164,6 +164,36 @@
       ]
     },
     {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=desktop&screen=log-amount",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/log/2026-11-04",
+        "wait for element #main h1 to be visible",
+        "click element section.log-meal .actions button:nth-child(2)",
+        "click element section.log-meal form .choice:last-child input",
+        "click element section.log-meal form button[type=submit]",
+        "wait for element section.log-meal form .field-error to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=desktop&screen=log-refused",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/log/2026-11-04",
+        "wait for element #main h1 to be visible",
+        "click element section.log-meal .actions button:nth-child(3)",
+        "set field .panel textarea to a meal past the rate limit",
+        "click element .panel form button[type=submit]",
+        "wait for element .panel [role=alert] to be visible"
+      ]
+    },
+    {
       "url": "http://127.0.0.1:4173/?view=phone&screen=plan-empty#/plan",
       "viewport": {
         "width": 375,
@@ -328,6 +358,38 @@
       "actions": [
         "navigate to http://127.0.0.1:4173/#/summary",
         "wait for element .summary-days to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=phone&screen=log-amount",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/log/2026-11-04",
+        "wait for element #main h1 to be visible",
+        "click element section.log-meal .actions button:nth-child(2)",
+        "click element section.log-meal form .choice:last-child input",
+        "click element section.log-meal form button[type=submit]",
+        "wait for element section.log-meal form .field-error to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=phone&screen=log-refused",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/log/2026-11-04",
+        "wait for element #main h1 to be visible",
+        "click element section.log-meal .actions button:nth-child(3)",
+        "set field .panel textarea to a meal past the rate limit",
+        "click element .panel form button[type=submit]",
+        "wait for element .panel [role=alert] to be visible"
       ]
     }
   ]

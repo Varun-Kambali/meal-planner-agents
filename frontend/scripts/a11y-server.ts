@@ -10,7 +10,8 @@
 // - POST /v1/week refuses the plan with a 422, so the week screen's refusal can be checked.
 // - POST /v1/log/read, GET /v1/foods/search, POST /v1/log/compute and POST /v1/summary answer
 //   with the API's recorded replies, whatever they are asked, so the log and summary screens can
-//   be checked with real data.
+//   be checked with real data. A typed meal of REFUSED_MEAL is refused as the rate limit refuses
+//   it, so a failed request's alert can be checked too.
 //
 // Nothing here calls a model or the real API.
 
@@ -24,6 +25,8 @@ const DIST = path.resolve(here, '../dist')
 const FIXTURE = path.resolve(here, '../src/test/recorded-week.json')
 const TRACKING = path.resolve(here, '../src/test/recorded-tracking.json')
 export const ORIGIN = 'http://127.0.0.1:4173'
+// The typed meal the read route refuses with a 429, as the API does past its rate limit.
+const REFUSED_MEAL = 'a meal past the rate limit'
 // The key storage.ts keeps a copy of the state under; the app reads it before IndexedDB.
 const STORAGE_KEY = 'meal-planner-state'
 
@@ -64,9 +67,21 @@ function seedPage(text: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Saved state</title></head><body><main><h1>Saved state</h1></main><script>localStorage.setItem(${JSON.stringify(STORAGE_KEY)}, ${literal})</script></body></html>`
 }
 
-function send(response: ServerResponse, status: number, type: string, body: string | Buffer): void {
-  response.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' })
+function send(
+  response: ServerResponse,
+  status: number,
+  type: string,
+  body: string | Buffer,
+  headers: Record<string, string> = {},
+): void {
+  response.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...headers })
   response.end(body)
+}
+
+async function bodyOf(request: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of request) chunks.push(chunk as Buffer)
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 export async function serve(): Promise<Server> {
@@ -101,6 +116,13 @@ export async function serve(): Promise<Server> {
     if (pathname === '/v1/catalogue') return send(response, 200, TYPES['.json']!, catalogue)
     if (pathname === '/v1/week' && request.method === 'POST') {
       return send(response, 422, TYPES['.json']!, refusal)
+    }
+    if (pathname === '/v1/log/read' && request.method === 'POST') {
+      const { text } = JSON.parse(await bodyOf(request)) as { text?: unknown }
+      if (text === REFUSED_MEAL) {
+        const refused = JSON.stringify({ detail: 'too many requests, try again later' })
+        return send(response, 429, TYPES['.json']!, refused, { 'Retry-After': '30' })
+      }
     }
     const reply = replies[`${request.method ?? 'GET'} ${pathname}`]
     if (reply !== undefined) return send(response, 200, TYPES['.json']!, reply)
