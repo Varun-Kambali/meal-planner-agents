@@ -4,18 +4,30 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { SaveOutcome } from '../session'
-import type { State } from '../storage'
-import { fakeApi, json, sampleState } from '../test/helpers'
+import { ValidationFailed, type State } from '../storage'
+import { catchDownloads, fakeApi, json, sampleState } from '../test/helpers'
 import { computeReply, readReply } from '../test/tracking'
 import { Today } from './Today'
 
-// The screen over a state it keeps, as the shell does, with every save recorded.
-function Harness({ start, date, saves }: { start: State; date: string; saves: State[] }) {
+// The screen over a state it keeps, as the shell does, with every save it is asked for recorded.
+// `outcome` stands for the browser's storage; a state it refuses as not fitting is not kept.
+function Harness({
+  start,
+  date,
+  saves,
+  outcome = () => ({ ok: true }),
+}: {
+  start: State
+  date: string
+  saves: State[]
+  outcome?: (next: State) => SaveOutcome
+}) {
   const [state, setState] = useState(start)
   const save = async (next: State): Promise<SaveOutcome> => {
     saves.push(next)
-    setState(next)
-    return { ok: true }
+    const result = outcome(next)
+    if (result.ok || !(result.error instanceof ValidationFailed)) setState(next)
+    return result
   }
   return <Today state={state} date={date} today="2026-11-02" onSave={save} />
 }
@@ -26,11 +38,23 @@ function unlogged(): State {
 }
 
 // Monday 2 November in a plan whose sample week has Monday's breakfast and lunch.
-function show(start: State = unlogged()): { saves: State[]; user: UserEvent } {
+function show(
+  start: State = unlogged(),
+  outcome?: (next: State) => SaveOutcome,
+): { saves: State[]; user: UserEvent } {
   const saves: State[] = []
   const user = userEvent.setup()
-  render(<Harness start={start} date="2026-11-02" saves={saves} />)
+  render(<Harness start={start} date="2026-11-02" saves={saves} outcome={outcome} />)
   return { saves, user }
+}
+
+async function typeMeal(user: UserEvent, where: HTMLElement): Promise<void> {
+  await user.click(within(where).getByRole('button', { name: 'Swapped' }))
+  await user.type(
+    within(where).getByLabelText('What did you eat?'),
+    '3 chapatis, some curd, half plate rice and bhindi sabzi',
+  )
+  await user.click(within(where).getByRole('button', { name: 'Read the meal' }))
 }
 
 function meal(name: string): HTMLElement {
@@ -39,12 +63,7 @@ function meal(name: string): HTMLElement {
 
 async function readLunch(user: UserEvent): Promise<HTMLElement> {
   const lunch = meal('Lunch')
-  await user.click(within(lunch).getByRole('button', { name: 'Swapped' }))
-  await user.type(
-    within(lunch).getByLabelText('What did you eat?'),
-    '3 chapatis, some curd, half plate rice and bhindi sabzi',
-  )
-  await user.click(within(lunch).getByRole('button', { name: 'Read the meal' }))
+  await typeMeal(user, lunch)
   await within(lunch).findByRole('list', { name: 'Foods read' })
   return lunch
 }
@@ -148,4 +167,237 @@ it('needs nothing from the API to show the meals of the date', () => {
 
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monday 2 November')
   expect(fetch).not.toHaveBeenCalled()
+})
+
+describe('the swap flow when a request fails', () => {
+  it('says why the meal was not read, and reads it again when asked', async () => {
+    let reads = 0
+    fakeApi({
+      '/v1/log/read': () => {
+        reads += 1
+        return reads === 1
+          ? json({ detail: 'too many requests, try again later' }, 429, { 'Retry-After': '20' })
+          : json(readReply())
+      },
+    })
+    const { user } = show()
+    const lunch = meal('Lunch')
+    await typeMeal(user, lunch)
+
+    const alert = await within(lunch).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'The meal was not read. The API has had too many requests. Try again in 20 seconds.',
+    )
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+    await within(lunch).findByRole('list', { name: 'Foods read' })
+    expect(reads).toBe(2)
+  })
+
+  it('searches for another food only when asked, and says why its numbers were refused', async () => {
+    const calls = fakeApi({
+      '/v1/log/read': () => json(readReply()),
+      '/v1/foods/search': () =>
+        json([{ id: 'paneer', name: 'Paneer', kind: 'ingredient', units: ['g', 'cube'] }]),
+      '/v1/log/compute': () =>
+        json(
+          {
+            detail: [
+              {
+                loc: ['body', 'items', 0],
+                msg: 'item 1 (paneer): amount 9000 g is over the limit of 5000 g',
+              },
+            ],
+          },
+          422,
+        ),
+    })
+    const { user } = show()
+    const lunch = await readLunch(user)
+    const chapati = within(lunch).getByRole('listitem', { name: /^Chapati/ })
+
+    await user.click(within(chapati).getByRole('button', { name: 'Change Chapati' }))
+    await user.click(within(chapati).getByRole('button', { name: 'Change food' }))
+    const name = within(chapati).getByLabelText('Food name')
+    expect(name).toHaveFocus()
+    await user.clear(name)
+    await user.type(name, 'paneer')
+    expect(calls.filter((call) => call.path.startsWith('/v1/foods/search'))).toHaveLength(0)
+    await user.click(within(chapati).getByRole('button', { name: 'Search' }))
+    await user.click(await within(chapati).findByRole('button', { name: 'Use Paneer' }))
+
+    expect(calls.filter((call) => call.path.startsWith('/v1/foods/search'))).toEqual([
+      expect.objectContaining({ path: '/v1/foods/search?q=paneer' }),
+    ])
+    const amount = within(chapati).getByLabelText('Amount')
+    expect(amount).toHaveFocus()
+    const unit = within(chapati).getByLabelText('Unit')
+    expect(
+      within(unit)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Choose a unit', 'g', 'cube'])
+    await user.clear(amount)
+    await user.type(amount, '9000')
+    await user.selectOptions(unit, 'g')
+    await user.click(within(chapati).getByRole('button', { name: 'Confirm Paneer' }))
+
+    const alert = await within(chapati).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'The numbers were not worked out. The API said: item 1 (paneer): amount 9000 g is over the limit of 5000 g.',
+    )
+    expect(within(alert).getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(
+      within(lunch).getByRole('button', { name: 'Save the meal' }),
+    ).toHaveAccessibleDescription(expect.stringContaining('finish changing Chapati'))
+  })
+})
+
+describe('logging a meal with one tap', () => {
+  it('logs a meal as planned with the recipe at its final grams, and keeps the focus there', async () => {
+    const { saves, user } = show()
+    const breakfast = meal('Breakfast')
+    const button = within(breakfast).getByRole('button', { name: 'As planned' })
+
+    await user.click(button)
+
+    await waitFor(() => expect(saves).toHaveLength(1))
+    expect(saves[0]!.log.entries).toEqual([
+      {
+        date: '2026-11-02',
+        slot_id: 'breakfast',
+        status: 'as_planned',
+        items: [
+          { food_id: 'banana', amount: 182.19, unit: 'g' },
+          { food_id: 'oats', amount: 99.38, unit: 'g' },
+          { food_id: 'curd', amount: 49.69, unit: 'g' },
+        ],
+      },
+    ])
+    expect(breakfast).toHaveTextContent('Logged: as planned.')
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Breakfast logged as planned.'),
+    )
+    expect(button).toHaveFocus()
+  })
+
+  it("replaces the meal's entry when it is logged again, and a skipped meal lists no food", async () => {
+    const { saves, user } = show()
+    const breakfast = meal('Breakfast')
+
+    await user.click(within(breakfast).getByRole('button', { name: 'As planned' }))
+    await user.click(within(breakfast).getByRole('button', { name: 'Skipped' }))
+
+    await waitFor(() => expect(saves).toHaveLength(2))
+    expect(saves[1]!.log.entries).toEqual([
+      { date: '2026-11-02', slot_id: 'breakfast', status: 'skipped', items: [] },
+    ])
+    expect(breakfast).toHaveTextContent('Logged: skipped.')
+  })
+
+  it('offers only swapped or skipped for a recipe that misses a check, or a meal with none', async () => {
+    const start = unlogged()
+    start.week!.recipes[1]!.failures = [
+      { check: 'slot_protein', message: 'protein 31 g, the meal needs at least 40 g' },
+    ]
+    const { saves, user } = show(start)
+    const lunch = meal('Lunch')
+    const asPlanned = within(lunch).getByRole('button', { name: 'As planned' })
+
+    expect(asPlanned).toHaveAttribute('aria-disabled', 'true')
+    expect(asPlanned).toHaveAccessibleDescription(
+      'This recipe misses a check, so the meal can be logged only as swapped or skipped.',
+    )
+    expect(within(lunch).getByRole('button', { name: 'Different amount' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    await user.click(asPlanned)
+    const snack = meal('Evening snack')
+    expect(within(snack).getByRole('button', { name: 'As planned' })).toHaveAccessibleDescription(
+      'No recipe was written for this meal, so it can be logged only as swapped or skipped.',
+    )
+    await user.click(within(snack).getByRole('button', { name: 'Skipped' }))
+
+    await waitFor(() => expect(saves).toHaveLength(1))
+    expect(saves[0]!.log.entries.map((entry) => entry.slot_id)).toEqual(['snack'])
+  })
+
+  it('scales every ingredient by half, one and a half, or the grams of the whole meal', async () => {
+    const { saves, user } = show()
+    const breakfast = meal('Breakfast')
+    const different = within(breakfast).getByRole('button', { name: 'Different amount' })
+
+    await user.click(different)
+    expect(different).toHaveAttribute('aria-expanded', 'true')
+    expect(within(breakfast).getByRole('radio', { name: 'Half' })).toHaveFocus()
+    await user.click(within(breakfast).getByRole('radio', { name: 'One and a half' }))
+    await user.click(within(breakfast).getByRole('button', { name: 'Save the amount' }))
+    await waitFor(() => expect(saves).toHaveLength(1))
+    expect(saves[0]!.log.entries[0]).toMatchObject({ status: 'different_amount' })
+    expect(saves[0]!.log.entries[0]!.items.map((item) => item.amount)).toEqual([
+      273.28, 149.07, 74.54,
+    ])
+    expect(different).toHaveFocus()
+
+    await user.click(different)
+    await user.click(within(breakfast).getByRole('radio', { name: 'A weight in grams' }))
+    const grams = within(breakfast).getByLabelText('Grams of the whole meal')
+    expect(grams).toHaveAccessibleDescription(expect.stringContaining('weighs 331 g'))
+    await user.type(grams, '6000')
+    await user.click(within(breakfast).getByRole('button', { name: 'Save the amount' }))
+    expect(grams).toHaveAccessibleDescription(
+      expect.stringContaining('Give the grams as a number above 0 and at most 5000.'),
+    )
+    expect(saves).toHaveLength(1)
+    await user.clear(grams)
+    await user.type(grams, '200')
+    await user.click(within(breakfast).getByRole('button', { name: 'Save the amount' }))
+
+    await waitFor(() => expect(saves).toHaveLength(2))
+    expect(saves[1]!.log.entries[0]!.items.map((item) => item.amount)).toEqual([110, 60, 30])
+  })
+
+  it('says the log is full before saving, and starts a new one only once it is kept as a file', async () => {
+    const downloads = catchDownloads()
+    const { saves, user } = show(sampleState())
+
+    await user.click(within(meal('Breakfast')).getByRole('button', { name: 'Skipped' }))
+
+    const notice = await screen.findByRole('region', { name: 'The log is full' })
+    expect(notice).toHaveTextContent(
+      'A log covers at most 7 days in a row. Yours has meals on Monday 26 October only. Logging Breakfast on Monday 2 November would make it 8 days, so nothing has been saved.',
+    )
+    expect(within(notice).getByRole('heading')).toHaveFocus()
+    expect(saves).toHaveLength(0)
+    expect(
+      within(notice).queryByRole('button', { name: 'Start a new log with this meal' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(within(notice).getByRole('button', { name: 'Save the log as a file' }))
+    expect(downloads).toHaveLength(1)
+    expect(JSON.parse(await downloads[0]!.text()).log).toEqual(sampleState().log)
+    await user.click(within(notice).getByRole('button', { name: 'Start a new log with this meal' }))
+
+    await waitFor(() => expect(saves).toHaveLength(1))
+    expect(saves[0]!.log.entries).toEqual([
+      { date: '2026-11-02', slot_id: 'breakfast', status: 'skipped', items: [] },
+    ])
+    expect(screen.queryByRole('region', { name: 'The log is full' })).not.toBeInTheDocument()
+  })
+
+  it('says a meal was not saved when the browser refuses the log, and changes nothing', async () => {
+    const refused = new ValidationFailed([
+      { path: '/log/entries/0/slot_id', message: 'the plan has no such slot' },
+    ])
+    const { user } = show(unlogged(), () => ({ ok: false, error: refused }))
+    const breakfast = meal('Breakfast')
+
+    await user.click(within(breakfast).getByRole('button', { name: 'Skipped' }))
+
+    expect(await within(breakfast).findByRole('alert')).toHaveTextContent(
+      'Not saved: the data does not fit the file format: /log/entries/0/slot_id the plan has no such slot.',
+    )
+    expect(breakfast).toHaveTextContent('Not logged yet.')
+  })
 })

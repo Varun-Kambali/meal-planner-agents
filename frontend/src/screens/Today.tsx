@@ -114,7 +114,9 @@ export function Today({ state, date, today, onSave }: TodayProps) {
       return false
     }
     const kept = outcome.ok ? '' : ' It is kept on this page, but not saved in this browser.'
-    setSaid(`${slotName(entry.slot_id)} logged as ${MEAL_STATUSES[entry.status]}.${kept}`)
+    // "as planned" already starts with "as".
+    const how = entry.status === 'as_planned' ? 'as planned' : `as ${MEAL_STATUSES[entry.status]}`
+    setSaid(`${slotName(entry.slot_id)} logged ${how}.${kept}`)
     setPanel(null)
     focusTo.current = `${entry.slot_id} ${entry.status}`
     return true
@@ -463,7 +465,9 @@ function LogFull({
       <p>
         A log covers at most {LOG_DAYS} days in a row.
         {now !== null &&
-          ` Yours runs from ${dateWords(now.first, today)} to ${dateWords(now.last, today)}.`}{' '}
+          (now.first === now.last
+            ? ` Yours has meals on ${dateWords(now.first, today)} only.`
+            : ` Yours runs from ${dateWords(now.first, today)} to ${dateWords(now.last, today)}.`)}{' '}
         Logging {meal} on {dateWords(waiting.entry.date, today)} would make it {waiting.span.days}{' '}
         days, so nothing has been saved.
       </p>
