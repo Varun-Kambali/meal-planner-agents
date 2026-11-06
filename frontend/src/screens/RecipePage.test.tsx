@@ -103,6 +103,37 @@ describe('the recipe page', () => {
     expect(saved.week!.recipes[0]!.draft.steps[0]).toContain('moong_dal')
   })
 
+  it("names the ingredients as the catalogue does once it has loaded, and nutrition-mcp's way before", () => {
+    const rows = [{ id: 'oats', name: 'Rolled oats', category: 'grain' as const }]
+    const ingredientNames = (): string[] =>
+      within(screen.getByRole('table', { name: 'Ingredients for one serving' }))
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => within(row).getAllByRole('cell')[0]!.textContent ?? '')
+    const { rerender } = render(
+      <RecipePage
+        state={state()}
+        day="mon"
+        slotId="breakfast"
+        catalogue={catalogue({ status: 'loading' })}
+      />,
+    )
+
+    expect(ingredientNames()).toEqual(['Banana', 'Oats', 'Curd'])
+
+    rerender(
+      <RecipePage
+        state={state()}
+        day="mon"
+        slotId="breakfast"
+        catalogue={catalogue({ status: 'ready', rows })}
+      />,
+    )
+
+    // A food the catalogue lacks keeps nutrition-mcp's name.
+    expect(ingredientNames()).toEqual(['Banana', 'Rolled oats', 'Curd'])
+  })
+
   it('shows the steps as written when the catalogue could not be loaded', () => {
     const saved = state()
     saved.week!.recipes[0]!.draft.steps = ['Soak the moong_dal.']

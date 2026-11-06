@@ -70,6 +70,7 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
                 key={`${recipe.spec.day}-${recipe.spec.slot.id}`}
                 recipe={recipe}
                 rules={rules}
+                catalogueNames={catalogueNames}
                 nameFoods={nameFoods}
                 level={2}
               />
@@ -101,7 +102,13 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
       <p className="screen-only">
         <a href="#/week">Back to the week</a>
       </p>
-      <Recipe recipe={recipe} rules={rules} nameFoods={nameFoods} level={1} />
+      <Recipe
+        recipe={recipe}
+        rules={rules}
+        catalogueNames={catalogueNames}
+        nameFoods={nameFoods}
+        level={1}
+      />
       <p className="screen-only">
         <button type="button" className="button-secondary" onClick={() => window.print()}>
           Print this recipe
@@ -125,11 +132,14 @@ const PRINTED: NutrientKey[] = [
 function Recipe({
   recipe,
   rules,
+  catalogueNames,
   nameFoods,
   level,
 }: {
   recipe: CheckedRecipe
   rules: PlanRules | null
+  // Catalogue ids and their names; empty until the catalogue has loaded.
+  catalogueNames: ReadonlyMap<string, string>
   // A step with the catalogue's names for the ids it quotes; as written until it has loaded.
   nameFoods: (step: string) => string
   level: 1 | 2
@@ -139,8 +149,10 @@ function Recipe({
   const stepsId = useId()
   const Title = level === 1 ? 'h1' : 'h2'
   const Section = level === 1 ? 'h2' : 'h3'
+  // The catalogue's names once it has loaded, so the table, the notes and the steps name a food
+  // the same way; nutrition-mcp's names until then.
   const names = new Map(nutrition?.items.map((item) => [item.food.id, item.food.name]) ?? [])
-  const nameOf = (id: string): string => names.get(id) ?? id
+  const nameOf = (id: string): string => catalogueNames.get(id) ?? names.get(id) ?? id
   const dayType = rules?.day_types.find((d) => d.id === spec.day_type)?.name ?? spec.day_type
   const amount = (key: NutrientKey): string => {
     const value = nutrition?.total[key] ?? null
