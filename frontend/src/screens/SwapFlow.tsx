@@ -90,7 +90,7 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
     setTextError(null)
     setReading({ status: 'reading' })
     try {
-      const result = await readMeal(text, { signal: call() })
+      const result = await call((signal) => readMeal(text, { signal }))
       showFoods.current = true
       latestRead.current += 1
       setReads(latestRead.current)
@@ -112,7 +112,7 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
     const askedUnder = latestRead.current
     setComputing(true)
     try {
-      const result = await computeMeal(logItems(sent), { signal: call() })
+      const result = await call((signal) => computeMeal(logItems(sent), { signal }))
       if (askedUnder !== latestRead.current) return null
       // Applied to the foods as they are now, which the person may have confirmed meanwhile.
       setItems((now) => (now === null ? now : computed(now, sent, result.items, key)))

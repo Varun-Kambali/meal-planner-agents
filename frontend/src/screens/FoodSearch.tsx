@@ -39,7 +39,7 @@ export function FoodSearch({
     setProblem(null)
     setSearch({ status: 'searching' })
     try {
-      const options = await searchFoods(query.trim(), { signal: call() })
+      const options = await call((signal) => searchFoods(query.trim(), { signal }))
       setSearch({ status: 'found', options })
     } catch (error) {
       if (!isAbort(error)) setSearch({ status: 'failed', error })
