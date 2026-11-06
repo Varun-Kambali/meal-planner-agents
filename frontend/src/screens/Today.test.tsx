@@ -339,7 +339,7 @@ describe('logging a meal with one tap', () => {
     expect(breakfast).toHaveTextContent('Logged: skipped.')
   })
 
-  it('offers only swapped or skipped for a recipe that misses a check, or a meal with none', async () => {
+  it('offers all four for a recipe that misses a check, as it has numbers', async () => {
     const start = unlogged()
     start.week!.recipes[1]!.failures = [
       { check: 'slot_protein', message: 'protein 31 g, the meal needs at least 40 g' },
@@ -348,9 +348,29 @@ describe('logging a meal with one tap', () => {
     const lunch = meal('Lunch')
     const asPlanned = within(lunch).getByRole('button', { name: 'As planned' })
 
+    expect(asPlanned).not.toHaveAttribute('aria-disabled')
+    expect(within(lunch).getByRole('button', { name: 'Different amount' })).not.toHaveAttribute(
+      'aria-disabled',
+    )
+    await user.click(asPlanned)
+
+    await waitFor(() => expect(saves).toHaveLength(1))
+    expect(saves[0]!.log.entries[0]).toMatchObject({ slot_id: 'lunch', status: 'as_planned' })
+  })
+
+  it('offers only swapped or skipped for a recipe with no numbers, or a meal with none', async () => {
+    const start = unlogged()
+    start.week!.recipes[1]!.nutrition = null
+    start.week!.recipes[1]!.failures = [
+      { check: 'nutrition_failed', message: 'nutrition-mcp could not work out this recipe' },
+    ]
+    const { saves, user } = show(start)
+    const lunch = meal('Lunch')
+    const asPlanned = within(lunch).getByRole('button', { name: 'As planned' })
+
     expect(asPlanned).toHaveAttribute('aria-disabled', 'true')
     expect(asPlanned).toHaveAccessibleDescription(
-      'This recipe misses a check, so the meal can be logged only as swapped or skipped.',
+      "This recipe's numbers could not be worked out, so the meal can be logged only as swapped or skipped.",
     )
     expect(within(lunch).getByRole('button', { name: 'Different amount' })).toHaveAttribute(
       'aria-disabled',

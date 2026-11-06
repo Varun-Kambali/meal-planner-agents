@@ -83,11 +83,14 @@ describe('a recipe as it is logged', () => {
     expect(recipeItems(breakfast, 0.00001).map((item) => item.amount)).toEqual([0.01, 0.01, 0.01])
   })
 
-  it('follows a recipe only when it was written and meets its checks', () => {
+  it('follows any written recipe with numbers, whether or not it met its checks', () => {
     const week = sampleWeek()
     const lunch = week.recipes[1]!
     expect(followable(lunch)).toBe(true)
     lunch.failures = [{ check: 'slot_protein', message: 'protein 31 g, the meal needs 40 g' }]
+    expect(followable(lunch)).toBe(true)
+    // nutrition-mcp could not work it out, so the summary would refuse its foods.
+    lunch.nutrition = null
     expect(followable(lunch)).toBe(false)
     expect(followable(undefined)).toBe(false)
   })

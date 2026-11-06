@@ -47,9 +47,11 @@ export function tooLong(log: MealLog, entry: LogEntry): Span | null {
 }
 
 // A recipe a meal can be logged against as planned or in a different amount: one that was written
-// and meets its checks. Any other meal can still be logged as swapped or skipped.
+// and that nutrition-mcp worked out, whether or not it met its checks. One with no numbers has a
+// food nutrition-mcp refused, which the summary would refuse too. Any meal can still be logged as
+// swapped or skipped.
 export function followable(recipe: CheckedRecipe | undefined): recipe is CheckedRecipe {
-  return recipe !== undefined && recipe.failures.length === 0
+  return recipe !== undefined && recipe.nutrition !== null
 }
 
 // The weight of the recipe as written, which "grams of the whole meal" is measured against.

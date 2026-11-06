@@ -36,8 +36,8 @@ def planned(week: dict[str, Any], day: str, slot: str, factor: float = 1) -> lis
     recipe = next(
         r for r in week["recipes"] if r["spec"]["day"] == day and r["spec"]["slot"]["id"] == slot
     )
-    if recipe["failures"]:
-        raise SystemExit(f"{day} {slot} misses a check, so the log screen would not log it")
+    if recipe["nutrition"] is None:
+        raise SystemExit(f"{day} {slot} has no numbers, so the log screen would not log it")
     return [
         {
             "food_id": item["id"],

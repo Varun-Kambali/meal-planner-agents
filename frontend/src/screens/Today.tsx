@@ -236,7 +236,8 @@ function Meal({
   if (recipe === undefined) {
     reason = 'No recipe was written for this meal, so it can be logged only as swapped or skipped.'
   } else if (!usable) {
-    reason = 'This recipe misses a check, so the meal can be logged only as swapped or skipped.'
+    reason =
+      "This recipe's numbers could not be worked out, so the meal can be logged only as swapped or skipped."
   }
   return (
     <section className="log-meal" aria-labelledby={headingId}>
