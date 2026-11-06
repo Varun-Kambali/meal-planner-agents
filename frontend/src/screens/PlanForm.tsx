@@ -2,9 +2,8 @@
 // before saving (planForm.ts), and shows the problems the API found when a week was written,
 // each under its field.
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 
-import { catalogue as loadCatalogue } from '../api'
 import {
   FIELD_LABELS,
   MAX_DAY_TYPES,
@@ -27,7 +26,8 @@ import {
 } from '../planForm'
 import type { SaveOutcome } from '../session'
 import { ValidationFailed, type State } from '../storage'
-import type { CatalogueRow, PlanRules } from '../types'
+import type { PlanRules } from '../types'
+import type { CatalogueState, SharedCatalogue } from '../useCatalogue'
 import {
   ALLERGENS,
   COOK_WHEN,
@@ -49,6 +49,8 @@ export interface PlanFormProps {
   onSave: (state: State) => Promise<SaveOutcome>
   // Why saving has to wait, such as a week being written for the saved plan.
   blocked: string | null
+  // The catalogue the shell holds, for the lists of foods (useCatalogue).
+  catalogue: SharedCatalogue
 }
 
 // The fields this draft has, by path, so that a problem can be put at the nearest one.
@@ -83,53 +85,26 @@ function nearest(path: string, paths: Set<string>): string {
   return ''
 }
 
-type Food =
-  | { status: 'loading' }
-  | { status: 'ready'; rows: CatalogueRow[] }
-  | {
-      status: 'failed'
-      message: string
-    }
-
 type Saving =
   | { status: 'idle' }
   | { status: 'saving' }
   | { status: 'saved' }
   | { status: 'failed'; message: string }
 
-export function PlanForm({ state, refused, onSave, blocked }: PlanFormProps) {
+export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFormProps) {
   const [draft, setDraft] = useState<PlanDraft>(() => draftOf(state.rules))
   const [errors, setErrors] = useState<FormError[]>([])
   const [saving, setSaving] = useState<Saving>({ status: 'idle' })
   const [pending, setPending] = useState<PlanRules | null>(null)
-  const [food, setFood] = useState<Food>({ status: 'loading' })
   const summary = useRef<HTMLElement>(null)
   const question = useRef<HTMLHeadingElement>(null)
   const focusSummary = useRef(false)
   const blockedId = useId()
 
-  // The catalogue, once per visit to the form and again on asking: every /v1/ route shares one
-  // rate limit, so the list is not asked for again as the diet or the allergens change.
-  const foodRequest = useRef<AbortController | null>(null)
-  const loadFood = useCallback((): void => {
-    foodRequest.current?.abort()
-    const controller = new AbortController()
-    foodRequest.current = controller
-    loadCatalogue({}, { signal: controller.signal }).then(
-      (rows) => {
-        if (!controller.signal.aborted) setFood({ status: 'ready', rows })
-      },
-      (error: unknown) => {
-        if (controller.signal.aborted) return
-        const message = messageOf(error)
-        setFood({ status: 'failed', message })
-      },
-    )
-  }, [])
-  useEffect(() => {
-    loadFood()
-    return () => foodRequest.current?.abort()
-  }, [loadFood])
+  // The whole catalogue, asked for by the shell once per page and again on asking: the list is
+  // not asked for again as the diet or the allergens change.
+  const { need: needCatalogue } = catalogue
+  useEffect(() => needCatalogue(), [needCatalogue])
 
   useEffect(() => {
     if (errors.length > 0 && focusSummary.current) {
@@ -267,18 +242,12 @@ export function PlanForm({ state, refused, onSave, blocked }: PlanFormProps) {
             errors={shownErrors}
             onChange={(allergens) => change((d) => ({ ...d, allergens }))}
           />
-          <FoodLoad
-            food={food}
-            onRetry={() => {
-              setFood({ status: 'loading' })
-              loadFood()
-            }}
-          />
+          <FoodLoad catalogue={catalogue.state} onRetry={catalogue.reload} />
           <FoodList
             path="food.exclude_foods"
             label="Foods to leave out"
             chosen={draft.excludeFoods}
-            food={food}
+            catalogue={catalogue.state}
             errors={shownErrors}
             onChange={(excludeFoods) => change((d) => ({ ...d, excludeFoods }))}
           />
@@ -287,7 +256,7 @@ export function PlanForm({ state, refused, onSave, blocked }: PlanFormProps) {
             label="Foods you like"
             hint="A liked food the diet or the allergens rule out is not used."
             chosen={draft.likedFoods}
-            food={food}
+            catalogue={catalogue.state}
             errors={shownErrors}
             onChange={(likedFoods) => change((d) => ({ ...d, likedFoods }))}
           />
@@ -715,7 +684,7 @@ interface FoodListProps {
   label: string
   hint?: string
   chosen: string[]
-  food: Food
+  catalogue: CatalogueState
   errors: Errors
   onChange: (chosen: string[]) => void
 }
@@ -723,11 +692,11 @@ interface FoodListProps {
 const FOOD_LOAD_ID = 'food-list-load'
 
 // Says once, for both lists of foods, that the catalogue could not be loaded.
-function FoodLoad({ food, onRetry }: { food: Food; onRetry: () => void }) {
-  if (food.status !== 'failed') return null
+function FoodLoad({ catalogue, onRetry }: { catalogue: CatalogueState; onRetry: () => void }) {
+  if (catalogue.status !== 'failed') return null
   return (
     <p id={FOOD_LOAD_ID} className="field-error">
-      The food list could not be loaded: {food.message}.{' '}
+      The food list could not be loaded: {catalogue.message}.{' '}
       <button type="button" className="button-text" onClick={onRetry}>
         Load the food list again
       </button>
@@ -736,16 +705,16 @@ function FoodLoad({ food, onRetry }: { food: Food; onRetry: () => void }) {
 }
 
 // Foods from the catalogue, chosen one at a time. The ids are what the rules keep.
-function FoodList({ path, label, hint, chosen, food, errors, onChange }: FoodListProps) {
+function FoodList({ path, label, hint, chosen, catalogue, errors, onChange }: FoodListProps) {
   const [choice, setChoice] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
   const id = fieldId(path)
-  const rows = food.status === 'ready' ? food.rows : []
+  const rows = catalogue.status === 'ready' ? catalogue.rows : []
   const names = new Map(rows.map((row) => [row.id, row.name]))
   const invalid = errors.has(path) || problem !== null
   const describedBy = [
     hint === undefined ? null : `${id}-hint`,
-    food.status === 'failed' ? FOOD_LOAD_ID : null,
+    catalogue.status === 'failed' ? FOOD_LOAD_ID : null,
     errors.has(path) ? errorId(path) : null,
     problem === null ? null : `${id}-problem`,
   ]
@@ -773,13 +742,15 @@ function FoodList({ path, label, hint, chosen, food, errors, onChange }: FoodLis
           id={id}
           className="input"
           value={choice}
-          disabled={food.status !== 'ready'}
+          disabled={catalogue.status !== 'ready'}
           aria-invalid={invalid ? true : undefined}
           aria-describedby={describedBy || undefined}
           onChange={(event) => setChoice(event.target.value)}
         >
           <option value="">
-            {food.status === 'loading' ? 'Loading the food list' : 'Choose a food'}
+            {catalogue.status === 'loading' || catalogue.status === 'idle'
+              ? 'Loading the food list'
+              : 'Choose a food'}
           </option>
           {rows
             .filter((row) => !chosen.includes(row.id))
@@ -792,7 +763,7 @@ function FoodList({ path, label, hint, chosen, food, errors, onChange }: FoodLis
         <button
           type="button"
           className="button-secondary"
-          disabled={food.status !== 'ready'}
+          disabled={catalogue.status !== 'ready'}
           aria-label={`Add to ${label.toLowerCase()}`}
           onClick={add}
         >

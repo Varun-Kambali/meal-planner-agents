@@ -83,6 +83,7 @@ describe('the shell', () => {
 
   it("titles a recipe page with the recipe's name", async () => {
     seed(sampleState())
+    fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })
     window.location.hash = '#/recipe/mon/lunch'
     render(<App />)
 
@@ -92,11 +93,29 @@ describe('the shell', () => {
 
   it('titles a recipe page the week does not have', async () => {
     seed(sampleState())
+    fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })
     window.location.hash = '#/recipe/tue/dinner'
     render(<App />)
 
     await screen.findByRole('heading', { level: 1, name: 'No recipe here' })
     expect(document.title).toBe('No recipe here: Meal planner')
+  })
+
+  it('asks for the food list once for the recipe page and the plan form', async () => {
+    const saved = sampleState()
+    saved.week!.recipes[1]!.draft.steps = ['Cook the moong_dal with the paneer.']
+    seed(saved)
+    const calls = fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })
+    const user = userEvent.setup()
+    window.location.hash = '#/recipe/mon/lunch'
+    render(<App />)
+
+    const steps = await screen.findByRole('list', { name: 'Steps' })
+    await waitFor(() => expect(steps).toHaveTextContent('Cook the moong dal with the paneer.'))
+    await user.click(screen.getByRole('link', { name: 'Plan' }))
+
+    expect(await screen.findAllByRole('option', { name: 'Moong dal' })).not.toHaveLength(0)
+    expect(calls.filter((call) => call.path.startsWith('/v1/catalogue'))).toHaveLength(1)
   })
 
   it('shows the field the API refused in the plan form after writing the week', async () => {

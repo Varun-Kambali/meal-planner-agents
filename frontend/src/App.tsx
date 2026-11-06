@@ -23,6 +23,7 @@ import {
   type State,
   type StateStore,
 } from './storage'
+import { useCatalogue } from './useCatalogue'
 import { useWeekRun } from './useWeekRun'
 import { DAY_NAMES, messageOf } from './words'
 
@@ -102,6 +103,8 @@ export function App({ store = browserStore }: { store?: StateStore }) {
 
   const state = loaded.status === 'ready' ? loaded.state : null
   const run = useWeekRun(state, save, setRefused)
+  // Asked for by the first screen that needs it, and kept for the others.
+  const catalogue = useCatalogue()
   // What a run is doing, for the reasons other screens give for waiting on it.
   let running: string | null = null
   if (run.running?.what === 'week') running = 'A week is being written'
@@ -187,6 +190,7 @@ export function App({ store = browserStore }: { store?: StateStore }) {
                 state={state}
                 refused={refused}
                 onSave={savePlan}
+                catalogue={catalogue}
                 blocked={
                   running === null
                     ? null
@@ -196,9 +200,16 @@ export function App({ store = browserStore }: { store?: StateStore }) {
             )}
             {name === 'week' && <Week state={state} run={run} />}
             {route.name === 'recipe' && (
-              <RecipePage state={state} day={route.day} slotId={route.slotId} />
+              <RecipePage
+                state={state}
+                day={route.day}
+                slotId={route.slotId}
+                catalogue={catalogue}
+              />
             )}
-            {name === 'recipes' && <RecipePage state={state} day={null} slotId={null} />}
+            {name === 'recipes' && (
+              <RecipePage state={state} day={null} slotId={null} catalogue={catalogue} />
+            )}
             {name === 'missing' && (
               <>
                 <h1 tabIndex={-1} data-screen-title>

@@ -130,7 +130,7 @@ def catalogue_item(food_id: str, **fields: Any) -> CatalogueItem:
             "pack_g": None,
             "keeps_days_opened": None,
             "diet": "veg",
-            "units": ["g", *UNITS.get(food_id, {})],
+            "units": {"g": 1.0, **UNITS.get(food_id, {})},
             "per_100g": {"kcal": PER_100G[food_id]["kcal"]},
             **fields,
         }

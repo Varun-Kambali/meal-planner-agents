@@ -274,4 +274,4 @@ async def test_the_services_hold_the_loaded_catalogue(tmp_path: Path) -> None:
         settings_for(tmp_path), model=model_for(), nutrition=SpyNutrition()
     ) as services:
         assert "sugar" in services.catalogue.items
-        assert services.catalogue.get("sugar").units == ["g"]
+        assert services.catalogue.get("sugar").units == {"g": 1.0}

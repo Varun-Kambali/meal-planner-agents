@@ -51,7 +51,7 @@ def catalogue_of(log: MealLog) -> Catalogue:
         {
             food: item(food).model_copy(
                 update={
-                    "units": ["g", *NUTRITION_UNITS.get(food, {})],
+                    "units": {"g": 1.0, **NUTRITION_UNITS.get(food, {})},
                     "measures": rows[food].get("measures", {}),
                 }
             )

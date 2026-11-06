@@ -6,10 +6,16 @@ import { fromServer } from '../planForm'
 import type { SaveOutcome } from '../session'
 import { emptyState, StorageUnavailable, type State } from '../storage'
 import { CATALOGUE, fakeApi, json, sampleState } from '../test/helpers'
-import { PlanForm } from './PlanForm'
+import { useCatalogue } from '../useCatalogue'
+import { PlanForm, type PlanFormProps } from './PlanForm'
 
 function saver(outcome: SaveOutcome = { ok: true }) {
   return vi.fn<(state: State) => Promise<SaveOutcome>>(async () => outcome)
+}
+
+// The form with the catalogue the shell would give it (useCatalogue).
+function Form(props: Omit<PlanFormProps, 'catalogue'>) {
+  return <PlanForm {...props} catalogue={useCatalogue()} />
 }
 
 function show(
@@ -17,7 +23,7 @@ function show(
   options: { onSave?: ReturnType<typeof saver>; refused?: ReturnType<typeof fromServer> } = {},
 ) {
   const onSave = options.onSave ?? saver()
-  render(<PlanForm state={state} refused={options.refused ?? []} onSave={onSave} blocked={null} />)
+  render(<Form state={state} refused={options.refused ?? []} onSave={onSave} blocked={null} />)
   return onSave
 }
 

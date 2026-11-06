@@ -479,6 +479,11 @@ thead th {
   font-size: var(--text-small);
 }
 
+/* A household measure beside the grams: "185 g, 1 cup". */
+.measure {
+  color: var(--color-text-muted);
+}
+
 /* Live progress */
 
 .progress {

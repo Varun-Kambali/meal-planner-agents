@@ -1,11 +1,15 @@
-// A recipe to cook from, and every recipe of the week to print, one to an A4 page. Grams come
-// from the recipe, numbers from nutrition-mcp through the API; nothing is worked out here.
+// A recipe to cook from, and every recipe of the week to print, one to an A4 page. Grams and
+// household measures come from the recipe, numbers from nutrition-mcp through the API; nothing is
+// worked out here. Where the writer's text (the steps, and the store, swap and fits lines) quotes
+// a gear id it shows the gear's label, and a catalogue id the food's name once the catalogue the
+// shell holds has loaded.
 
-import { useId } from 'react'
+import { useEffect, useId, useMemo } from 'react'
 
 import type { DayKey } from '../api'
 import type { State } from '../storage'
 import type { CheckedRecipe, PlanRules } from '../types'
+import { foodNames, type SharedCatalogue } from '../useCatalogue'
 import {
   COOK_WHEN,
   DAYS,
@@ -13,7 +17,10 @@ import {
   GEAR,
   NUTRIENTS,
   NUTRIENT_KEYS,
+  measureWords,
+  quotedNames,
   shown,
+  textNamer,
   type NutrientKey,
 } from '../words'
 import { Status } from './parts'
@@ -23,6 +30,8 @@ export interface RecipePageProps {
   // Null for every recipe of the week.
   day: DayKey | null
   slotId: string | null
+  // The catalogue the shell holds, for the food names in the steps (useCatalogue).
+  catalogue: SharedCatalogue
 }
 
 function byWeekOrder(rules: PlanRules | null, recipes: CheckedRecipe[]): CheckedRecipe[] {
@@ -32,8 +41,12 @@ function byWeekOrder(rules: PlanRules | null, recipes: CheckedRecipe[]): Checked
   return [...recipes].sort((a, b) => place(a) - place(b))
 }
 
-export function RecipePage({ state, day, slotId }: RecipePageProps) {
+export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
   const { rules, week } = state
+  const { need } = catalogue
+  useEffect(() => need(), [need])
+  const catalogueNames = useMemo(() => foodNames(catalogue.state), [catalogue.state])
+  const nameIds = useMemo(() => textNamer(quotedNames(catalogueNames)), [catalogueNames])
   if (day === null || slotId === null) {
     const recipes = byWeekOrder(rules, week?.recipes ?? [])
     return (
@@ -59,6 +72,8 @@ export function RecipePage({ state, day, slotId }: RecipePageProps) {
                 key={`${recipe.spec.day}-${recipe.spec.slot.id}`}
                 recipe={recipe}
                 rules={rules}
+                catalogueNames={catalogueNames}
+                nameIds={nameIds}
                 level={2}
               />
             ))}
@@ -89,7 +104,13 @@ export function RecipePage({ state, day, slotId }: RecipePageProps) {
       <p className="screen-only">
         <a href="#/week">Back to the week</a>
       </p>
-      <Recipe recipe={recipe} rules={rules} level={1} />
+      <Recipe
+        recipe={recipe}
+        rules={rules}
+        catalogueNames={catalogueNames}
+        nameIds={nameIds}
+        level={1}
+      />
       <p className="screen-only">
         <button type="button" className="button-secondary" onClick={() => window.print()}>
           Print this recipe
@@ -113,10 +134,17 @@ const PRINTED: NutrientKey[] = [
 function Recipe({
   recipe,
   rules,
+  catalogueNames,
+  nameIds,
   level,
 }: {
   recipe: CheckedRecipe
   rules: PlanRules | null
+  // Catalogue ids and their names; empty until the catalogue has loaded.
+  catalogueNames: ReadonlyMap<string, string>
+  // The writer's text with the names of the gear and catalogue ids it quotes; catalogue ids stay
+  // as written until the catalogue has loaded.
+  nameIds: (text: string) => string
   level: 1 | 2
 }) {
   const { spec, draft, nutrition } = recipe
@@ -124,8 +152,10 @@ function Recipe({
   const stepsId = useId()
   const Title = level === 1 ? 'h1' : 'h2'
   const Section = level === 1 ? 'h2' : 'h3'
+  // The catalogue's names once it has loaded, so the table, the notes and the steps name a food
+  // the same way; nutrition-mcp's names until then.
   const names = new Map(nutrition?.items.map((item) => [item.food.id, item.food.name]) ?? [])
-  const nameOf = (id: string): string => names.get(id) ?? id
+  const nameOf = (id: string): string => catalogueNames.get(id) ?? names.get(id) ?? id
   const dayType = rules?.day_types.find((d) => d.id === spec.day_type)?.name ?? spec.day_type
   const amount = (key: NutrientKey): string => {
     const value = nutrition?.total[key] ?? null
@@ -197,19 +227,26 @@ function Recipe({
               <tr>
                 <th scope="col">Ingredient</th>
                 <th scope="col" className="num">
-                  Weight
+                  Amount
                 </th>
               </tr>
             </thead>
             <tbody>
-              {draft.ingredients.map((ingredient) => (
-                <tr key={ingredient.id}>
-                  <td>{nameOf(ingredient.id)}</td>
-                  <td className="num">
-                    {shown(ingredient.grams)} <span className="unit">g</span>
-                  </td>
-                </tr>
-              ))}
+              {draft.ingredients.map((ingredient, index) => {
+                // A file saved before measures were shown has none.
+                const measure = recipe.measures[index] ?? null
+                return (
+                  <tr key={index}>
+                    <td>{nameOf(ingredient.id)}</td>
+                    <td className="num">
+                      {shown(ingredient.grams)} <span className="unit">g</span>
+                      {measure !== null && (
+                        <span className="measure">{`, ${measureWords(measure)}`}</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           {recipe.portion_scale !== 1 && (
@@ -224,20 +261,20 @@ function Recipe({
           <Section id={stepsId}>Steps</Section>
           <ol className="steps" aria-labelledby={stepsId}>
             {draft.steps.map((step, index) => (
-              <li key={index}>{step}</li>
+              <li key={index}>{nameIds(step)}</li>
             ))}
           </ol>
         </div>
       </div>
       <Section>Keeping it</Section>
       <p>
-        <strong>Store:</strong> {draft.store}
+        <strong>Store:</strong> {nameIds(draft.store)}
       </p>
       <p>
-        <strong>Swap:</strong> {draft.swap}
+        <strong>Swap:</strong> {nameIds(draft.swap)}
       </p>
       <p>
-        <strong>How it fits:</strong> {draft.fits}
+        <strong>How it fits:</strong> {nameIds(draft.fits)}
       </p>
       <Section>Numbers</Section>
       {nutrition === null ? (

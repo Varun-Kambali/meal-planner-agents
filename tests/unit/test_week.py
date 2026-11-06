@@ -38,7 +38,7 @@ from meal_planner.catalogue import Catalogue
 from meal_planner.config import Settings
 from meal_planner.llm import ModelPort, ModelReply
 from meal_planner.nutrition import NutritionError, NutritionPort
-from meal_planner.recipes import CheckedRecipe, DraftRecipe, Failure, SlotDraft
+from meal_planner.recipes import CheckedRecipe, DraftRecipe, Failure, HouseholdMeasure, SlotDraft
 from meal_planner.rules import DayKey, PlanRules, expand
 from meal_planner.week import evaluate_week, replace_recipe, run_week, with_numbers
 from meal_planner.week_events import (
@@ -1966,3 +1966,95 @@ async def test_events_and_week_survive_json() -> None:
         assert adapter.validate_json(event.model_dump_json()) == event
     assert week.no_waste
     assert WeekResult.model_validate_json(week.model_dump_json()) == week
+
+
+# Household measures
+
+
+def banana_by_the_piece() -> Catalogue:
+    """The fixture catalogue with a 91 g banana: 182 g is 2 pieces and 155 g is 1.5."""
+    return catalogue(item("banana").model_copy(update={"measures": {"piece": 91.0}}))
+
+
+async def test_a_fitted_recipe_has_measures_for_its_fitted_grams() -> None:
+    model = model_for(writes={"breakfast": [low_breakfast()]})
+
+    _, week = await run(model, cat=banana_by_the_piece())
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.portion_scale > 1.1
+    banana = mon.draft.ingredients[0]
+    assert (banana.id, banana.grams) == ("banana", 182)
+    # Oats and curd are in grams only.
+    assert mon.measures == [HouseholdMeasure(amount=2, unit="piece"), None, None]
+    assert all(len(r.measures) == len(r.draft.ingredients) for r in week.recipes)
+
+
+async def test_a_recipe_that_is_not_fitted_has_measures_for_its_grams_as_written() -> None:
+    model = model_for(writes={"breakfast": [low_breakfast()]})
+
+    _, week = await run(model, cat=banana_by_the_piece(), fit_portions=False)
+
+    mon = by_key(week)[("mon", "breakfast")]
+    assert mon.draft.ingredients[0].grams == pytest.approx(155.41)
+    assert mon.measures == [HouseholdMeasure(amount=1.5, unit="piece"), None, None]
+
+
+async def test_a_replacement_gives_the_recipes_it_keeps_their_measures_too() -> None:
+    """The API rebuilds the kept recipes from their drafts, with no measures; they come back with
+    them, worked out from the same grams."""
+    _, week = await run(model_for())
+    rebuilt = week.model_copy(
+        update={"recipes": [r.model_copy(update={"measures": []}) for r in week.recipes]}
+    )
+    replacement = recipe_of("lunch", "wed") | {"title": "Rajma rice, the other way"}
+    model = SlotModel(
+        {"lunch": {"write_slot": [raw({"slot_id": "lunch", "recipes": [replacement]})]}}
+    )
+
+    events = [
+        event
+        async for event in replace_recipe(
+            plan_rules(),
+            rebuilt,
+            "wed",
+            "lunch",
+            model=model,
+            nutrition=SpyNutrition(),
+            catalogue=banana_by_the_piece(),
+            settings=Settings(),
+        )
+    ]
+
+    done = events[-1]
+    assert isinstance(done, WeekDone)
+    mon = by_key(done.week)[("mon", "breakfast")]
+    assert mon.measures == [HouseholdMeasure(amount=2, unit="piece"), None, None]
+    assert all(len(r.measures) == len(r.draft.ingredients) for r in done.week.recipes)
+
+
+def test_a_measure_never_reaches_the_repair_prompt() -> None:
+    rules = plan_rules()
+    specs = {(s.day, s.slot.id): s for s in expand(rules)}
+    breakfasts = [
+        CheckedRecipe(
+            spec=specs[(r["day"], "breakfast")],
+            draft=DraftRecipe.model_validate(r),
+            nutrition=None,
+            failures=[Failure(check="slot_kcal", message="calories too low")],
+            attempts=1,
+        )
+        for r in canned("breakfast")["recipes"]
+    ]
+    measured = [
+        r.model_copy(update={"measures": [HouseholdMeasure(amount=2, unit="piece"), None, None]})
+        for r in breakfasts
+    ]
+    allowed = banana_by_the_piece().allowed_for(rules)
+
+    def prompt(recipes: list[CheckedRecipe]) -> tuple[str, str]:
+        job = Job("breakfast", [r.spec for r in recipes[:1]], 2, None, recipes[:1], recipes[1:])
+        return repair_prompt(rules, Settings(), allowed, job)
+
+    assert prompt(measured) == prompt(breakfasts)
+    assert "piece" not in prompt(measured)[1]

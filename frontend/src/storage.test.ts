@@ -198,6 +198,17 @@ describe('import', () => {
 
     expect(state.week!.recipes[0]!.portion_scale).toBe(1)
   })
+
+  it('loads a file saved before household measures were shown, with none', async () => {
+    const file = exported()
+    for (const recipe of file.week!.recipes) {
+      delete (recipe as unknown as Record<string, unknown>).measures
+    }
+
+    const state = await importFile(fileOf(file))
+
+    expect(state.week!.recipes.map((recipe) => recipe.measures)).toEqual([[], []])
+  })
 })
 
 // The files in test/invalid-exports.json, each the sample with a change or two. The server's

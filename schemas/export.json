@@ -36,6 +36,21 @@
           "default": 1.0,
           "title": "Portion Scale",
           "type": "number"
+        },
+        "measures": {
+          "default": [],
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HouseholdMeasure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Measures",
+          "type": "array"
         }
       },
       "required": [
@@ -483,6 +498,27 @@
         "units"
       ],
       "title": "FoodSummary",
+      "type": "object"
+    },
+    "HouseholdMeasure": {
+      "additionalProperties": false,
+      "description": "An ingredient's grams in a unit a kitchen measures with, such as 1.5 cup or 2 piece.\n\nWorked out in code from the grams and the food's units (measures.py), for showing beside the\ngrams. The model never writes one and never reads one.",
+      "properties": {
+        "amount": {
+          "exclusiveMinimum": 0,
+          "title": "Amount",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "unit"
+      ],
+      "title": "HouseholdMeasure",
       "type": "object"
     },
     "LogEntry": {

@@ -57,6 +57,17 @@ class Failure(_Model):
     message: str
 
 
+class HouseholdMeasure(_Model):
+    """An ingredient's grams in a unit a kitchen measures with, such as 1.5 cup or 2 piece.
+
+    Worked out in code from the grams and the food's units (measures.py), for showing beside the
+    grams. The model never writes one and never reads one.
+    """
+
+    amount: float = Field(gt=0)
+    unit: str
+
+
 class CheckedRecipe(_Model):
     """A draft with its numbers from nutrition-mcp and the checks it has failed so far."""
 
@@ -69,6 +80,10 @@ class CheckedRecipe(_Model):
     # The factor code applied to the model's grams for this attempt; 1.0 when it did not scale.
     # The draft holds the grams after scaling.
     portion_scale: float = 1.0
+    # One for each of the draft's ingredients, in its order: the grams in a household unit, or
+    # None when no unit of the food comes close enough. Set once the grams are final, when the
+    # week is reported; empty until then, and in a file saved before measures were shown.
+    measures: list[HouseholdMeasure | None] = []
 
 
 class DayReport(_Model):

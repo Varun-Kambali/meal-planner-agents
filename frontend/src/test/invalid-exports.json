@@ -36,6 +36,14 @@
     "refused_by": "model"
   },
   {
+    "case": "a household measure of nothing",
+    "changes": [
+      { "at": "/week/recipes/0/measures", "value": [{ "amount": 0, "unit": "cup" }, null, null] }
+    ],
+    "path": "/week/recipes/0/measures/0/amount",
+    "refused_by": "model"
+  },
+  {
     "case": "a recipe title of spaces",
     "changes": [{ "at": "/week/recipes/0/draft/title", "value": "   " }],
     "path": "/week/recipes/0/draft/title",

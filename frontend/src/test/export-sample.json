@@ -330,7 +330,8 @@
         },
         "failures": [],
         "attempts": 1,
-        "portion_scale": 1.0
+        "portion_scale": 1.0,
+        "measures": [{ "amount": 1.5, "unit": "piece" }, { "amount": 1.25, "unit": "cup" }, null]
       },
       {
         "spec": {
@@ -544,7 +545,8 @@
         },
         "failures": [],
         "attempts": 1,
-        "portion_scale": 1.0
+        "portion_scale": 1.0,
+        "measures": [null, null, null]
       }
     ],
     "days": [
