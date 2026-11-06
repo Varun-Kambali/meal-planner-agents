@@ -169,6 +169,25 @@ it('needs nothing from the API to show the meals of the date', () => {
   expect(fetch).not.toHaveBeenCalled()
 })
 
+it('starts each food afresh when the meal is read again', async () => {
+  const second = readReply()
+  second.items = [
+    second.items[0]!,
+    { ...second.items[1]!, name: 'dal', food_id: 'dal_tadka', food_name: 'Dal tadka' },
+  ]
+  let reads = 0
+  fakeApi({ '/v1/log/read': () => json((reads += 1) === 1 ? readReply() : second) })
+  const { user } = show()
+  const lunch = await readLunch(user)
+  const curd = within(lunch).getByRole('listitem', { name: /^Curd/ })
+
+  await user.type(within(curd).getByLabelText('Amount'), '50')
+  await user.click(within(lunch).getByRole('button', { name: 'Read it again' }))
+
+  const dal = await within(lunch).findByRole('listitem', { name: /^Dal tadka/ })
+  expect(within(dal).getByLabelText('Amount')).toHaveValue('')
+})
+
 describe('the swap flow when a request fails', () => {
   it('says why the meal was not read, and reads it again when asked', async () => {
     let reads = 0

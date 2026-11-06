@@ -70,6 +70,10 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
   const [textError, setTextError] = useState<string | null>(null)
   const [reading, setReading] = useState<Reading>({ status: 'idle' })
   const [items, setItems] = useState<SwapItem[] | null>(null)
+  // Counts the reads that worked, so the foods of a new read start afresh and a compute asked for
+  // before it is not applied to them.
+  const [reads, setReads] = useState(0)
+  const latestRead = useRef(0)
   const [total, setTotal] = useState<MealResult | null>(null)
   // The found foods the person has opened to change.
   const [changing, setChanging] = useState<ReadonlySet<number>>(new Set())
@@ -103,6 +107,8 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
     try {
       const result = await readMeal(text, { signal: call() })
       showFoods.current = true
+      latestRead.current += 1
+      setReads(latestRead.current)
       setItems(swapItems(result))
       setTotal(result.total)
       setChanging(new Set())
@@ -118,8 +124,10 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
     if (items === null) return null
     const next = withChange(items, key, change)
     const sent = counted(next)
+    const read = latestRead.current
     try {
       const result = await computeMeal(logItems(sent), { signal: call() })
+      if (read !== latestRead.current) return null
       setItems(computed(next, sent, result.items, key))
       setTotal(result)
       setChanging((open) => new Set([...open].filter((k) => k !== key)))
@@ -211,7 +219,7 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
           <ul className="foods" aria-labelledby={foodsId}>
             {items.map((item) => (
               <FoodRow
-                key={item.key}
+                key={`${reads}-${item.key}`}
                 item={item}
                 changing={changing.has(item.key)}
                 onConfirm={() =>
