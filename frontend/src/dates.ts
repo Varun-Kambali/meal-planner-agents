@@ -54,11 +54,11 @@ export function weekdayOf(date: string): DayKey {
   return DAYS[(utc(date).getUTCDay() + 6) % 7]!
 }
 
-// "Monday 2 November", with the year when it is not `thisYear`'s.
-export function dateWords(date: string, thisYear?: string): string {
+// "Monday 2 November", with the year when it is not the year of `today`, a date as YYYY-MM-DD.
+export function dateWords(date: string, today?: string): string {
   const day = utc(date)
   const words = `${DAY_NAMES[weekdayOf(date)]} ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]}`
-  return thisYear === undefined || thisYear.slice(0, 4) === date.slice(0, 4)
+  return today === undefined || today.slice(0, 4) === date.slice(0, 4)
     ? words
     : `${words} ${date.slice(0, 4)}`
 }
