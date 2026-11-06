@@ -545,6 +545,18 @@ describe('logging a meal with one tap', () => {
     expect(screen.queryByRole('region', { name: 'The log is full' })).not.toBeInTheDocument()
   })
 
+  it('moves the focus to the notice each time a meal would make the log too long', async () => {
+    const { saves, user } = show(sampleState())
+    await user.click(within(meal('Breakfast')).getByRole('button', { name: 'Skipped' }))
+    const notice = await screen.findByRole('region', { name: 'The log is full' })
+
+    await user.click(within(meal('Lunch')).getByRole('button', { name: 'Skipped' }))
+
+    expect(within(notice).getByRole('heading')).toHaveFocus()
+    expect(notice).toHaveTextContent('Logging Lunch on Monday 2 November')
+    expect(saves).toHaveLength(0)
+  })
+
   it('says so when the full log cannot be saved as a file, and offers no new log', async () => {
     vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
       throw new DOMException('Downloads are blocked.', 'SecurityError')

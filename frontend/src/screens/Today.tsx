@@ -65,10 +65,12 @@ export function Today({ state, date, today, onSave }: TodayProps) {
     buttons.current.get(focusTo.current)?.focus()
     focusTo.current = null
   })
-  const hasWaiting = waiting !== null
+  // Each meal the log could not take moves the focus to the notice, also when it is already open;
+  // saving the log as a file keeps the same meal, so the focus stays where it is.
+  const waitingFor = waiting?.entry ?? null
   useEffect(() => {
-    if (hasWaiting) waitingHeading.current?.focus()
-  }, [hasWaiting])
+    if (waitingFor !== null) waitingHeading.current?.focus()
+  }, [waitingFor])
 
   const words = dateWords(date, today)
   const heading = date === today ? `Today, ${words}` : words
