@@ -2,10 +2,15 @@
 // need from a browser and an API that are not there:
 //
 // - /__seed/<name> puts a saved state into this browser's storage, as the app saves it: `week` is
-//   src/test/recorded-week.json (scripts/record_week_fixture.py), `unreadable` a stored copy
-//   that does not fit the file format. A check then moves on to the screen to test.
+//   src/test/recorded-week.json (scripts/record_week_fixture.py), `tracking` the same with the
+//   meal log of src/test/recorded-tracking.json (scripts/record_tracking_fixture.py), and
+//   `unreadable` a stored copy that does not fit the file format. A check then moves on to the
+//   screen to test.
 // - GET /v1/catalogue lists the foods of that week, so the plan form's food lists load.
 // - POST /v1/week refuses the plan with a 422, so the week screen's refusal can be checked.
+// - POST /v1/log/read, GET /v1/foods/search, POST /v1/log/compute and POST /v1/summary answer
+//   with the API's recorded replies, whatever they are asked, so the log and summary screens can
+//   be checked with real data.
 //
 // Nothing here calls a model or the real API.
 
@@ -17,6 +22,7 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.resolve(here, '../dist')
 const FIXTURE = path.resolve(here, '../src/test/recorded-week.json')
+const TRACKING = path.resolve(here, '../src/test/recorded-tracking.json')
 export const ORIGIN = 'http://127.0.0.1:4173'
 // The key storage.ts keeps a copy of the state under; the app reads it before IndexedDB.
 const STORAGE_KEY = 'meal-planner-state'
@@ -32,6 +38,15 @@ const TYPES: Record<string, string> = {
 
 interface RecordedState {
   week: { recipes: { nutrition: { items: { food: { id: string; name: string } }[] } | null }[] }
+}
+
+// The replies scripts/record_tracking_fixture.py recorded, and the log they were recorded for.
+interface RecordedTracking {
+  log: unknown
+  read: { reply: unknown }
+  search: { reply: unknown }
+  compute: { reply: unknown }
+  summary: unknown
 }
 
 // The foods of the recorded week, as the catalogue route lists them.
@@ -56,9 +71,18 @@ function send(response: ServerResponse, status: number, type: string, body: stri
 
 export async function serve(): Promise<Server> {
   const week = await readFile(FIXTURE, 'utf8')
+  const tracking = JSON.parse(await readFile(TRACKING, 'utf8')) as RecordedTracking
   const seeds: Record<string, string> = {
     week,
+    tracking: JSON.stringify({ ...(JSON.parse(week) as object), log: tracking.log }),
     unreadable: '{"version": 1, "rules": "not a plan"}',
+  }
+  // Each recorded reply by the method and path it answers.
+  const replies: Record<string, string> = {
+    'POST /v1/log/read': JSON.stringify(tracking.read.reply),
+    'GET /v1/foods/search': JSON.stringify(tracking.search.reply),
+    'POST /v1/log/compute': JSON.stringify(tracking.compute.reply),
+    'POST /v1/summary': JSON.stringify(tracking.summary),
   }
   const catalogue = JSON.stringify(foodsOf(JSON.parse(week) as RecordedState))
   const refusal = JSON.stringify({
@@ -78,6 +102,8 @@ export async function serve(): Promise<Server> {
     if (pathname === '/v1/week' && request.method === 'POST') {
       return send(response, 422, TYPES['.json']!, refusal)
     }
+    const reply = replies[`${request.method ?? 'GET'} ${pathname}`]
+    if (reply !== undefined) return send(response, 200, TYPES['.json']!, reply)
     const file = path.resolve(DIST, `.${pathname === '/' ? '/index.html' : pathname}`)
     if (!file.startsWith(`${DIST}${path.sep}`))
       return send(response, 404, 'text/plain', 'not found')
