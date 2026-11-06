@@ -78,6 +78,9 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
   // The found foods the person has opened to change.
   const [changing, setChanging] = useState<ReadonlySet<number>>(new Set())
   const [saving, setSaving] = useState(false)
+  // One food's numbers are worked out at a time: each compute sends every counted food, so two at
+  // once would each undo the other's change.
+  const [computing, setComputing] = useState(false)
   const call = useCalls()
   const textId = useId()
   const foodsId = useId()
@@ -125,6 +128,7 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
     const next = withChange(items, key, change)
     const sent = counted(next)
     const askedUnder = latestRead.current
+    setComputing(true)
     try {
       const result = await computeMeal(logItems(sent), { signal: call() })
       if (askedUnder !== latestRead.current) return null
@@ -134,6 +138,8 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
       return null
     } catch (error) {
       return isAbort(error) ? null : error
+    } finally {
+      setComputing(false)
     }
   }
 
@@ -148,7 +154,7 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
   } else {
     reason = `Saves ${saved.length} ${saved.length === 1 ? 'food' : 'foods'} as this meal${missing.length > 0 ? `, without ${missing.map(itemName).join(', ')}` : ''}.`
   }
-  const blocked = items === null || todo.length > 0 || saved.length === 0 || saving
+  const blocked = items === null || todo.length > 0 || saved.length === 0 || saving || computing
 
   async function save(): Promise<void> {
     if (blocked || items === null) return
@@ -222,6 +228,7 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
                 key={`${reads}-${item.key}`}
                 item={item}
                 changing={changing.has(item.key)}
+                computing={computing}
                 onConfirm={() =>
                   setItems((all) =>
                     all === null
@@ -273,6 +280,7 @@ function amountWords(item: SwapItem): string {
 function FoodRow({
   item,
   changing,
+  computing,
   onConfirm,
   onChange,
   onCancelChange,
@@ -280,6 +288,7 @@ function FoodRow({
 }: {
   item: SwapItem
   changing: boolean
+  computing: boolean
   onConfirm: () => void
   onChange: () => void
   onCancelChange: () => void
@@ -352,6 +361,7 @@ function FoodRow({
       {editing && item.food !== null && (
         <ItemEditor
           item={item}
+          computing={computing}
           onConfirm={onConfirmChange}
           onCancel={item.status === 'matched' ? onCancelChange : null}
         />
@@ -364,10 +374,13 @@ function FoodRow({
 // compute route for the numbers; a refusal is shown here with a way to try again.
 function ItemEditor({
   item,
+  computing,
   onConfirm,
   onCancel,
 }: {
   item: SwapItem
+  // Another food's numbers are being worked out, so this one waits.
+  computing: boolean
   onConfirm: (change: Change) => Promise<unknown>
   onCancel: (() => void) | null
 }) {
@@ -386,7 +399,7 @@ function ItemEditor({
 
   // Never rejects: a refusal is shown under the fields.
   async function confirm(): Promise<void> {
-    if (working) return
+    if (working || computing) return
     const value = Number(amount.trim())
     if (amount.trim() === '' || !Number.isFinite(value) || value <= 0) {
       setProblem('Give the amount as a number above 0.')
@@ -455,7 +468,7 @@ function ItemEditor({
           <button
             type="submit"
             className="button-secondary"
-            aria-disabled={working}
+            aria-disabled={working || computing}
             aria-label={`Confirm ${food.name}`}
           >
             Confirm

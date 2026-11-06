@@ -188,6 +188,31 @@ it('starts each food afresh when the meal is read again', async () => {
   expect(within(dal).getByLabelText('Amount')).toHaveValue('')
 })
 
+it("works out one food's numbers at a time, since each compute sends every counted food", async () => {
+  let answer: (response: Response) => void = () => undefined
+  const calls = fakeApi({
+    '/v1/log/read': () => json(readReply()),
+    '/v1/log/compute': () => new Promise<Response>((resolve) => (answer = resolve)),
+  })
+  const { user } = show()
+  const lunch = await readLunch(user)
+  const curd = within(lunch).getByRole('listitem', { name: /^Curd/ })
+  const rice = within(lunch).getByRole('listitem', { name: /^Steamed rice/ })
+
+  await user.type(within(curd).getByLabelText('Amount'), '100')
+  await user.selectOptions(within(curd).getByLabelText('Unit'), 'g')
+  await user.click(within(curd).getByRole('button', { name: 'Confirm Curd' }))
+  await user.selectOptions(within(rice).getByLabelText('Unit'), 'katori')
+  const confirmRice = within(rice).getByRole('button', { name: 'Confirm Steamed rice' })
+  expect(confirmRice).toHaveAttribute('aria-disabled', 'true')
+  await user.click(confirmRice)
+  expect(calls.filter((call) => call.path === '/v1/log/compute')).toHaveLength(1)
+
+  answer(json(computeReply()))
+  await within(curd).findByText('Confirmed')
+  await waitFor(() => expect(confirmRice).not.toHaveAttribute('aria-disabled', 'true'))
+})
+
 describe('the swap flow when a request fails', () => {
   it('says why the meal was not read, and reads it again when asked', async () => {
     let reads = 0
