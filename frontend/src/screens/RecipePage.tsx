@@ -1,11 +1,14 @@
-// A recipe to cook from, and every recipe of the week to print, one to an A4 page. Grams come
-// from the recipe, numbers from nutrition-mcp through the API; nothing is worked out here.
+// A recipe to cook from, and every recipe of the week to print, one to an A4 page. Grams and
+// household measures come from the recipe, numbers from nutrition-mcp through the API; nothing is
+// worked out here. A step that quotes a catalogue id shows the food's name, once the catalogue
+// the shell holds has loaded.
 
-import { useId } from 'react'
+import { useEffect, useId } from 'react'
 
 import type { DayKey } from '../api'
 import type { State } from '../storage'
 import type { CheckedRecipe, PlanRules } from '../types'
+import { foodNames, type FoodCatalogue } from '../useCatalogue'
 import {
   COOK_WHEN,
   DAYS,
@@ -13,7 +16,9 @@ import {
   GEAR,
   NUTRIENTS,
   NUTRIENT_KEYS,
+  measureWords,
   shown,
+  withFoodNames,
   type NutrientKey,
 } from '../words'
 import { Status } from './parts'
@@ -23,6 +28,8 @@ export interface RecipePageProps {
   // Null for every recipe of the week.
   day: DayKey | null
   slotId: string | null
+  // The catalogue the shell holds, for the food names in the steps (useCatalogue).
+  food: FoodCatalogue
 }
 
 function byWeekOrder(rules: PlanRules | null, recipes: CheckedRecipe[]): CheckedRecipe[] {
@@ -32,8 +39,11 @@ function byWeekOrder(rules: PlanRules | null, recipes: CheckedRecipe[]): Checked
   return [...recipes].sort((a, b) => place(a) - place(b))
 }
 
-export function RecipePage({ state, day, slotId }: RecipePageProps) {
+export function RecipePage({ state, day, slotId, food }: RecipePageProps) {
   const { rules, week } = state
+  const { need } = food
+  useEffect(() => need(), [need])
+  const steps = foodNames(food.list)
   if (day === null || slotId === null) {
     const recipes = byWeekOrder(rules, week?.recipes ?? [])
     return (
@@ -59,6 +69,7 @@ export function RecipePage({ state, day, slotId }: RecipePageProps) {
                 key={`${recipe.spec.day}-${recipe.spec.slot.id}`}
                 recipe={recipe}
                 rules={rules}
+                names={steps}
                 level={2}
               />
             ))}
@@ -89,7 +100,7 @@ export function RecipePage({ state, day, slotId }: RecipePageProps) {
       <p className="screen-only">
         <a href="#/week">Back to the week</a>
       </p>
-      <Recipe recipe={recipe} rules={rules} level={1} />
+      <Recipe recipe={recipe} rules={rules} names={steps} level={1} />
       <p className="screen-only">
         <button type="button" className="button-secondary" onClick={() => window.print()}>
           Print this recipe
@@ -113,10 +124,13 @@ const PRINTED: NutrientKey[] = [
 function Recipe({
   recipe,
   rules,
+  names: catalogueNames,
   level,
 }: {
   recipe: CheckedRecipe
   rules: PlanRules | null
+  // Catalogue ids and their names, for the steps; empty until the catalogue has loaded.
+  names: ReadonlyMap<string, string>
   level: 1 | 2
 }) {
   const { spec, draft, nutrition } = recipe
@@ -197,19 +211,26 @@ function Recipe({
               <tr>
                 <th scope="col">Ingredient</th>
                 <th scope="col" className="num">
-                  Weight
+                  Amount
                 </th>
               </tr>
             </thead>
             <tbody>
-              {draft.ingredients.map((ingredient) => (
-                <tr key={ingredient.id}>
-                  <td>{nameOf(ingredient.id)}</td>
-                  <td className="num">
-                    {shown(ingredient.grams)} <span className="unit">g</span>
-                  </td>
-                </tr>
-              ))}
+              {draft.ingredients.map((ingredient, index) => {
+                // A file saved before measures were shown has none.
+                const measure = recipe.measures[index] ?? null
+                return (
+                  <tr key={index}>
+                    <td>{nameOf(ingredient.id)}</td>
+                    <td className="num">
+                      {shown(ingredient.grams)} <span className="unit">g</span>
+                      {measure !== null && (
+                        <span className="measure">{`, ${measureWords(measure)}`}</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           {recipe.portion_scale !== 1 && (
@@ -224,7 +245,7 @@ function Recipe({
           <Section id={stepsId}>Steps</Section>
           <ol className="steps" aria-labelledby={stepsId}>
             {draft.steps.map((step, index) => (
-              <li key={index}>{step}</li>
+              <li key={index}>{withFoodNames(step, catalogueNames)}</li>
             ))}
           </ol>
         </div>

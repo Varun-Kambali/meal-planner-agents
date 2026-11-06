@@ -2,9 +2,8 @@
 // before saving (planForm.ts), and shows the problems the API found when a week was written,
 // each under its field.
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 
-import { catalogue as loadCatalogue } from '../api'
 import {
   FIELD_LABELS,
   MAX_DAY_TYPES,
@@ -27,7 +26,8 @@ import {
 } from '../planForm'
 import type { SaveOutcome } from '../session'
 import { ValidationFailed, type State } from '../storage'
-import type { CatalogueRow, PlanRules } from '../types'
+import type { PlanRules } from '../types'
+import type { FoodCatalogue, FoodList as FoodListState } from '../useCatalogue'
 import {
   ALLERGENS,
   COOK_WHEN,
@@ -49,6 +49,8 @@ export interface PlanFormProps {
   onSave: (state: State) => Promise<SaveOutcome>
   // Why saving has to wait, such as a week being written for the saved plan.
   blocked: string | null
+  // The catalogue the shell holds, for the lists of foods (useCatalogue).
+  food: FoodCatalogue
 }
 
 // The fields this draft has, by path, so that a problem can be put at the nearest one.
@@ -83,53 +85,27 @@ function nearest(path: string, paths: Set<string>): string {
   return ''
 }
 
-type Food =
-  | { status: 'loading' }
-  | { status: 'ready'; rows: CatalogueRow[] }
-  | {
-      status: 'failed'
-      message: string
-    }
-
 type Saving =
   | { status: 'idle' }
   | { status: 'saving' }
   | { status: 'saved' }
   | { status: 'failed'; message: string }
 
-export function PlanForm({ state, refused, onSave, blocked }: PlanFormProps) {
+export function PlanForm({ state, refused, onSave, blocked, food: catalogue }: PlanFormProps) {
   const [draft, setDraft] = useState<PlanDraft>(() => draftOf(state.rules))
   const [errors, setErrors] = useState<FormError[]>([])
   const [saving, setSaving] = useState<Saving>({ status: 'idle' })
   const [pending, setPending] = useState<PlanRules | null>(null)
-  const [food, setFood] = useState<Food>({ status: 'loading' })
+  const food = catalogue.list
   const summary = useRef<HTMLElement>(null)
   const question = useRef<HTMLHeadingElement>(null)
   const focusSummary = useRef(false)
   const blockedId = useId()
 
-  // The catalogue, once per visit to the form and again on asking: every /v1/ route shares one
-  // rate limit, so the list is not asked for again as the diet or the allergens change.
-  const foodRequest = useRef<AbortController | null>(null)
-  const loadFood = useCallback((): void => {
-    foodRequest.current?.abort()
-    const controller = new AbortController()
-    foodRequest.current = controller
-    loadCatalogue({}, { signal: controller.signal }).then(
-      (rows) => {
-        if (!controller.signal.aborted) setFood({ status: 'ready', rows })
-      },
-      (error: unknown) => {
-        if (controller.signal.aborted) return
-        const message = messageOf(error)
-        setFood({ status: 'failed', message })
-      },
-    )
-  }, [])
-  useEffect(() => {
-    loadFood()
-    return () => foodRequest.current?.abort()
-  }, [loadFood])
+  // The whole catalogue, asked for by the shell once per page and again on asking: the list is
+  // not asked for again as the diet or the allergens change.
+  const { need: needFood } = catalogue
+  useEffect(() => needFood(), [needFood])
 
   useEffect(() => {
     if (errors.length > 0 && focusSummary.current) {
@@ -267,13 +243,7 @@ export function PlanForm({ state, refused, onSave, blocked }: PlanFormProps) {
             errors={shownErrors}
             onChange={(allergens) => change((d) => ({ ...d, allergens }))}
           />
-          <FoodLoad
-            food={food}
-            onRetry={() => {
-              setFood({ status: 'loading' })
-              loadFood()
-            }}
-          />
+          <FoodLoad food={food} onRetry={catalogue.reload} />
           <FoodList
             path="food.exclude_foods"
             label="Foods to leave out"
@@ -715,7 +685,7 @@ interface FoodListProps {
   label: string
   hint?: string
   chosen: string[]
-  food: Food
+  food: FoodListState
   errors: Errors
   onChange: (chosen: string[]) => void
 }
@@ -723,7 +693,7 @@ interface FoodListProps {
 const FOOD_LOAD_ID = 'food-list-load'
 
 // Says once, for both lists of foods, that the catalogue could not be loaded.
-function FoodLoad({ food, onRetry }: { food: Food; onRetry: () => void }) {
+function FoodLoad({ food, onRetry }: { food: FoodListState; onRetry: () => void }) {
   if (food.status !== 'failed') return null
   return (
     <p id={FOOD_LOAD_ID} className="field-error">
@@ -779,7 +749,9 @@ function FoodList({ path, label, hint, chosen, food, errors, onChange }: FoodLis
           onChange={(event) => setChoice(event.target.value)}
         >
           <option value="">
-            {food.status === 'loading' ? 'Loading the food list' : 'Choose a food'}
+            {food.status === 'loading' || food.status === 'idle'
+              ? 'Loading the food list'
+              : 'Choose a food'}
           </option>
           {rows
             .filter((row) => !chosen.includes(row.id))

@@ -2,7 +2,7 @@
 // are only formatted here, never worked out: every one comes from an API response.
 
 import type { Allergen, DayKey, Diet } from './api'
-import type { NutrientTarget, PlanRules, Slot } from './types'
+import type { HouseholdMeasure, NutrientTarget, PlanRules, Slot } from './types'
 
 export type Gear = PlanRules['gear'][number]
 export type CookWhen = Slot['cook_when']
@@ -109,6 +109,48 @@ export const EXTRA_NUTRIENTS = NUTRIENT_KEYS.filter((key) => !CORE_NUTRIENTS.inc
 export function shown(value: number): string {
   const digits = Math.abs(value) >= 10 ? 0 : 1
   return value.toLocaleString(undefined, { maximumFractionDigits: digits })
+}
+
+// A measure's amount is a whole number of quarters (src/meal_planner/measures.py).
+const QUARTERS: Record<number, string> = { 0.25: '¼', 0.5: '½', 0.75: '¾' }
+
+// The plural of each unit in nutrition-mcp's data and the catalogue that has one. tsp and tbsp
+// are abbreviations and stay as they are, and so does a unit not listed here.
+const PLURALS: Record<string, string> = {
+  piece: 'pieces',
+  roti: 'rotis',
+  clove: 'cloves',
+  leaf: 'leaves',
+  slice: 'slices',
+  cup: 'cups',
+  glass: 'glasses',
+  scoop: 'scoops',
+  katori: 'katoris',
+  plate: 'plates',
+  serving: 'servings',
+}
+
+// A household measure as a kitchen says it: "1½ cups", "¾ tbsp", "2 pieces". The amount and the
+// unit are the API's; only the words are made here.
+export function measureWords({ amount, unit }: HouseholdMeasure): string {
+  const whole = Math.floor(amount)
+  const quarter = QUARTERS[amount - whole]
+  let number = shown(amount)
+  if (amount === whole) number = String(whole)
+  else if (quarter !== undefined) number = whole === 0 ? quarter : `${whole}${quarter}`
+  return `${number} ${amount > 1 ? (PLURALS[unit] ?? unit) : unit}`
+}
+
+// A step with each catalogue id it quotes ("cook the brown_rice") given as the catalogue's name
+// for that food ("cook the brown rice"): whole words only, in lower case except at the start of
+// the step. For showing only: the step the week keeps is unchanged.
+export function withFoodNames(step: string, names: ReadonlyMap<string, string>): string {
+  if (names.size === 0) return step
+  const ids = [...names.keys()].map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return step.replace(new RegExp(`\\b(?:${ids.join('|')})\\b`, 'g'), (id, at: number) => {
+    const name = names.get(id) ?? id
+    return at === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1)
+  })
 }
 
 // The codes a slot's failure can carry, in words. Any other reason is already a sentence.
