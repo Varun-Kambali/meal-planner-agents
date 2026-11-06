@@ -14,6 +14,15 @@ describe('the screen an address names', () => {
     expect(parseRoute('#/recipe/funday/lunch')).toEqual({ name: 'missing' })
   })
 
+  it('reads the log and the summary, with a date or without one', () => {
+    expect(parseRoute('#/log')).toEqual({ name: 'log', date: null })
+    expect(parseRoute('#/log/2026-11-02')).toEqual({ name: 'log', date: '2026-11-02' })
+    expect(parseRoute('#/summary')).toEqual({ name: 'summary' })
+    expect(parseRoute('#/summary/2026-11-02')).toEqual({ name: 'day', date: '2026-11-02' })
+    expect(parseRoute('#/log/2026-02-30')).toEqual({ name: 'missing' })
+    expect(parseRoute('#/summary/today')).toEqual({ name: 'missing' })
+  })
+
   it('leaves the screen alone for a "#" that names an element', () => {
     expect(parseRoute('#main')).toBeNull()
   })

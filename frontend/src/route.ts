@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 
 import type { DayKey } from './api'
+import { isDate } from './dates'
 import { isDay } from './words'
 
 export type Route =
@@ -13,6 +14,10 @@ export type Route =
   | { name: 'week' }
   | { name: 'recipe'; day: DayKey; slotId: string }
   | { name: 'recipes' }
+  // The meals of a date to log, the reader's own date when there is none.
+  | { name: 'log'; date: string | null }
+  | { name: 'summary' }
+  | { name: 'day'; date: string }
   | { name: 'missing' }
 
 export function parseRoute(hash: string): Route | null {
@@ -33,11 +38,26 @@ export function parseRoute(hash: string): Route | null {
   if (parts.length === 3 && screen === 'recipe' && day !== undefined && isDay(day) && slotId) {
     return { name: 'recipe', day, slotId }
   }
+  if (parts.length === 1 && screen === 'log') return { name: 'log', date: null }
+  if (parts.length === 1 && screen === 'summary') return { name: 'summary' }
+  const [, date] = parts
+  if (parts.length === 2 && date !== undefined && isDate(date)) {
+    if (screen === 'log') return { name: 'log', date }
+    if (screen === 'summary') return { name: 'day', date }
+  }
   return { name: 'missing' }
 }
 
 export function recipeHref(day: DayKey, slotId: string): string {
   return `#/recipe/${day}/${encodeURIComponent(slotId)}`
+}
+
+export function logHref(date: string): string {
+  return `#/log/${date}`
+}
+
+export function dayHref(date: string): string {
+  return `#/summary/${date}`
 }
 
 // The screen the address names, and how many times it has changed since the page opened, so

@@ -40,7 +40,7 @@ export interface State {
 }
 
 // The days a log may cover, and the slack slot shares get to add up to a day, as on the server.
-const LOG_DAYS = 7
+export const LOG_DAYS = 7
 const SHARE_SUM_TOLERANCE = 0.001
 // The nutrients a day type has a field for, and the field (rules.CORE_TARGET_FIELDS).
 const CORE_TARGET_FIELDS: Record<string, string> = {

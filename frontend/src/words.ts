@@ -1,8 +1,8 @@
 // The words the screens use for the API's codes and keys, and how they show numbers. Numbers
 // are only formatted here, never worked out: every one comes from an API response.
 
-import type { Allergen, DayKey, Diet } from './api'
-import type { HouseholdMeasure, NutrientTarget, PlanRules, Slot } from './types'
+import { ApiError, type Allergen, type DayKey, type Diet } from './api'
+import type { HouseholdMeasure, LogEntry, NutrientTarget, PlanRules, Slot } from './types'
 
 export type Gear = PlanRules['gear'][number]
 export type CookWhen = Slot['cook_when']
@@ -43,6 +43,14 @@ export const COOK_WHEN: Record<CookWhen, string> = {
   fresh: 'Fresh, just before eating',
   evening_before: 'The evening before',
   night_before: 'The night before, nothing to cook that morning',
+}
+
+// How a planned meal went, as the log screens say it after "logged as".
+export const MEAL_STATUSES: Record<LogEntry['status'], string> = {
+  as_planned: 'as planned',
+  different_amount: 'a different amount',
+  swapped: 'swapped',
+  skipped: 'skipped',
 }
 
 export const DIETS: Record<Diet, string> = {
@@ -199,4 +207,19 @@ export function sentence(text: string): string {
 export function messageOf(error: unknown): string {
   const message = (error as { message?: unknown } | null)?.message
   return typeof message === 'string' ? message : String(error)
+}
+
+// A request that was refused or failed, as a sentence that says what to do next. Every /v1/
+// route shares one rate limit, so a 429 says how long to wait.
+export function refusalWords(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 429) {
+      return `The API has had too many requests. Try again in ${error.retryAfter ?? 60} seconds.`
+    }
+    if (error.status === 0) {
+      return 'The API could not be reached; check the connection and try again.'
+    }
+    return `The API said: ${error.message}.`
+  }
+  return `Something went wrong: ${messageOf(error)}.`
 }
