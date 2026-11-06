@@ -36,7 +36,9 @@ describe('the day against its targets', () => {
 
     const table = screen.getByRole('table', { name: 'Eaten against target' })
     const row = (name: string): string =>
-      within(table).getByRole('row', { name: new RegExp(`^${name}`) }).textContent ?? ''
+      (within(table).getByRole('row', { name: new RegExp(`^${name}`) }).textContent ?? '')
+        // A number keeps its unit on its line.
+        .replaceAll('\u00a0', ' ')
     expect(row('Energy')).toBe('Energy2,410 kcal2,650 kcalMeets')
     expect(row('Protein')).toBe('Protein118 gat least 150 gMisses')
     expect(row('Saturated fat')).toBe('Saturated fat21 gat most 28 gMeets')

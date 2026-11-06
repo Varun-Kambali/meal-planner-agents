@@ -28,8 +28,9 @@ function wordsOf(key: string): { name: string; unit: string } {
   return key in NUTRIENTS ? NUTRIENTS[key as NutrientKey] : { name: key, unit: '' }
 }
 
+// A number and its unit, kept on one line in a narrow column.
 function amount(value: number, unit: string): string {
-  return unit === '' ? shown(value) : `${shown(value)} ${unit}`
+  return unit === '' ? shown(value) : `${shown(value)}\u00a0${unit}`
 }
 
 // A target as the day type holds it: a band for calories, a floor or a cap for the rest.

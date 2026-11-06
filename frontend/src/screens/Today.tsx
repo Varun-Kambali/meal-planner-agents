@@ -458,7 +458,7 @@ function LogFull({
   const now = spanOf(log)
   const exported = waiting.exported !== null
   return (
-    <section className="notice" aria-labelledby={headingId}>
+    <section className="notice log-full" aria-labelledby={headingId}>
       <h2 id={headingId} ref={headingRef} tabIndex={-1}>
         The log is full
       </h2>
