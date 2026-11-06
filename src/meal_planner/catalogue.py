@@ -1,9 +1,10 @@
 """The ingredients the recipe writer may use, and the facts about them that are not nutrition.
 
 `data/catalogue.yaml` holds allergen groups, pack size, shelf life once opened and grams per
-household measure. Diet, the units nutrition-mcp accepts and the nutrients per 100 g are read
-from nutrition-mcp when the file is loaded, so they have one source. Loading also checks every
-id against nutrition-mcp, which turns a typo in the file into a startup failure that names the id.
+household measure. Diet, the units nutrition-mcp accepts (with the grams in one of each) and the
+nutrients per 100 g are read from nutrition-mcp when the file is loaded, so they have one source.
+Loading also checks every id against nutrition-mcp, which turns a typo in the file into a startup
+failure that names the id.
 """
 
 import sys
@@ -98,8 +99,8 @@ class CatalogueItem(CatalogueEntry):
     """A row plus what nutrition-mcp says about the food, filled in when the catalogue loads."""
 
     diet: Diet
-    # Every unit nutrition-mcp accepts for the food, "g" first.
-    units: list[str]
+    # Every unit nutrition-mcp accepts for the food, "g" first, with the grams in one of each.
+    units: dict[str, float]
     # The food's 16 nutrients for 100 g, by nutrition-mcp's key. None where it has no value.
     per_100g: dict[str, float | None]
 
@@ -177,6 +178,17 @@ class Catalogue:
         units = list(own_units if own_units is not None else (row.units if row else []))
         return [*units, *(unit for unit in (row.measures if row else {}) if unit not in units)]
 
+    def unit_grams(self, food_id: str) -> dict[str, float]:
+        """Grams in one of each of the food's `valid_units`, in that order: nutrition-mcp's grams
+        for its units, the catalogue's for its measures. A food the catalogue lacks has none."""
+        row = self.items.get(food_id)
+        if row is None:
+            return {}
+        return {
+            unit: row.units[unit] if unit in row.units else row.measures[unit]
+            for unit in self.valid_units(food_id)
+        }
+
 
 def _within_float(amount: float) -> float:
     """The amount, kept a number when it is too large for a float, so that nutrition-mcp refuses
@@ -227,7 +239,7 @@ async def load_catalogue(path: Path, nutrition: NutritionPort) -> Catalogue:
         items[entry.id] = CatalogueItem(
             **entry.model_dump(),
             diet=food.diet,
-            units=list(food.units),
+            units=dict(food.units),
             per_100g=dict(per_100g.nutrients),
         )
     if problems:

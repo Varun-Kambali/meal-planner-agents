@@ -86,7 +86,8 @@ async def test_load_takes_diet_and_units_from_nutrition(tmp_path: Path) -> None:
 
     item = catalogue.get("egg")
     assert item.diet == "egg"
-    assert item.units == ["g", "piece"]
+    # nutrition-mcp's grams in one of each unit are kept, so a measure needs no second call.
+    assert item.units == {"g": 1.0, "piece": 50.0}
 
 
 async def test_load_keeps_the_nutrients_per_100g(tmp_path: Path) -> None:
@@ -463,6 +464,23 @@ async def test_the_valid_units_are_nutrition_mcps_then_the_catalogues_measures(
     assert catalogue.valid_units("egg", {"g": 1.0}) == ["g", "dozen", "piece"]
     assert catalogue.valid_units("chapati", {"g": 1.0, "roti": 40.0}) == ["g", "roti"]
     assert catalogue.valid_units("chapati") == []
+
+
+async def test_unit_grams_follow_the_valid_units(tmp_path: Path) -> None:
+    """nutrition-mcp's grams for its units, then the catalogue's for its measures, in the order
+    `valid_units` gives them."""
+    nutrition = fake_nutrition("egg", "moong_dal", units={"egg": {"tbsp": 15.0}})
+    entries = [
+        entry("egg", category="egg", measures={"dozen": 600, "piece": 50}),
+        entry("moong_dal", category="pulse"),
+    ]
+    catalogue = await load(tmp_path, entries, nutrition)
+
+    grams = catalogue.unit_grams("egg")
+    assert list(grams) == catalogue.valid_units("egg")
+    assert grams == {"g": 1.0, "tbsp": 15.0, "dozen": 600.0, "piece": 50.0}
+    assert catalogue.unit_grams("moong_dal") == {"g": 1.0}
+    assert catalogue.unit_grams("chapati") == {}
 
 
 async def test_grams_too_many_for_a_float_stay_a_number(tmp_path: Path) -> None:

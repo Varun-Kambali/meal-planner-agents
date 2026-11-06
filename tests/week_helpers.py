@@ -109,7 +109,7 @@ def item(
             "pack_g": pack_g,
             "keeps_days_opened": keeps,
             "diet": "veg",
-            "units": ["g"],
+            "units": {"g": 1.0},
             "per_100g": {key: nutrients.get(key) for key in NUTRIENT_KEYS},
         }
     )
