@@ -1,7 +1,8 @@
 // A recipe to cook from, and every recipe of the week to print, one to an A4 page. Grams and
 // household measures come from the recipe, numbers from nutrition-mcp through the API; nothing is
-// worked out here. A step that quotes a catalogue id shows the food's name, once the catalogue
-// the shell holds has loaded.
+// worked out here. Where the writer's text (the steps, and the store, swap and fits lines) quotes
+// a gear id it shows the gear's label, and a catalogue id the food's name once the catalogue the
+// shell holds has loaded.
 
 import { useEffect, useId, useMemo } from 'react'
 
@@ -17,8 +18,9 @@ import {
   NUTRIENTS,
   NUTRIENT_KEYS,
   measureWords,
+  quotedNames,
   shown,
-  stepNamer,
+  textNamer,
   type NutrientKey,
 } from '../words'
 import { Status } from './parts'
@@ -44,7 +46,7 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
   const { need } = catalogue
   useEffect(() => need(), [need])
   const catalogueNames = useMemo(() => foodNames(catalogue.state), [catalogue.state])
-  const nameFoods = useMemo(() => stepNamer(catalogueNames), [catalogueNames])
+  const nameIds = useMemo(() => textNamer(quotedNames(catalogueNames)), [catalogueNames])
   if (day === null || slotId === null) {
     const recipes = byWeekOrder(rules, week?.recipes ?? [])
     return (
@@ -71,7 +73,7 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
                 recipe={recipe}
                 rules={rules}
                 catalogueNames={catalogueNames}
-                nameFoods={nameFoods}
+                nameIds={nameIds}
                 level={2}
               />
             ))}
@@ -106,7 +108,7 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
         recipe={recipe}
         rules={rules}
         catalogueNames={catalogueNames}
-        nameFoods={nameFoods}
+        nameIds={nameIds}
         level={1}
       />
       <p className="screen-only">
@@ -133,15 +135,16 @@ function Recipe({
   recipe,
   rules,
   catalogueNames,
-  nameFoods,
+  nameIds,
   level,
 }: {
   recipe: CheckedRecipe
   rules: PlanRules | null
   // Catalogue ids and their names; empty until the catalogue has loaded.
   catalogueNames: ReadonlyMap<string, string>
-  // A step with the catalogue's names for the ids it quotes; as written until it has loaded.
-  nameFoods: (step: string) => string
+  // The writer's text with the names of the gear and catalogue ids it quotes; catalogue ids stay
+  // as written until the catalogue has loaded.
+  nameIds: (text: string) => string
   level: 1 | 2
 }) {
   const { spec, draft, nutrition } = recipe
@@ -258,20 +261,20 @@ function Recipe({
           <Section id={stepsId}>Steps</Section>
           <ol className="steps" aria-labelledby={stepsId}>
             {draft.steps.map((step, index) => (
-              <li key={index}>{nameFoods(step)}</li>
+              <li key={index}>{nameIds(step)}</li>
             ))}
           </ol>
         </div>
       </div>
       <Section>Keeping it</Section>
       <p>
-        <strong>Store:</strong> {draft.store}
+        <strong>Store:</strong> {nameIds(draft.store)}
       </p>
       <p>
-        <strong>Swap:</strong> {draft.swap}
+        <strong>Swap:</strong> {nameIds(draft.swap)}
       </p>
       <p>
-        <strong>How it fits:</strong> {draft.fits}
+        <strong>How it fits:</strong> {nameIds(draft.fits)}
       </p>
       <Section>Numbers</Section>
       {nutrition === null ? (

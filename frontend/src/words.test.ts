@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { measureWords, stepNamer } from './words'
+import { measureWords, quotedNames, textNamer } from './words'
 
 describe('a household measure in words', () => {
   it('writes quarters and halves as fractions', () => {
@@ -30,7 +30,7 @@ describe('a household measure in words', () => {
   })
 })
 
-describe('food names in a step', () => {
+describe("names in the writer's text", () => {
   const names = new Map([
     ['brown_rice', 'Brown rice'],
     ['curry_leaves', 'Curry leaves'],
@@ -41,7 +41,7 @@ describe('food names in a step', () => {
     ['green_beans', 'French beans'],
     ['turmeric', 'Turmeric powder'],
   ])
-  const nameFoods = stepNamer(names)
+  const nameFoods = textNamer(names)
 
   it('puts the catalogue name in place of a catalogue id', () => {
     expect(nameFoods('Cook brown_rice in a pressure_cooker.')).toBe(
@@ -79,7 +79,25 @@ describe('food names in a step', () => {
     expect(nameFoods('Soak the brown_rice.')).toBe('Soak the brown rice.')
   })
 
+  it('shows a gear id by the label the gear row uses, in lower case mid-sentence', () => {
+    const nameIds = textNamer(quotedNames(names))
+
+    expect(nameIds('Cook brown_rice in a pressure_cooker, then a stovetop_pan.')).toBe(
+      'Cook brown rice in a pressure cooker, then a stovetop pan.',
+    )
+    expect(nameIds('Chill it in a jar_with_lid.')).toBe('Chill it in a jar with a lid.')
+    expect(nameIds('rice_cooker on, then wait.')).toBe('Rice cooker on, then wait.')
+  })
+
+  it('names gear before the catalogue has loaded, and leaves its ids as written', () => {
+    const nameIds = textNamer(quotedNames(new Map()))
+
+    expect(nameIds('Cook moong_dal in a pressure_cooker.')).toBe(
+      'Cook moong_dal in a pressure cooker.',
+    )
+  })
+
   it('leaves a step as written when there are no names', () => {
-    expect(stepNamer(new Map())('Cook brown_rice.')).toBe('Cook brown_rice.')
+    expect(textNamer(new Map())('Cook brown_rice.')).toBe('Cook brown_rice.')
   })
 })

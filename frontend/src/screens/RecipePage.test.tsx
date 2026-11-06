@@ -134,6 +134,54 @@ describe('the recipe page', () => {
     expect(ingredientNames()).toEqual(['Banana', 'Rolled oats', 'Curd'])
   })
 
+  it('shows a gear id in a step by its gear label', () => {
+    const saved = state()
+    saved.week!.recipes[0]!.draft.steps = ['Warm the oats in a pressure_cooker.']
+    render(<RecipePage state={saved} day="mon" slotId="breakfast" catalogue={catalogue()} />)
+
+    expect(screen.getByRole('list', { name: 'Steps' })).toHaveTextContent(
+      'Warm the oats in a pressure cooker.',
+    )
+  })
+
+  it('names the ids in the store, swap and fits lines as in the steps', () => {
+    const saved = state()
+    const { draft } = saved.week!.recipes[0]!
+    draft.store = 'Keep the soaked moong_dal in a jar_with_lid.'
+    draft.swap = 'Use moong_dal instead of oats.'
+    draft.fits = 'moong_dal adds protein to the morning.'
+    render(<RecipePage state={saved} day="mon" slotId="breakfast" catalogue={catalogue()} />)
+
+    expect(screen.getByText('Store:').parentElement).toHaveTextContent(
+      'Store: Keep the soaked moong dal in a jar with a lid.',
+    )
+    expect(screen.getByText('Swap:').parentElement).toHaveTextContent(
+      'Swap: Use moong dal instead of oats.',
+    )
+    expect(screen.getByText('How it fits:').parentElement).toHaveTextContent(
+      'How it fits: Moong dal adds protein to the morning.',
+    )
+    // What the week holds is left as the model wrote it.
+    expect(draft.swap).toBe('Use moong_dal instead of oats.')
+  })
+
+  it('names gear and leaves catalogue ids as written before the catalogue has loaded', () => {
+    const saved = state()
+    saved.week!.recipes[0]!.draft.swap = 'Cook moong_dal in a rice_cooker instead.'
+    render(
+      <RecipePage
+        state={saved}
+        day="mon"
+        slotId="breakfast"
+        catalogue={catalogue({ status: 'loading' })}
+      />,
+    )
+
+    expect(screen.getByText('Swap:').parentElement).toHaveTextContent(
+      'Swap: Cook moong_dal in a rice cooker instead.',
+    )
+  })
+
   it('shows the steps as written when the catalogue could not be loaded', () => {
     const saved = state()
     saved.week!.recipes[0]!.draft.steps = ['Soak the moong_dal.']
