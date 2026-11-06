@@ -64,7 +64,7 @@ CI replays a recorded slice of three plans and ten meals on every PR, with no ke
 
 ## Status
 
-Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. Milestone 5 has begun with the browser app: its design system, storage in the browser with export and import, a typed API client, the plan form, the week with live progress and replacing one recipe, and printable recipe pages, all checked with pa11y in CI. The tracking screens and a deployed demo come next.
+Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. Milestone 5 has begun with the browser app: its design system, storage in the browser with export and import, a typed API client, the plan form, the week with live progress and replacing one recipe, printable recipe pages, the log (each planned meal in one tap, with a swapped meal read from typed words and confirmed food by food) and the summary of the log by day and week, all checked with pa11y in CI. A deployed demo comes next.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
