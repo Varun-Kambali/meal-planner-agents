@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { measureWords, withFoodNames } from './words'
+import { measureWords, stepNamer } from './words'
 
 describe('a household measure in words', () => {
   it('writes quarters and halves as fractions', () => {
@@ -34,34 +34,52 @@ describe('food names in a step', () => {
   const names = new Map([
     ['brown_rice', 'Brown rice'],
     ['curry_leaves', 'Curry leaves'],
+    ['curd', 'Curd (dahi)'],
     ['egg', 'Egg'],
     ['egg_white', 'Egg white'],
-    ['onion', 'Onion'],
+    ['greek_yogurt', 'Greek yogurt (low fat)'],
+    ['green_beans', 'French beans'],
+    ['turmeric', 'Turmeric powder'],
   ])
+  const nameFoods = stepNamer(names)
 
   it('puts the catalogue name in place of a catalogue id', () => {
-    expect(withFoodNames('Cook brown_rice in a pressure_cooker.', names)).toBe(
+    expect(nameFoods('Cook brown_rice in a pressure_cooker.')).toBe(
       'Cook brown rice in a pressure_cooker.',
     )
-    expect(withFoodNames('Fry the onion and curry_leaves, then more curry_leaves.', names)).toBe(
-      'Fry the onion and curry leaves, then more curry leaves.',
+    expect(nameFoods('Fry the curry_leaves, then more curry_leaves.')).toBe(
+      'Fry the curry leaves, then more curry leaves.',
     )
   })
 
   it('keeps the name as written at the start of a step', () => {
-    expect(withFoodNames('brown_rice goes in first.', names)).toBe('Brown rice goes in first.')
+    expect(nameFoods('brown_rice goes in first.')).toBe('Brown rice goes in first.')
+  })
+
+  it('keeps the capital of a name that starts with a proper adjective', () => {
+    expect(nameFoods('Top with greek_yogurt and green_beans.')).toBe(
+      'Top with Greek yogurt (low fat) and French beans.',
+    )
+  })
+
+  it('leaves an id of one word as written, since it is already a word of the step', () => {
+    expect(nameFoods('Stir the turmeric into the curd and add an egg.')).toBe(
+      'Stir the turmeric into the curd and add an egg.',
+    )
   })
 
   it('replaces whole words only', () => {
-    expect(withFoodNames('Whisk the egg_white with 2 eggs.', names)).toBe(
-      'Whisk the egg white with 2 eggs.',
-    )
-    expect(withFoodNames('Add onions and brown_rice_flour.', names)).toBe(
-      'Add onions and brown_rice_flour.',
-    )
+    expect(nameFoods('Whisk the egg_white with 2 eggs.')).toBe('Whisk the egg white with 2 eggs.')
+    expect(nameFoods('Add brown_rice_flour.')).toBe('Add brown_rice_flour.')
+  })
+
+  it('names the foods of every step it is given, one after another', () => {
+    expect(nameFoods('Rinse the brown_rice.')).toBe('Rinse the brown rice.')
+    expect(nameFoods('Rinse the brown_rice.')).toBe('Rinse the brown rice.')
+    expect(nameFoods('Soak the brown_rice.')).toBe('Soak the brown rice.')
   })
 
   it('leaves a step as written when there are no names', () => {
-    expect(withFoodNames('Cook brown_rice.', new Map())).toBe('Cook brown_rice.')
+    expect(stepNamer(new Map())('Cook brown_rice.')).toBe('Cook brown_rice.')
   })
 })

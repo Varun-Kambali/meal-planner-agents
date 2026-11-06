@@ -3,7 +3,7 @@
 // worked out here. A step that quotes a catalogue id shows the food's name, once the catalogue
 // the shell holds has loaded.
 
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useMemo } from 'react'
 
 import type { DayKey } from '../api'
 import type { State } from '../storage'
@@ -18,7 +18,7 @@ import {
   NUTRIENT_KEYS,
   measureWords,
   shown,
-  withFoodNames,
+  stepNamer,
   type NutrientKey,
 } from '../words'
 import { Status } from './parts'
@@ -43,7 +43,8 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
   const { rules, week } = state
   const { need } = catalogue
   useEffect(() => need(), [need])
-  const catalogueNames = foodNames(catalogue.state)
+  const catalogueNames = useMemo(() => foodNames(catalogue.state), [catalogue.state])
+  const nameFoods = useMemo(() => stepNamer(catalogueNames), [catalogueNames])
   if (day === null || slotId === null) {
     const recipes = byWeekOrder(rules, week?.recipes ?? [])
     return (
@@ -69,7 +70,7 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
                 key={`${recipe.spec.day}-${recipe.spec.slot.id}`}
                 recipe={recipe}
                 rules={rules}
-                catalogueNames={catalogueNames}
+                nameFoods={nameFoods}
                 level={2}
               />
             ))}
@@ -100,7 +101,7 @@ export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
       <p className="screen-only">
         <a href="#/week">Back to the week</a>
       </p>
-      <Recipe recipe={recipe} rules={rules} catalogueNames={catalogueNames} level={1} />
+      <Recipe recipe={recipe} rules={rules} nameFoods={nameFoods} level={1} />
       <p className="screen-only">
         <button type="button" className="button-secondary" onClick={() => window.print()}>
           Print this recipe
@@ -124,13 +125,13 @@ const PRINTED: NutrientKey[] = [
 function Recipe({
   recipe,
   rules,
-  catalogueNames,
+  nameFoods,
   level,
 }: {
   recipe: CheckedRecipe
   rules: PlanRules | null
-  // Catalogue ids and their names, for the steps; empty until the catalogue has loaded.
-  catalogueNames: ReadonlyMap<string, string>
+  // A step with the catalogue's names for the ids it quotes; as written until it has loaded.
+  nameFoods: (step: string) => string
   level: 1 | 2
 }) {
   const { spec, draft, nutrition } = recipe
@@ -245,7 +246,7 @@ function Recipe({
           <Section id={stepsId}>Steps</Section>
           <ol className="steps" aria-labelledby={stepsId}>
             {draft.steps.map((step, index) => (
-              <li key={index}>{withFoodNames(step, catalogueNames)}</li>
+              <li key={index}>{nameFoods(step)}</li>
             ))}
           </ol>
         </div>

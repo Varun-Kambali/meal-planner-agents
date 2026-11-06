@@ -141,16 +141,29 @@ export function measureWords({ amount, unit }: HouseholdMeasure): string {
   return `${number} ${amount > 1 ? (PLURALS[unit] ?? unit) : unit}`
 }
 
-// A step with each catalogue id it quotes ("cook the brown_rice") given as the catalogue's name
-// for that food ("cook the brown rice"): whole words only, in lower case except at the start of
-// the step. For showing only: the step the week keeps is unchanged.
-export function withFoodNames(step: string, names: ReadonlyMap<string, string>): string {
-  if (names.size === 0) return step
-  const ids = [...names.keys()].map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  return step.replace(new RegExp(`\\b(?:${ids.join('|')})\\b`, 'g'), (id, at: number) => {
-    const name = names.get(id) ?? id
-    return at === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1)
-  })
+// The proper adjectives that start a name in data/catalogue.yaml ("Greek yogurt (low fat)",
+// "French beans"). A name that starts with one keeps its capital inside a sentence.
+const PROPER_ADJECTIVES: readonly string[] = ['Greek', 'French']
+
+// A catalogue name as it reads at `at` in a sentence: as written at the start, and otherwise in
+// lower case unless it starts with a proper adjective.
+function inSentence(name: string, at: number): string {
+  if (at === 0 || PROPER_ADJECTIVES.includes(name.split(' ')[0]!)) return name
+  return name.charAt(0).toLowerCase() + name.slice(1)
+}
+
+// Turns a step that quotes catalogue ids ("cook the brown_rice") into one with the catalogue's
+// names for those foods ("cook the brown rice"), whole words only. Only ids of more than one
+// word, joined by "_", are replaced: an id of one word ("curd") is already a word of the step and
+// stays as written. The pattern is built once for the names given. For showing only: the step
+// the week keeps is unchanged.
+export function stepNamer(names: ReadonlyMap<string, string>): (step: string) => string {
+  const ids = [...names.keys()]
+    .filter((id) => id.includes('_'))
+    .map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  if (ids.length === 0) return (step) => step
+  const quoted = new RegExp(`\\b(?:${ids.join('|')})\\b`, 'g')
+  return (step) => step.replace(quoted, (id, at: number) => inSentence(names.get(id) ?? id, at))
 }
 
 // The codes a slot's failure can carry, in words. Any other reason is already a sentence.
