@@ -137,7 +137,7 @@ def test_replace_works_the_numbers_out_again_and_takes_none_from_the_client(
     assert len(nutrition.meals) == 28 + 1
 
 
-@pytest.mark.parametrize("field", ["nutrition", "failures", "spec", "measures"])
+@pytest.mark.parametrize("field", ["nutrition", "failures", "spec"])
 def test_replace_refuses_a_recipe_that_brings_its_own_numbers(tmp_path: Path, field: str) -> None:
     week = a_week(tmp_path)
     body = replace_body(week)
@@ -148,6 +148,24 @@ def test_replace_refuses_a_recipe_that_brings_its_own_numbers(tmp_path: Path, fi
 
     assert response.status_code == 422
     assert any(p["loc"][:3] == ["body", "recipes", 0] for p in response.json()["detail"])
+
+
+def test_replace_refuses_measures_from_the_browser_as_a_field_it_does_not_take(
+    tmp_path: Path,
+) -> None:
+    """Measures well formed as the week holds them are still refused: the entry has no such
+    field, since the server works the measures out again."""
+    week = a_week(tmp_path)
+    body = replace_body(week)
+    body["recipes"][0]["measures"] = [{"amount": 1, "unit": "cup"}, None, None]
+
+    with serving(tmp_path, model=lunch_again()) as client:
+        response = client.post("/v1/week/replace", json=body)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {"loc": ["body", "recipes", 0, "measures"], "msg": "Extra inputs are not permitted"}
+    ]
 
 
 def test_replace_for_a_slot_the_plan_lacks_is_422_naming_it(tmp_path: Path) -> None:
