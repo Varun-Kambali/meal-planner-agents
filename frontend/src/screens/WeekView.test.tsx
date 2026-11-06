@@ -1,5 +1,8 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+
+import { ApiError } from '../api'
 
 import { sampleState } from '../test/helpers'
 import { daySummary, weekSummary } from '../test/tracking'
@@ -48,6 +51,21 @@ describe('the summary of the log', () => {
       'href',
       '#/summary/2026-10-27',
     )
+  })
+
+  it('says why the log could not be worked out, with a way to try again', async () => {
+    const failed = summary({
+      status: 'failed',
+      error: new ApiError(429, 'too many requests, try again later', [], null, 30),
+    })
+    render(<WeekView state={sampleState()} summary={failed} />)
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(
+      'The log could not be worked out. The API has had too many requests. Try again in 30 seconds.',
+    )
+    await userEvent.setup().click(within(alert).getByRole('button', { name: 'Try again' }))
+    expect(failed.retry).toHaveBeenCalledTimes(1)
   })
 
   it('asks for nothing while nothing is logged', () => {

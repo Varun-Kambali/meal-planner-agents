@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { SaveOutcome } from '../session'
-import { ValidationFailed, type State } from '../storage'
+import { StorageUnavailable, ValidationFailed, type State } from '../storage'
 import { catchDownloads, fakeApi, json, sampleState } from '../test/helpers'
 import { computeReply, readReply } from '../test/tracking'
 import { Today } from './Today'
@@ -261,6 +261,32 @@ describe('the swap flow when a request fails', () => {
     expect(reads).toBe(2)
   })
 
+  it('says why a search did not run, and searches again when asked', async () => {
+    let searches = 0
+    fakeApi({
+      '/v1/log/read': () => json(readReply()),
+      '/v1/foods/search': () =>
+        (searches += 1) === 1
+          ? json({ detail: 'nutrition-mcp could not be reached' }, 503)
+          : json([{ id: 'paneer', name: 'Paneer', kind: 'ingredient', units: ['g'] }]),
+    })
+    const { user } = show()
+    const lunch = await readLunch(user)
+    const chapati = within(lunch).getByRole('listitem', { name: /^Chapati/ })
+    await user.click(within(chapati).getByRole('button', { name: 'Change Chapati' }))
+    await user.click(within(chapati).getByRole('button', { name: 'Change food' }))
+    await user.click(within(chapati).getByRole('button', { name: 'Search' }))
+
+    const alert = await within(chapati).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'The search did not run. The API said: nutrition-mcp could not be reached.',
+    )
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+
+    expect(await within(chapati).findByRole('button', { name: 'Use Paneer' })).toBeInTheDocument()
+    expect(searches).toBe(2)
+  })
+
   it('searches for another food only when asked, and says why its numbers were refused', async () => {
     const calls = fakeApi({
       '/v1/log/read': () => json(readReply()),
@@ -496,6 +522,39 @@ describe('logging a meal with one tap', () => {
       { date: '2026-11-02', slot_id: 'breakfast', status: 'skipped', items: [] },
     ])
     expect(screen.queryByRole('region', { name: 'The log is full' })).not.toBeInTheDocument()
+  })
+
+  it('says so when the full log cannot be saved as a file, and offers no new log', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      throw new DOMException('Downloads are blocked.', 'SecurityError')
+    })
+    const { saves, user } = show(sampleState())
+    await user.click(within(meal('Breakfast')).getByRole('button', { name: 'Skipped' }))
+    const notice = await screen.findByRole('region', { name: 'The log is full' })
+
+    await user.click(within(notice).getByRole('button', { name: 'Save the log as a file' }))
+
+    expect(within(notice).getByRole('alert')).toHaveTextContent(
+      'The file could not be made: Downloads are blocked.',
+    )
+    expect(
+      within(notice).queryByRole('button', { name: 'Start a new log with this meal' }),
+    ).not.toBeInTheDocument()
+    expect(saves).toHaveLength(0)
+  })
+
+  it('says a logged meal is kept on the page when the browser cannot keep it', async () => {
+    const { user } = show(unlogged(), () => ({ ok: false, error: new StorageUnavailable() }))
+    const breakfast = meal('Breakfast')
+
+    await user.click(within(breakfast).getByRole('button', { name: 'Skipped' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Breakfast logged as skipped. It is kept on this page, but not saved in this browser.',
+      ),
+    )
+    expect(breakfast).toHaveTextContent('Logged: skipped.')
   })
 
   it('says a meal was not saved when the browser refuses the log, and changes nothing', async () => {
