@@ -98,7 +98,8 @@ export function readReply(): ReadResult {
       unit: 'piece',
       grams: 120,
       status: 'matched',
-      valid_units: [],
+      // nutrition-mcp's units for chapati, then the catalogue's measures (Catalogue.valid_units).
+      valid_units: ['g', 'roti', 'piece', 'serving'],
       nutrition: chapatiNumbers,
     },
     {

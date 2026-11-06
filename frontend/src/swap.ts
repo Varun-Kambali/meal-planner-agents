@@ -30,11 +30,14 @@ export interface Change {
   units: string[]
 }
 
+// The units the person may choose from: the reader's list for the food (nutrition-mcp's units,
+// then the catalogue's measures), with the unit a matched food was read in first when the list
+// spells it otherwise ("pieces" for "piece"), so changing only the amount keeps it.
 function unitsOf(item: ReadItem): string[] {
-  if (item.status !== 'matched') return item.valid_units
-  // The reader lists no units for a food it matched; nutrition-mcp's are in its numbers.
-  const own = Object.keys(item.nutrition?.food.units ?? {})
-  return [...new Set([...(item.unit === null ? [] : [item.unit]), ...own])]
+  if (item.status !== 'matched' || item.unit === null || item.valid_units.includes(item.unit)) {
+    return item.valid_units
+  }
+  return [item.unit, ...item.valid_units]
 }
 
 export function swapItems(result: ReadResult): SwapItem[] {

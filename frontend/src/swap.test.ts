@@ -7,10 +7,21 @@ describe('a swapped meal being confirmed', () => {
   it('starts from the reader, with a matched food unconfirmed and its units known', () => {
     const [chapati, curd, rice, sabzi] = swapItems(readReply())
 
-    expect(chapati).toMatchObject({ status: 'matched', confirmed: false, units: ['piece', 'g'] })
+    expect(chapati).toMatchObject({
+      status: 'matched',
+      confirmed: false,
+      units: ['g', 'roti', 'piece', 'serving'],
+    })
     expect(curd).toMatchObject({ status: 'needs_amount', amount: null, units: ['g', 'katori'] })
     expect(rice).toMatchObject({ status: 'unknown_unit', amount: 0.5, unit: 'plate' })
     expect(sabzi).toMatchObject({ status: 'missing', food: null })
+  })
+
+  it('keeps the unit a matched food was read in first when the list lacks that spelling', () => {
+    const reply = readReply()
+    reply.items[0] = { ...reply.items[0]!, unit: 'pieces' }
+
+    expect(swapItems(reply)[0]!.units).toEqual(['pieces', 'g', 'roti', 'piece', 'serving'])
   })
 
   it('says what is left before saving, and never asks anything of a missing food', () => {

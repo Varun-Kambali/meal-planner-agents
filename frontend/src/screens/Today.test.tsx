@@ -236,6 +236,27 @@ it("keeps a food confirmed while another food's numbers are worked out", async (
   expect(chapati).toHaveTextContent('Confirmed')
 })
 
+it("changes a found food's amount in any of its units without a search", async () => {
+  const calls = fakeApi({
+    '/v1/log/read': () => json(readReply()),
+    '/v1/log/compute': () => json(computeReply()),
+  })
+  const { user } = show()
+  const lunch = await readLunch(user)
+  const chapati = within(lunch).getByRole('listitem', { name: /^Chapati/ })
+
+  await user.click(within(chapati).getByRole('button', { name: 'Change Chapati' }))
+
+  const unit = within(chapati).getByLabelText('Unit')
+  expect(unit).toHaveValue('piece')
+  expect(
+    within(unit)
+      .getAllByRole('option')
+      .map((option) => option.textContent),
+  ).toEqual(['Choose a unit', 'g', 'roti', 'piece', 'serving'])
+  expect(calls.filter((call) => call.path.startsWith('/v1/foods/search'))).toHaveLength(0)
+})
+
 describe('the swap flow when a request fails', () => {
   it('says why the meal was not read, and reads it again when asked', async () => {
     let reads = 0
