@@ -124,10 +124,10 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
     if (items === null) return null
     const next = withChange(items, key, change)
     const sent = counted(next)
-    const read = latestRead.current
+    const askedUnder = latestRead.current
     try {
       const result = await computeMeal(logItems(sent), { signal: call() })
-      if (read !== latestRead.current) return null
+      if (askedUnder !== latestRead.current) return null
       setItems(computed(next, sent, result.items, key))
       setTotal(result)
       setChanging((open) => new Set([...open].filter((k) => k !== key)))
