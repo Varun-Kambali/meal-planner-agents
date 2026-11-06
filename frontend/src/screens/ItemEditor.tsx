@@ -32,6 +32,8 @@ export function ItemEditor({
   const [working, setWorking] = useState(false)
   const [searching, setSearching] = useState(false)
   const id = useId()
+  // Held while another food's numbers are worked out, not this one's.
+  const held = computing && !working
   const amountInput = useRef<HTMLInputElement>(null)
 
   // Never rejects: a refusal is shown under the fields.
@@ -106,6 +108,7 @@ export function ItemEditor({
             type="submit"
             className="button-secondary"
             aria-disabled={working || computing}
+            aria-describedby={held ? `${id}-held` : undefined}
             aria-label={`Confirm ${food.name}`}
           >
             Confirm
@@ -124,6 +127,12 @@ export function ItemEditor({
             Change food
           </button>
         </div>
+        {held && (
+          <p id={`${id}-held`} className="hint">
+            Another food&apos;s numbers are being worked out; this one can be confirmed once they
+            are in.
+          </p>
+        )}
         <output>{working ? 'Working out the numbers.' : ''}</output>
       </form>
       {failed !== null && (

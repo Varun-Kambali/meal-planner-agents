@@ -206,6 +206,9 @@ it("works out one food's numbers at a time, since each compute sends every count
   await user.selectOptions(within(rice).getByLabelText('Unit'), 'katori')
   const confirmRice = within(rice).getByRole('button', { name: 'Confirm Steamed rice' })
   expect(confirmRice).toHaveAttribute('aria-disabled', 'true')
+  expect(confirmRice).toHaveAccessibleDescription(
+    "Another food's numbers are being worked out; this one can be confirmed once they are in.",
+  )
   await user.click(confirmRice)
   expect(calls.filter((call) => call.path === '/v1/log/compute')).toHaveLength(1)
 
