@@ -8,7 +8,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 
-import { computeMeal, readMeal, searchFoods } from '../api'
+import { computeMeal, readMeal } from '../api'
 import {
   computed,
   counted,
@@ -20,8 +20,10 @@ import {
   type Change,
   type SwapItem,
 } from '../swap'
-import type { FoodOption, LogItem, MealResult } from '../types'
+import type { LogItem, MealResult } from '../types'
+import { isAbort, useCalls } from '../useCalls'
 import { NUTRIENTS, measureWords, shown, type NutrientKey } from '../words'
+import { ItemEditor } from './ItemEditor'
 import { RequestProblem, Status } from './parts'
 
 // The longest typed meal the reader takes (MEAL_PLANNER_MAX_MEAL_TEXT_CHARS).
@@ -44,26 +46,6 @@ export interface SwapFlowProps {
 }
 
 type Reading = { status: 'idle' } | { status: 'reading' } | { status: 'failed'; error: unknown }
-
-function isAbort(error: unknown): boolean {
-  return (error as { name?: unknown } | null)?.name === 'AbortError'
-}
-
-// The calls this flow has open, so that closing it stops them.
-function useCalls(): () => AbortSignal {
-  const open = useRef(new Set<AbortController>())
-  useEffect(() => {
-    const calls = open.current
-    return () => {
-      for (const call of calls) call.abort()
-    }
-  }, [])
-  return () => {
-    const controller = new AbortController()
-    open.current.add(controller)
-    return controller.signal
-  }
-}
 
 export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
   const [text, setText] = useState('')
@@ -367,257 +349,6 @@ function FoodRow({
         />
       )}
     </li>
-  )
-}
-
-// The amount, the unit and the food of one item, as the person changes them. Confirming asks the
-// compute route for the numbers; a refusal is shown here with a way to try again.
-function ItemEditor({
-  item,
-  computing,
-  onConfirm,
-  onCancel,
-}: {
-  item: SwapItem
-  // Another food's numbers are being worked out, so this one waits.
-  computing: boolean
-  onConfirm: (change: Change) => Promise<unknown>
-  onCancel: (() => void) | null
-}) {
-  const [food, setFood] = useState(item.food!)
-  const [units, setUnits] = useState(item.units)
-  const [amount, setAmount] = useState(item.amount === null ? '' : String(item.amount))
-  const [unit, setUnit] = useState(
-    item.unit !== null && item.units.includes(item.unit) ? item.unit : '',
-  )
-  const [problem, setProblem] = useState<string | null>(null)
-  const [failed, setFailed] = useState<unknown>(null)
-  const [working, setWorking] = useState(false)
-  const [searching, setSearching] = useState(false)
-  const id = useId()
-  const amountInput = useRef<HTMLInputElement>(null)
-
-  // Never rejects: a refusal is shown under the fields.
-  async function confirm(): Promise<void> {
-    if (working || computing) return
-    const value = Number(amount.trim())
-    if (amount.trim() === '' || !Number.isFinite(value) || value <= 0) {
-      setProblem('Give the amount as a number above 0.')
-      amountInput.current?.focus()
-      return
-    }
-    if (unit === '') {
-      setProblem('Choose a unit.')
-      return
-    }
-    setProblem(null)
-    setFailed(null)
-    setWorking(true)
-    const error = await onConfirm({ food, amount: value, unit, units })
-    setWorking(false)
-    if (error !== null) setFailed(error)
-  }
-
-  return (
-    <div className="item-editor">
-      <form
-        noValidate
-        onSubmit={(event: FormEvent) => {
-          event.preventDefault()
-          void confirm()
-        }}
-      >
-        <div className="field-grid">
-          <div className="field">
-            <label htmlFor={`${id}-amount`}>Amount</label>
-            <input
-              id={`${id}-amount`}
-              ref={amountInput}
-              className="input"
-              inputMode="decimal"
-              autoComplete="off"
-              value={amount}
-              aria-invalid={problem === null ? undefined : true}
-              aria-describedby={problem === null ? undefined : `${id}-problem`}
-              onChange={(event) => setAmount(event.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor={`${id}-unit`}>Unit</label>
-            <select
-              id={`${id}-unit`}
-              className="input"
-              value={unit}
-              onChange={(event) => setUnit(event.target.value)}
-            >
-              <option value="">Choose a unit</option>
-              {units.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {problem !== null && (
-          <p id={`${id}-problem`} className="field-error">
-            {problem}
-          </p>
-        )}
-        <div className="actions">
-          <button
-            type="submit"
-            className="button-secondary"
-            aria-disabled={working || computing}
-            aria-label={`Confirm ${food.name}`}
-          >
-            Confirm
-          </button>
-          {onCancel !== null && (
-            <button type="button" className="button-secondary" onClick={onCancel}>
-              Cancel
-            </button>
-          )}
-          <button
-            type="button"
-            className="button-text"
-            aria-expanded={searching}
-            onClick={() => setSearching((open) => !open)}
-          >
-            Change food
-          </button>
-        </div>
-        <output>{working ? 'Working out the numbers.' : ''}</output>
-      </form>
-      {failed !== null && (
-        <RequestProblem
-          what="The numbers were not worked out."
-          error={failed}
-          onRetry={() => void confirm()}
-        />
-      )}
-      {searching && (
-        <FoodSearch
-          initial={item.name}
-          onChoose={(option) => {
-            setFood({ id: option.id, name: option.name })
-            setUnits(option.units)
-            setUnit((current) => (option.units.includes(current) ? current : ''))
-            setSearching(false)
-            amountInput.current?.focus()
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-type Search =
-  | { status: 'idle' }
-  | { status: 'searching' }
-  | { status: 'found'; options: FoodOption[] }
-  | { status: 'failed'; error: unknown }
-
-// nutrition-mcp's foods under a name the person types, asked for when the form is sent.
-function FoodSearch({
-  initial,
-  onChoose,
-}: {
-  initial: string
-  onChoose: (option: FoodOption) => void
-}) {
-  const [query, setQuery] = useState(initial)
-  const [search, setSearch] = useState<Search>({ status: 'idle' })
-  const [problem, setProblem] = useState<string | null>(null)
-  const call = useCalls()
-  const id = useId()
-  const input = useRef<HTMLInputElement>(null)
-  useEffect(() => input.current?.focus(), [])
-
-  // Never rejects: a search that fails is said to, with a way to search again.
-  async function find(): Promise<void> {
-    if (query.trim() === '') {
-      setProblem('Type a food name first.')
-      return
-    }
-    setProblem(null)
-    setSearch({ status: 'searching' })
-    try {
-      const options = await searchFoods(query.trim(), { signal: call() })
-      setSearch({ status: 'found', options })
-    } catch (error) {
-      if (!isAbort(error)) setSearch({ status: 'failed', error })
-    }
-  }
-
-  return (
-    <div className="food-search">
-      <form
-        noValidate
-        onSubmit={(event: FormEvent) => {
-          event.preventDefault()
-          if (search.status !== 'searching') void find()
-        }}
-      >
-        <label htmlFor={`${id}-q`}>Food name</label>
-        <div className="inline">
-          <input
-            id={`${id}-q`}
-            ref={input}
-            className="input"
-            autoComplete="off"
-            maxLength={100}
-            value={query}
-            aria-invalid={problem === null ? undefined : true}
-            aria-describedby={problem === null ? undefined : `${id}-problem`}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <button
-            type="submit"
-            className="button-secondary"
-            aria-disabled={search.status === 'searching'}
-          >
-            Search
-          </button>
-        </div>
-        {problem !== null && (
-          <p id={`${id}-problem`} className="field-error">
-            {problem}
-          </p>
-        )}
-        <output>
-          {search.status === 'searching' && 'Searching.'}
-          {search.status === 'found' &&
-            (search.options.length === 0
-              ? 'nutrition-mcp has no food under that name.'
-              : `${search.options.length} ${search.options.length === 1 ? 'food' : 'foods'} found.`)}
-        </output>
-      </form>
-      {search.status === 'failed' && (
-        <RequestProblem
-          what="The search did not run."
-          error={search.error}
-          onRetry={() => void find()}
-        />
-      )}
-      {search.status === 'found' && search.options.length > 0 && (
-        <ul className="choices-found" aria-label="Foods found">
-          {search.options.map((option) => (
-            <li key={option.id}>
-              {option.name} <span className="meta">{option.kind}</span>{' '}
-              <button
-                type="button"
-                className="button-text"
-                aria-label={`Use ${option.name}`}
-                onClick={() => onChoose(option)}
-              >
-                Use
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   )
 }
 

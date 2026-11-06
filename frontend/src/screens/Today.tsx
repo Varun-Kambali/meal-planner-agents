@@ -3,28 +3,18 @@
 // date's planned meals are the saved week's recipes for its weekday. The log keeps foods and
 // amounts only; the summary works the numbers out again (ADR 0007).
 
-import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { addDays, dateWords, weekdayOf } from '../dates'
 import { saveFile, today as fileDate } from '../download'
-import {
-  MAX_MEAL_GRAMS,
-  entryAt,
-  followable,
-  recipeGrams,
-  recipeItems,
-  spanOf,
-  tooLong,
-  withEntry,
-  type MealStatus,
-  type Span,
-} from '../mealLog'
+import { entryAt, followable, recipeItems, tooLong, withEntry, type MealStatus } from '../mealLog'
 import { dayHref, logHref, recipeHref } from '../route'
 import type { SaveOutcome } from '../session'
 import { ValidationFailed, exportFile, type State } from '../storage'
 import type { CheckedRecipe, LogEntry, LogItem, Slot } from '../types'
-import { LOG_DAYS } from '../validate'
-import { MEAL_STATUSES, messageOf, shown } from '../words'
+import { MEAL_STATUSES, messageOf } from '../words'
+import { AmountPanel } from './AmountPanel'
+import { LogFull, type Waiting } from './LogFull'
 import { SwapFlow } from './SwapFlow'
 
 export interface TodayProps {
@@ -43,14 +33,6 @@ const BUTTONS: [MealStatus, string][] = [
 ]
 
 type Panel = { slotId: string; status: 'different_amount' | 'swapped' } | null
-
-// A meal the log could not take without running over a week, held until the person decides.
-interface Waiting {
-  entry: LogEntry
-  span: Span
-  exported: string | null
-  problem: string | null
-}
 
 function logged(entry: LogEntry | undefined): string {
   if (entry === undefined) return 'Not logged yet.'
@@ -315,187 +297,6 @@ function Meal({
       )}
       {panel === 'swapped' && (
         <SwapFlow onSave={(items) => onLog('swapped', items)} onCancel={() => onClose('swapped')} />
-      )}
-    </section>
-  )
-}
-
-type Portion = 'half' | 'more' | 'grams'
-
-const PORTIONS: [Portion, string][] = [
-  ['half', 'Half'],
-  ['more', 'One and a half'],
-  ['grams', 'A weight in grams'],
-]
-
-// How much of the recipe was eaten: every ingredient is scaled by the same factor, half, one and
-// a half, or the grams of the whole meal eaten over the recipe's own weight.
-function AmountPanel({
-  recipe,
-  onSave,
-  onCancel,
-}: {
-  recipe: CheckedRecipe
-  onSave: (items: LogItem[]) => Promise<boolean>
-  onCancel: () => void
-}) {
-  const [portion, setPortion] = useState<Portion | null>(null)
-  const [grams, setGrams] = useState('')
-  const [problem, setProblem] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const name = useId()
-  const id = useId()
-  const first = useRef<HTMLInputElement>(null)
-  const gramsInput = useRef<HTMLInputElement>(null)
-  useEffect(() => first.current?.focus(), [])
-  const weight = recipeGrams(recipe)
-
-  async function submit(event: FormEvent): Promise<void> {
-    event.preventDefault()
-    if (saving) return
-    let factor: number
-    if (portion === null) {
-      setProblem('Choose how much of the recipe you ate.')
-      first.current?.focus()
-      return
-    }
-    if (portion === 'grams') {
-      const value = Number(grams.trim())
-      if (grams.trim() === '' || !Number.isFinite(value) || value <= 0 || value > MAX_MEAL_GRAMS) {
-        setProblem(`Give the grams as a number above 0 and at most ${MAX_MEAL_GRAMS}.`)
-        gramsInput.current?.focus()
-        return
-      }
-      factor = value / weight
-    } else factor = portion === 'half' ? 0.5 : 1.5
-    setProblem(null)
-    setSaving(true)
-    const done = await onSave(recipeItems(recipe, factor))
-    if (!done) setSaving(false)
-  }
-
-  return (
-    <form className="panel" noValidate onSubmit={(event) => void submit(event)}>
-      <fieldset className="choices">
-        <legend>How much of the recipe did you eat?</legend>
-        <div className="choice-list">
-          {PORTIONS.map(([value, label], index) => (
-            <label key={value} className="choice">
-              <input
-                type="radio"
-                name={name}
-                value={value}
-                ref={index === 0 ? first : undefined}
-                checked={portion === value}
-                aria-describedby={
-                  problem !== null && portion === null ? `${id}-problem` : undefined
-                }
-                onChange={() => setPortion(value)}
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      {portion === 'grams' && (
-        <div className="field">
-          <label htmlFor={`${id}-grams`}>Grams of the whole meal</label>
-          <p id={`${id}-hint`} className="hint">
-            The recipe as written weighs {shown(weight)} g. Every ingredient is scaled to match.
-          </p>
-          <input
-            id={`${id}-grams`}
-            ref={gramsInput}
-            className="input"
-            inputMode="decimal"
-            autoComplete="off"
-            value={grams}
-            aria-invalid={problem === null ? undefined : true}
-            aria-describedby={problem === null ? `${id}-hint` : `${id}-hint ${id}-problem`}
-            onChange={(event) => setGrams(event.target.value)}
-          />
-        </div>
-      )}
-      {problem !== null && (
-        <p id={`${id}-problem`} className="field-error">
-          {problem}
-        </p>
-      )}
-      <div className="actions">
-        <button type="submit" className="button-primary" aria-disabled={saving}>
-          Save the amount
-        </button>
-        <button type="button" className="button-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    </form>
-  )
-}
-
-// The log would run over a week with this meal. Nothing is saved until the person has kept the
-// log as a file; only then can a new log start with the meal.
-function LogFull({
-  waiting,
-  log,
-  meal,
-  today,
-  headingRef,
-  onExport,
-  onStart,
-  onCancel,
-}: {
-  waiting: Waiting
-  log: LogEntry[]
-  meal: string
-  today: string
-  headingRef: RefObject<HTMLHeadingElement | null>
-  onExport: () => void
-  onStart: () => void
-  onCancel: () => void
-}) {
-  const headingId = useId()
-  const now = spanOf(log)
-  const exported = waiting.exported !== null
-  return (
-    <section className="notice log-full" aria-labelledby={headingId}>
-      <h2 id={headingId} ref={headingRef} tabIndex={-1}>
-        The log is full
-      </h2>
-      <p>
-        A log covers at most {LOG_DAYS} days in a row.
-        {now !== null &&
-          (now.first === now.last
-            ? ` Yours has meals on ${dateWords(now.first, today)} only.`
-            : ` Yours runs from ${dateWords(now.first, today)} to ${dateWords(now.last, today)}.`)}{' '}
-        Logging {meal} on {dateWords(waiting.entry.date, today)} would make it {waiting.span.days}{' '}
-        days, so nothing has been saved.
-      </p>
-      <p>Save the log as a file to keep it. Then a new log can start with this meal.</p>
-      <div className="actions">
-        <button
-          type="button"
-          className={exported ? 'button-secondary' : 'button-primary'}
-          onClick={onExport}
-        >
-          Save the log as a file
-        </button>
-        <button type="button" className="button-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-      <output>{exported && `Saved as ${waiting.exported}.`}</output>
-      {waiting.problem !== null && <p role="alert">{waiting.problem}</p>}
-      {exported && (
-        <div className="confirm">
-          <p>
-            The file keeps every meal logged so far. The new log in this browser starts with this
-            meal, and the meals of the old one are in the file only.
-          </p>
-          <button type="button" className="button-primary" onClick={onStart}>
-            Start a new log with this meal
-          </button>
-        </div>
       )}
     </section>
   )
