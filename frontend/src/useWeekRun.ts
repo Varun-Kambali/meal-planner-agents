@@ -17,7 +17,8 @@ import { advance, startProgress, type Progress } from './progress'
 import type { SaveOutcome } from './session'
 import { ValidationFailed, type State } from './storage'
 import type { WeekResult } from './types'
-import { DAY_NAMES, messageOf, reasonWords } from './words'
+import { isAbort } from './useCalls'
+import { DAY_NAMES, messageOf, reasonWords, refusalWords } from './words'
 
 export type Running = { what: 'week' } | { what: 'replace'; day: DayKey; slotId: string }
 
@@ -47,10 +48,6 @@ export function mergeUnwritten(
   return [...before.filter(([d, slot]) => d !== day || slot !== slotId), ...after]
 }
 
-function isAbort(error: unknown): boolean {
-  return (error as { name?: unknown } | null)?.name === 'AbortError'
-}
-
 function failure(error: unknown, run: Running): Outcome {
   if (isAbort(error)) return { kind: 'stopped', run }
   if (error instanceof ApiError) {
@@ -65,21 +62,7 @@ function failure(error: unknown, run: Running): Outcome {
         other: error.problems.filter((problem) => !inRules(problem.loc)).map((p) => p.msg),
       }
     }
-    if (error.status === 429) {
-      const wait = error.retryAfter ?? 60
-      return {
-        kind: 'failed',
-        run,
-        message: `The API has had too many requests. Try again in ${wait} seconds.`,
-      }
-    }
-    if (error.status === 0)
-      return {
-        kind: 'failed',
-        run,
-        message: 'The API could not be reached; check the connection and try again.',
-      }
-    return { kind: 'failed', run, message: `The API said: ${error.message}.` }
+    return { kind: 'failed', run, message: refusalWords(error) }
   }
   if (error instanceof StreamFailed) {
     const what = run.what === 'week' ? 'the week' : 'the recipe'
