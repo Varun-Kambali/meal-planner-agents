@@ -49,6 +49,11 @@ export function Today({ state, date, today, onSave }: TodayProps) {
   const [said, setSaid] = useState('')
   const [problem, setProblem] = useState<{ slotId: string; message: string } | null>(null)
   const [waiting, setWaiting] = useState<Waiting | null>(null)
+  // One meal is saved at a time. Each save is the log as this screen last had it plus one entry,
+  // so a second save started before the first lands would leave the first one out. The state
+  // holds the one-tap buttons back on screen; the ref stops a save asked for in the same moment.
+  const [saving, setSaving] = useState(false)
+  const savingNow = useRef(false)
   // The button the focus goes back to once a meal is saved or its panel closes, by its meal and
   // status; it is moved after the render that closes the panel.
   const focusTo = useRef<string | null>(null)
@@ -89,9 +94,20 @@ export function Today({ state, date, today, onSave }: TodayProps) {
   // Saves the state; true once it is saved or kept on the page. One the browser refuses because
   // it would not load again is said to under the meal, and nothing changes.
   async function commit(next: State, entry: LogEntry): Promise<boolean> {
+    if (savingNow.current) return false
+    savingNow.current = true
+    setSaving(true)
     setProblem(null)
-    const outcome = await onSave(next)
+    setSaid('Saving.')
+    let outcome: SaveOutcome
+    try {
+      outcome = await onSave(next)
+    } finally {
+      savingNow.current = false
+      setSaving(false)
+    }
     if (!outcome.ok && outcome.error instanceof ValidationFailed) {
+      setSaid('')
       setProblem({ slotId: entry.slot_id, message: `Not saved: ${outcome.error.message}.` })
       return false
     }
@@ -107,6 +123,7 @@ export function Today({ state, date, today, onSave }: TodayProps) {
   // A log covers at most a week. A meal that would make it longer is held, and nothing is saved,
   // until the person has saved the log as a file and starts a new one.
   async function logMeal(entry: LogEntry): Promise<boolean> {
+    if (savingNow.current) return false
     const span = tooLong(log, entry)
     if (span !== null) {
       setWaiting({ entry, span, exported: null, problem: null })
@@ -187,6 +204,7 @@ export function Today({ state, date, today, onSave }: TodayProps) {
           entry={entryAt(log, date, slot.id)}
           panel={panel?.slotId === slot.id ? panel.status : null}
           problem={problem?.slotId === slot.id ? problem.message : null}
+          saving={saving}
           buttonRef={(status, element) => {
             const key = `${slot.id} ${status}`
             if (element === null) buttons.current.delete(key)
@@ -214,6 +232,7 @@ function Meal({
   entry,
   panel,
   problem,
+  saving,
   buttonRef,
   onOpen,
   onClose,
@@ -224,6 +243,8 @@ function Meal({
   entry: LogEntry | undefined
   panel: 'different_amount' | 'swapped' | null
   problem: string | null
+  // A meal is being saved, so a one-tap button waits.
+  saving: boolean
   buttonRef: (status: MealStatus, element: HTMLButtonElement | null) => void
   onOpen: (status: 'different_amount' | 'swapped') => void
   onClose: (status: MealStatus) => void
@@ -258,17 +279,18 @@ function Meal({
           const needsRecipe = status === 'as_planned' || status === 'different_amount'
           const off = needsRecipe && !usable
           const opens = status === 'different_amount' || status === 'swapped'
+          const waits = !opens && saving
           return (
             <button
               key={status}
               type="button"
               className="button-secondary"
               ref={(element) => buttonRef(status, element)}
-              aria-disabled={off ? true : undefined}
+              aria-disabled={off || waits ? true : undefined}
               aria-describedby={off ? reasonId : undefined}
               aria-expanded={opens ? panel === status : undefined}
               onClick={() => {
-                if (off) return
+                if (off || waits) return
                 if (status === 'different_amount' || status === 'swapped') onOpen(status)
                 else if (status === 'as_planned' && usable) void onLog(status, recipeItems(recipe))
                 else void onLog('skipped', [])

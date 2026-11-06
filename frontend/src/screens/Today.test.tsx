@@ -20,12 +20,13 @@ function Harness({
   start: State
   date: string
   saves: State[]
-  outcome?: (next: State) => SaveOutcome
+  outcome?: (next: State) => SaveOutcome | Promise<SaveOutcome>
 }) {
   const [state, setState] = useState(start)
+  // As the shell does, the state changes once the browser has saved it.
   const save = async (next: State): Promise<SaveOutcome> => {
     saves.push(next)
-    const result = outcome(next)
+    const result = await outcome(next)
     if (result.ok || !(result.error instanceof ValidationFailed)) setState(next)
     return result
   }
@@ -40,7 +41,7 @@ function unlogged(): State {
 // Monday 2 November in a plan whose sample week has Monday's breakfast and lunch.
 function show(
   start: State = unlogged(),
-  outcome?: (next: State) => SaveOutcome,
+  outcome?: (next: State) => SaveOutcome | Promise<SaveOutcome>,
 ): { saves: State[]; user: UserEvent } {
   const saves: State[] = []
   const user = userEvent.setup()
@@ -323,6 +324,31 @@ describe('logging a meal with one tap', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Breakfast logged as planned.'),
     )
     expect(button).toHaveFocus()
+  })
+
+  it('saves one meal at a time, so a second tap cannot drop the first', async () => {
+    let release: () => void = () => undefined
+    const late = new Promise<void>((resolve) => (release = resolve))
+    const { saves, user } = show(unlogged(), async () => {
+      if (saves.length === 1) await late
+      return { ok: true }
+    })
+    const lunchPlanned = within(meal('Lunch')).getByRole('button', { name: 'As planned' })
+
+    await user.click(within(meal('Breakfast')).getByRole('button', { name: 'Skipped' }))
+    expect(lunchPlanned).toHaveAttribute('aria-disabled', 'true')
+    await user.click(lunchPlanned)
+    expect(saves).toHaveLength(1)
+    release()
+    await waitFor(() => expect(meal('Breakfast')).toHaveTextContent('Logged: skipped.'))
+    await waitFor(() => expect(lunchPlanned).not.toHaveAttribute('aria-disabled'))
+    await user.click(lunchPlanned)
+
+    await waitFor(() => expect(saves).toHaveLength(2))
+    expect(saves[1]!.log.entries.map((entry) => [entry.slot_id, entry.status])).toEqual([
+      ['breakfast', 'skipped'],
+      ['lunch', 'as_planned'],
+    ])
   })
 
   it("replaces the meal's entry when it is logged again, and a skipped meal lists no food", async () => {
