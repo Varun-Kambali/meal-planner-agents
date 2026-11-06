@@ -214,6 +214,28 @@ it("works out one food's numbers at a time, since each compute sends every count
   await waitFor(() => expect(confirmRice).not.toHaveAttribute('aria-disabled', 'true'))
 })
 
+it("keeps a food confirmed while another food's numbers are worked out", async () => {
+  let answer: (response: Response) => void = () => undefined
+  fakeApi({
+    '/v1/log/read': () => json(readReply()),
+    '/v1/log/compute': () => new Promise<Response>((resolve) => (answer = resolve)),
+  })
+  const { user } = show()
+  const lunch = await readLunch(user)
+  const chapati = within(lunch).getByRole('listitem', { name: /^Chapati/ })
+  const curd = within(lunch).getByRole('listitem', { name: /^Curd/ })
+
+  await user.type(within(curd).getByLabelText('Amount'), '100')
+  await user.selectOptions(within(curd).getByLabelText('Unit'), 'g')
+  await user.click(within(curd).getByRole('button', { name: 'Confirm Curd' }))
+  await user.click(within(chapati).getByRole('button', { name: 'Confirm Chapati' }))
+  expect(chapati).toHaveTextContent('Confirmed')
+  answer(json(computeReply()))
+
+  await within(curd).findByText('Confirmed')
+  expect(chapati).toHaveTextContent('Confirmed')
+})
+
 describe('the swap flow when a request fails', () => {
   it('says why the meal was not read, and reads it again when asked', async () => {
     let reads = 0

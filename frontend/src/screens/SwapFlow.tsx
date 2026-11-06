@@ -114,7 +114,8 @@ export function SwapFlow({ onSave, onCancel }: SwapFlowProps) {
     try {
       const result = await computeMeal(logItems(sent), { signal: call() })
       if (askedUnder !== latestRead.current) return null
-      setItems(computed(next, sent, result.items, key))
+      // Applied to the foods as they are now, which the person may have confirmed meanwhile.
+      setItems((now) => (now === null ? now : computed(now, sent, result.items, key)))
       setTotal(result)
       setChanging((open) => new Set([...open].filter((k) => k !== key)))
       return null

@@ -83,23 +83,22 @@ export function withChange(items: SwapItem[], key: number, change: Change): Swap
   )
 }
 
-// The items once the compute route has worked out `sent`, in the order sent: each takes its
-// numbers, and the changed one is confirmed.
+// The items as they are now, once the compute route has worked out `sent`, in the order sent:
+// the changed item `key` becomes what was sent, confirmed, and every food sent takes its numbers.
+// Anything else stays as it is now, so a food confirmed while the numbers were worked out stays
+// confirmed.
 export function computed(
-  items: SwapItem[],
+  current: SwapItem[],
   sent: SwapItem[],
   numbers: NutritionResult[],
   key: number,
 ): SwapItem[] {
   const byKey = new Map(sent.map((item, at) => [item.key, { item, numbers: numbers[at] ?? null }]))
-  return items.map((item) => {
+  return current.map((item) => {
     const done = byKey.get(item.key)
     if (done === undefined) return item
-    return {
-      ...done.item,
-      numbers: done.numbers,
-      confirmed: item.key === key ? true : item.confirmed,
-    }
+    if (item.key === key) return { ...done.item, numbers: done.numbers, confirmed: true }
+    return { ...item, numbers: done.numbers }
   })
 }
 

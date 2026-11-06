@@ -32,11 +32,13 @@ describe('a swapped meal being confirmed', () => {
     const sent = counted(next)
     expect(sent.map((item) => item.food?.id)).toEqual(['chapati', 'curd'])
 
-    const done = computed(next, sent, computeReply().items, 1)
+    // Chapati was confirmed while the numbers were worked out.
+    const now = items.map((item) => (item.key === 0 ? { ...item, confirmed: true } : item))
+    const done = computed(now, sent, computeReply().items, 1)
 
     expect(done[1]).toMatchObject({ status: 'matched', confirmed: true, amount: 100, unit: 'g' })
     expect(done[1]!.numbers?.nutrients.kcal).toBe(63)
-    expect(done[0]!.confirmed).toBe(false)
+    expect(done[0]!.confirmed).toBe(true)
     expect(done[2]!.status).toBe('unknown_unit')
     expect(logItems(done)).toEqual([
       { food_id: 'chapati', amount: 3, unit: 'piece' },
