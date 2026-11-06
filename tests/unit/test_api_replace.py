@@ -137,7 +137,7 @@ def test_replace_works_the_numbers_out_again_and_takes_none_from_the_client(
     assert len(nutrition.meals) == 28 + 1
 
 
-@pytest.mark.parametrize("field", ["nutrition", "failures", "spec"])
+@pytest.mark.parametrize("field", ["nutrition", "failures", "spec", "measures"])
 def test_replace_refuses_a_recipe_that_brings_its_own_numbers(tmp_path: Path, field: str) -> None:
     week = a_week(tmp_path)
     body = replace_body(week)

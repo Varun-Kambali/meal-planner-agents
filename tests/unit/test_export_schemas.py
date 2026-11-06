@@ -63,6 +63,27 @@ def test_the_frontend_sample_export_is_a_file_the_server_accepts() -> None:
     Export.model_validate_json(FRONTEND_SAMPLE.read_text(encoding="utf-8"))
 
 
+def test_the_sample_carries_measures_in_version_1() -> None:
+    export = Export.model_validate_json(FRONTEND_SAMPLE.read_text(encoding="utf-8"))
+
+    assert export.version == 1
+    assert export.week is not None
+    first = export.week.recipes[0].measures
+    assert [m and (m.amount, m.unit) for m in first] == [(1.5, "piece"), (1.25, "cup"), None]
+
+
+def test_a_file_saved_before_measures_were_shown_still_loads() -> None:
+    """The field is optional, so a file without it loads, with no measures."""
+    data = json.loads(FRONTEND_SAMPLE.read_text(encoding="utf-8"))
+    for recipe in data["week"]["recipes"]:
+        del recipe["measures"]
+
+    export = Export.model_validate(data)
+
+    assert export.week is not None
+    assert all(recipe.measures == [] for recipe in export.week.recipes)
+
+
 def _at(data: Any, pointer: str) -> Any:
     for key in pointer.split("/")[1:]:
         data = data[int(key)] if isinstance(data, list) else data[key]

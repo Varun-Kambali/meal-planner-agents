@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pytest
+import yaml
 from app_helpers import (
     EXTRA_FOODS,
     MARK,
@@ -27,6 +28,7 @@ from week_helpers import (
     SLOTS,
     SpyNutrition,
     model_for,
+    write_catalogue_file,
 )
 
 from meal_planner.llm import ModelPort, ModelReply
@@ -56,6 +58,26 @@ def test_week_streams_events_and_done(tmp_path: Path) -> None:
     assert week.unwritten == []
     # A tuple-keyed dict cannot be JSON, so the warnings travel as rows.
     assert isinstance(events[-1][1]["week"]["no_waste"], list)
+
+
+def test_each_recipe_carries_a_household_measure_for_each_ingredient(tmp_path: Path) -> None:
+    """A 91 g banana makes Monday's 182 g of banana 2 pieces; oats and curd are in grams only."""
+    rows = yaml.safe_load(write_catalogue_file(tmp_path, *EXTRA_FOODS).read_text(encoding="utf-8"))
+    for row in rows:
+        if row["id"] == "banana":
+            row["measures"] = {"piece": 91}
+    # A file of its own: the app's settings write the plain catalogue to the usual one.
+    path = tmp_path / "measured.yaml"
+    path.write_text(yaml.safe_dump(rows), encoding="utf-8")
+
+    with serving(tmp_path, catalogue_path=path) as client:
+        response = client.post("/v1/week", json=plan_json())
+
+    recipes = parse_stream(response.text)[-1][1]["week"]["recipes"]
+    monday = recipes[0]
+    assert [i["id"] for i in monday["draft"]["ingredients"]] == ["banana", "oats", "curd"]
+    assert monday["measures"] == [{"amount": 2.0, "unit": "piece"}, None, None]
+    assert all(len(r["measures"]) == len(r["draft"]["ingredients"]) for r in recipes)
 
 
 def test_stream_ends_cleanly_after_rate_limited_slot(tmp_path: Path) -> None:

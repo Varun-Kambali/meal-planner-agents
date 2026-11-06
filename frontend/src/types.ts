@@ -164,6 +164,7 @@ export interface CheckedRecipe {
   failures: Failure[]
   attempts: number
   portion_scale: number
+  measures: (HouseholdMeasure | null)[]
 }
 /**
  * One slot on one day, with the calories and protein its share of that day type comes to.
@@ -293,6 +294,16 @@ export interface Nutrients {
 export interface Failure {
   check: string
   message: string
+}
+/**
+ * An ingredient's grams in a unit a kitchen measures with, such as 1.5 cup or 2 piece.
+ *
+ * Worked out in code from the grams and the food's units (measures.py), for showing beside the
+ * grams. The model never writes one and never reads one.
+ */
+export interface HouseholdMeasure {
+  amount: number
+  unit: string
 }
 /**
  * A day's totals against its day type. Keys are nutrition-mcp's nutrient names.

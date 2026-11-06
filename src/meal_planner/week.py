@@ -59,6 +59,7 @@ from meal_planner.checks import (
 from meal_planner.config import Settings
 from meal_planner.llm import INVALID_JSON, MODEL_ERROR, SCHEMA_MISMATCH, ModelPort, ModelReply
 from meal_planner.log import get_logger
+from meal_planner.measures import with_measures
 from meal_planner.nutrition import NutritionError, NutritionPort
 from meal_planner.portions import portion_factor, scale_draft
 from meal_planner.recipes import CheckedRecipe, DayReport, DraftRecipe, Failure, SlotDraft
@@ -736,10 +737,20 @@ async def _check(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
 
 
 async def _report(state: _State, *, runtime: Runtime[_Deps]) -> dict[str, Any]:
-    rank = _rank(runtime.context.rules)
+    """The week, with a household measure for each ingredient (measures.py).
+
+    The grams are final here: fitted or not, and for a replacement the kept recipes' as sent. So
+    every recipe's measures are worked out from the grams it leaves with, in code and without a
+    call, and none of them was ever in a prompt.
+    """
+    deps = runtime.context
+    rank = _rank(deps.rules)
     usage = state["usage"]
     week = WeekResult(
-        recipes=[state["recipes"][key] for key in sorted(state["recipes"], key=rank)],
+        recipes=[
+            with_measures(state["recipes"][key], deps.catalogue)
+            for key in sorted(state["recipes"], key=rank)
+        ],
         days=state["days"],
         no_waste=state["no_waste"],
         unwritten=[
