@@ -43,7 +43,7 @@ export function RecipePage({ state, day, slotId, food }: RecipePageProps) {
   const { rules, week } = state
   const { need } = food
   useEffect(() => need(), [need])
-  const steps = foodNames(food.list)
+  const catalogueNames = foodNames(food.list)
   if (day === null || slotId === null) {
     const recipes = byWeekOrder(rules, week?.recipes ?? [])
     return (
@@ -69,7 +69,7 @@ export function RecipePage({ state, day, slotId, food }: RecipePageProps) {
                 key={`${recipe.spec.day}-${recipe.spec.slot.id}`}
                 recipe={recipe}
                 rules={rules}
-                names={steps}
+                catalogueNames={catalogueNames}
                 level={2}
               />
             ))}
@@ -100,7 +100,7 @@ export function RecipePage({ state, day, slotId, food }: RecipePageProps) {
       <p className="screen-only">
         <a href="#/week">Back to the week</a>
       </p>
-      <Recipe recipe={recipe} rules={rules} names={steps} level={1} />
+      <Recipe recipe={recipe} rules={rules} catalogueNames={catalogueNames} level={1} />
       <p className="screen-only">
         <button type="button" className="button-secondary" onClick={() => window.print()}>
           Print this recipe
@@ -124,13 +124,13 @@ const PRINTED: NutrientKey[] = [
 function Recipe({
   recipe,
   rules,
-  names: catalogueNames,
+  catalogueNames,
   level,
 }: {
   recipe: CheckedRecipe
   rules: PlanRules | null
   // Catalogue ids and their names, for the steps; empty until the catalogue has loaded.
-  names: ReadonlyMap<string, string>
+  catalogueNames: ReadonlyMap<string, string>
   level: 1 | 2
 }) {
   const { spec, draft, nutrition } = recipe
