@@ -59,15 +59,15 @@
 }
 
 /* A screen's heading and the main region take the focus when the screen opens or the skip link
-   is used, so a screen reader starts there; they need no ring. The groups, the form and the list
-   of problems that a problem's link or a removed row moves the focus to keep one, so a sighted
-   keyboard user sees where they are. */
+   is used, so a screen reader starts there; they need no ring. The groups, the form, the list of
+   problems and a question's heading that a problem's link, a removed row or an action moves the
+   focus to keep one, so a sighted keyboard user sees where they are. */
 h1[tabindex='-1']:focus,
-h2[tabindex='-1']:focus,
 main:focus {
   outline: none;
 }
 
+h2[tabindex='-1']:focus,
 fieldset[tabindex='-1']:focus,
 form[tabindex='-1']:focus,
 .problems:focus {
