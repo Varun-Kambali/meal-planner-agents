@@ -72,9 +72,38 @@ def test_a_unit_that_rounds_to_0_is_skipped() -> None:
     assert household_measure(5, {"cup": 240.0, "tsp": 5.0}) == measure(1, "tsp")
 
 
-def test_the_first_unit_that_fits_wins_in_the_order_given() -> None:
+def test_of_the_units_that_fit_the_biggest_with_at_least_half_of_one_wins() -> None:
+    # 1 tbsp and 3 tsp both fit 13 g; the tablespoon holds more, in either order.
     assert household_measure(13, {"tbsp": 13.0, "tsp": 4.33}) == measure(1, "tbsp")
-    assert household_measure(13, {"tsp": 4.33, "tbsp": 13.0}) == measure(3, "tsp")
+    assert household_measure(13, {"tsp": 4.33, "tbsp": 13.0}) == measure(1, "tbsp")
+
+
+def test_a_liquid_is_measured_in_the_biggest_unit_that_fits() -> None:
+    # 200 g of milk: 13 tbsp, 38.75 tsp, 3/4 cup and 3/4 glass all fit; the glass is biggest.
+    milk = {"g": 1.0, "ml": 1.03, "tbsp": 15.47, "tsp": 5.16, "cup": 247.51, "glass": 257.83}
+    assert household_measure(200, milk) == measure(0.75, "glass")
+
+
+def test_an_amount_of_exactly_half_a_unit_counts() -> None:
+    # 1/2 cup is 100 g; 6.75 tbsp fit too, but the cup is bigger and reaches 1/2.
+    assert household_measure(100, {"tbsp": 15.0, "cup": 200.0}) == measure(0.5, "cup")
+
+
+def test_a_unit_that_fits_at_under_half_of_one_gives_way_to_one_that_reaches_it() -> None:
+    # 1/4 cup fits 100 g, but under 1/2 of a cup; 6.75 tbsp fit and reach it.
+    assert household_measure(100, {"cup": 400.0, "tbsp": 15.0}) == measure(6.75, "tbsp")
+
+
+def test_when_no_unit_that_fits_reaches_half_the_smallest_wins() -> None:
+    # 1/4 cup and 1/4 glass both fit 100 g, neither reaches 1/2: the cup holds less.
+    assert household_measure(100, {"glass": 410.0, "cup": 400.0}) == measure(0.25, "cup")
+
+
+def test_a_tie_keeps_the_order_given() -> None:
+    assert household_measure(240, {"cup": 240.0, "mug": 240.0}) == measure(1, "cup")
+    assert household_measure(240, {"mug": 240.0, "cup": 240.0}) == measure(1, "mug")
+    # Below 1/2 too.
+    assert household_measure(60, {"cup": 240.0, "mug": 240.0}) == measure(0.25, "cup")
 
 
 def test_a_unit_that_does_not_fit_gives_way_to_one_that_does() -> None:
