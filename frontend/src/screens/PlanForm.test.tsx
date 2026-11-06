@@ -14,8 +14,8 @@ function saver(outcome: SaveOutcome = { ok: true }) {
 }
 
 // The form with the catalogue the shell would give it (useCatalogue).
-function Form(props: Omit<PlanFormProps, 'food'>) {
-  return <PlanForm {...props} food={useCatalogue()} />
+function Form(props: Omit<PlanFormProps, 'catalogue'>) {
+  return <PlanForm {...props} catalogue={useCatalogue()} />
 }
 
 function show(

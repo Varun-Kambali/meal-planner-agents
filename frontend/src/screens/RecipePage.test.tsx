@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { State } from '../storage'
 import { CATALOGUE, sampleState } from '../test/helpers'
-import type { FoodCatalogue, FoodList } from '../useCatalogue'
+import type { CatalogueState, SharedCatalogue } from '../useCatalogue'
 import { RecipePage } from './RecipePage'
 
-function food(list: FoodList = { status: 'ready', rows: CATALOGUE }): FoodCatalogue {
-  return { list, need: vi.fn<() => void>(), reload: vi.fn<() => void>() }
+function catalogue(loaded: CatalogueState = { status: 'ready', rows: CATALOGUE }): SharedCatalogue {
+  return { state: loaded, need: vi.fn<() => void>(), reload: vi.fn<() => void>() }
 }
 
 // The sample week, with Monday's breakfast missing a check, a fibre total that is a lower bound
@@ -26,7 +26,7 @@ function state(): State {
 
 describe('the recipe page', () => {
   it('shows the recipe with its grams, steps, numbers and what it misses', () => {
-    render(<RecipePage state={state()} day="mon" slotId="breakfast" food={food()} />)
+    render(<RecipePage state={state()} day="mon" slotId="breakfast" catalogue={catalogue()} />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Banana overnight oats' })).toBeVisible()
     expect(screen.getByText(/Monday, Breakfast at 08:00/)).toHaveTextContent('South Indian')
@@ -62,7 +62,7 @@ describe('the recipe page', () => {
   })
 
   it('shows a household measure in muted text, and grams alone where there is none', () => {
-    render(<RecipePage state={state()} day="mon" slotId="breakfast" food={food()} />)
+    render(<RecipePage state={state()} day="mon" slotId="breakfast" catalogue={catalogue()} />)
 
     const banana = screen.getByRole('row', { name: /^Banana/ })
     expect(within(banana).getByText(', 1½ pieces')).toHaveClass('measure')
@@ -73,7 +73,7 @@ describe('the recipe page', () => {
   it('shows grams alone for a recipe saved before measures were shown', () => {
     const saved = state()
     saved.week!.recipes[0]!.measures = []
-    render(<RecipePage state={saved} day="mon" slotId="breakfast" food={food()} />)
+    render(<RecipePage state={saved} day="mon" slotId="breakfast" catalogue={catalogue()} />)
 
     const ingredients = screen.getByRole('table', { name: 'Ingredients for one serving' })
     const rows = within(ingredients).getAllByRole('row').slice(1)
@@ -83,15 +83,20 @@ describe('the recipe page', () => {
   it('names the catalogue foods a step quotes by id, once the catalogue has loaded', () => {
     const saved = state()
     saved.week!.recipes[0]!.draft.steps = ['Soak the moong_dal, then layer the oats in a jar.']
-    const loaded = food()
+    const loaded = catalogue()
     const { rerender } = render(
-      <RecipePage state={saved} day="mon" slotId="breakfast" food={food({ status: 'loading' })} />,
+      <RecipePage
+        state={saved}
+        day="mon"
+        slotId="breakfast"
+        catalogue={catalogue({ status: 'loading' })}
+      />,
     )
 
     const steps = screen.getByRole('list', { name: 'Steps' })
     expect(steps).toHaveTextContent('Soak the moong_dal, then layer the oats in a jar.')
 
-    rerender(<RecipePage state={saved} day="mon" slotId="breakfast" food={loaded} />)
+    rerender(<RecipePage state={saved} day="mon" slotId="breakfast" catalogue={loaded} />)
 
     expect(steps).toHaveTextContent('Soak the moong dal, then layer the oats in a jar.')
     // What the week holds is left as the model wrote it.
@@ -101,21 +106,21 @@ describe('the recipe page', () => {
   it('shows the steps as written when the catalogue could not be loaded', () => {
     const saved = state()
     saved.week!.recipes[0]!.draft.steps = ['Soak the moong_dal.']
-    const failed = food({ status: 'failed', message: 'the API could not be reached' })
-    render(<RecipePage state={saved} day="mon" slotId="breakfast" food={failed} />)
+    const failed = catalogue({ status: 'failed', message: 'the API could not be reached' })
+    render(<RecipePage state={saved} day="mon" slotId="breakfast" catalogue={failed} />)
 
     expect(screen.getByRole('list', { name: 'Steps' })).toHaveTextContent('Soak the moong_dal.')
   })
 
   it('asks the shell for the catalogue when it opens', () => {
-    const asked = food({ status: 'idle' })
-    render(<RecipePage state={state()} day="mon" slotId="breakfast" food={asked} />)
+    const asked = catalogue({ status: 'idle' })
+    render(<RecipePage state={state()} day="mon" slotId="breakfast" catalogue={asked} />)
 
     expect(asked.need).toHaveBeenCalled()
   })
 
   it('says so when the week has no recipe for that day and meal', () => {
-    render(<RecipePage state={state()} day="tue" slotId="dinner" food={food()} />)
+    render(<RecipePage state={state()} day="tue" slotId="dinner" catalogue={catalogue()} />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'No recipe here' })).toBeVisible()
     expect(screen.getByText(/no recipe for Tuesday's Dinner/)).toBeInTheDocument()
@@ -125,7 +130,7 @@ describe('the recipe page', () => {
   it('prints from the browser', async () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
     const user = userEvent.setup()
-    render(<RecipePage state={state()} day="mon" slotId="lunch" food={food()} />)
+    render(<RecipePage state={state()} day="mon" slotId="lunch" catalogue={catalogue()} />)
 
     await user.click(screen.getByRole('button', { name: 'Print this recipe' }))
 
@@ -134,7 +139,7 @@ describe('the recipe page', () => {
 
   it('lists every recipe of the week, each on a page of its own when printed', () => {
     const { container } = render(
-      <RecipePage state={state()} day={null} slotId={null} food={food()} />,
+      <RecipePage state={state()} day={null} slotId={null} catalogue={catalogue()} />,
     )
 
     expect(screen.getByRole('heading', { level: 1, name: 'Recipes for the week' })).toBeVisible()

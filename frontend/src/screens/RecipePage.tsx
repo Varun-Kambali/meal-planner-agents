@@ -8,7 +8,7 @@ import { useEffect, useId } from 'react'
 import type { DayKey } from '../api'
 import type { State } from '../storage'
 import type { CheckedRecipe, PlanRules } from '../types'
-import { foodNames, type FoodCatalogue } from '../useCatalogue'
+import { foodNames, type SharedCatalogue } from '../useCatalogue'
 import {
   COOK_WHEN,
   DAYS,
@@ -29,7 +29,7 @@ export interface RecipePageProps {
   day: DayKey | null
   slotId: string | null
   // The catalogue the shell holds, for the food names in the steps (useCatalogue).
-  food: FoodCatalogue
+  catalogue: SharedCatalogue
 }
 
 function byWeekOrder(rules: PlanRules | null, recipes: CheckedRecipe[]): CheckedRecipe[] {
@@ -39,11 +39,11 @@ function byWeekOrder(rules: PlanRules | null, recipes: CheckedRecipe[]): Checked
   return [...recipes].sort((a, b) => place(a) - place(b))
 }
 
-export function RecipePage({ state, day, slotId, food }: RecipePageProps) {
+export function RecipePage({ state, day, slotId, catalogue }: RecipePageProps) {
   const { rules, week } = state
-  const { need } = food
+  const { need } = catalogue
   useEffect(() => need(), [need])
-  const catalogueNames = foodNames(food.list)
+  const catalogueNames = foodNames(catalogue.state)
   if (day === null || slotId === null) {
     const recipes = byWeekOrder(rules, week?.recipes ?? [])
     return (

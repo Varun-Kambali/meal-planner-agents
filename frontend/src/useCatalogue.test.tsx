@@ -3,17 +3,17 @@ import { StrictMode, useEffect } from 'react'
 import { describe, expect, it } from 'vitest'
 
 import { CATALOGUE, fakeApi, json } from './test/helpers'
-import { useCatalogue, type FoodCatalogue } from './useCatalogue'
+import { useCatalogue, type SharedCatalogue } from './useCatalogue'
 
 // A screen that needs the catalogue as it opens, as the plan form and the recipe page do.
-function Screen({ food }: { food: FoodCatalogue }) {
-  const { need } = food
+function Screen({ catalogue }: { catalogue: SharedCatalogue }) {
+  const { need } = catalogue
   useEffect(() => need(), [need])
-  return <p>{food.list.status}</p>
+  return <p>{catalogue.state.status}</p>
 }
 
 function Shell() {
-  return <Screen food={useCatalogue()} />
+  return <Screen catalogue={useCatalogue()} />
 }
 
 describe('the shared catalogue', () => {
@@ -22,7 +22,7 @@ describe('the shared catalogue', () => {
 
     const { result } = renderHook(() => useCatalogue())
 
-    expect(result.current.list).toEqual({ status: 'idle' })
+    expect(result.current.state).toEqual({ status: 'idle' })
     expect(calls).toHaveLength(0)
   })
 
@@ -34,7 +34,7 @@ describe('the shared catalogue', () => {
       result.current.need()
       result.current.need()
     })
-    await waitFor(() => expect(result.current.list).toEqual({ status: 'ready', rows: CATALOGUE }))
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'ready', rows: CATALOGUE }))
     act(() => result.current.need())
 
     expect(calls.map((call) => call.path)).toEqual(['/v1/catalogue'])
@@ -52,10 +52,10 @@ describe('the shared catalogue', () => {
     const { result } = renderHook(() => useCatalogue())
 
     act(() => result.current.need())
-    await waitFor(() => expect(result.current.list.status).toBe('failed'))
+    await waitFor(() => expect(result.current.state.status).toBe('failed'))
     act(() => result.current.need())
 
-    await waitFor(() => expect(result.current.list).toEqual({ status: 'ready', rows: CATALOGUE }))
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'ready', rows: CATALOGUE }))
     expect(calls).toHaveLength(2)
   })
 
@@ -64,11 +64,11 @@ describe('the shared catalogue', () => {
     const { result } = renderHook(() => useCatalogue())
 
     act(() => result.current.need())
-    await waitFor(() => expect(result.current.list.status).toBe('ready'))
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
     act(() => result.current.reload())
 
     await waitFor(() => expect(calls).toHaveLength(2))
-    await waitFor(() => expect(result.current.list.status).toBe('ready'))
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
   })
 
   it('stops its call when the page goes', () => {

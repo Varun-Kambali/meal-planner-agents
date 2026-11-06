@@ -10,24 +10,24 @@ import { catalogue as loadCatalogue } from './api'
 import type { CatalogueRow } from './types'
 import { messageOf } from './words'
 
-export type FoodList =
+export type CatalogueState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; rows: CatalogueRow[] }
   | { status: 'failed'; message: string }
 
-export interface FoodCatalogue {
-  list: FoodList
+export interface SharedCatalogue {
+  state: CatalogueState
   // Asks for the list unless it is loading or has loaded.
   need: () => void
   // Asks for it again, whatever state it is in.
   reload: () => void
 }
 
-export function useCatalogue(): FoodCatalogue {
-  const [list, setList] = useState<FoodList>({ status: 'idle' })
+export function useCatalogue(): SharedCatalogue {
+  const [state, setState] = useState<CatalogueState>({ status: 'idle' })
   // The status as of the last call, for `need`, which runs before a render shows the new one.
-  const status = useRef<FoodList['status']>('idle')
+  const status = useRef<CatalogueState['status']>('idle')
   const request = useRef<AbortController | null>(null)
 
   const reload = useCallback((): void => {
@@ -35,17 +35,17 @@ export function useCatalogue(): FoodCatalogue {
     const controller = new AbortController()
     request.current = controller
     status.current = 'loading'
-    setList({ status: 'loading' })
+    setState({ status: 'loading' })
     loadCatalogue({}, { signal: controller.signal }).then(
       (rows) => {
         if (controller.signal.aborted) return
         status.current = 'ready'
-        setList({ status: 'ready', rows })
+        setState({ status: 'ready', rows })
       },
       (error: unknown) => {
         if (controller.signal.aborted) return
         status.current = 'failed'
-        setList({ status: 'failed', message: messageOf(error) })
+        setState({ status: 'failed', message: messageOf(error) })
       },
     )
   }, [])
@@ -64,10 +64,10 @@ export function useCatalogue(): FoodCatalogue {
     [],
   )
 
-  return useMemo(() => ({ list, need, reload }), [list, need, reload])
+  return useMemo(() => ({ state, need, reload }), [state, need, reload])
 }
 
 // Each catalogue id with its name, once the list has loaded; none before.
-export function foodNames(list: FoodList): Map<string, string> {
-  return new Map(list.status === 'ready' ? list.rows.map((row) => [row.id, row.name]) : [])
+export function foodNames(state: CatalogueState): Map<string, string> {
+  return new Map(state.status === 'ready' ? state.rows.map((row) => [row.id, row.name]) : [])
 }
