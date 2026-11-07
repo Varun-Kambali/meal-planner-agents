@@ -26,3 +26,8 @@
 .page > output {
   display: block;
 }
+
+.page > output .notice,
+.page > output .notice > span {
+  display: block;
+}
