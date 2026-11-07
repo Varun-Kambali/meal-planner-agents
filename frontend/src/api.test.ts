@@ -5,6 +5,7 @@ import {
   StreamFailed,
   catalogue,
   computeMeal,
+  health,
   readMeal,
   replaceRecipe,
   searchFoods,
@@ -395,6 +396,48 @@ describe('the JSON routes', () => {
     await expect(
       computeMeal([{ food_id: 'banana', amount: 1, unit: 'cup' }]),
     ).rejects.toMatchObject({ status: 422, problems })
+  })
+})
+
+describe('health', () => {
+  it('asks GET /healthz and resolves when it answers with JSON', async () => {
+    const calls = serve(() => json({ status: 'ok' }))
+
+    await expect(health()).resolves.toBeUndefined()
+
+    expect(calls.map((call) => [call.method, call.url])).toEqual([['GET', '/healthz']])
+  })
+
+  it('fails on an error status, a page that is not JSON, and a lost connection', async () => {
+    serve(() => json({ detail: 'down' }, 503))
+    await expect(health()).rejects.toMatchObject({ name: 'ApiError', status: 503 })
+
+    serve(() => new Response('<html>starting</html>', { status: 200 }))
+    await expect(health()).rejects.toMatchObject({
+      name: 'ApiError',
+      detail: 'the response was not JSON',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch')
+      }),
+    )
+    await expect(health()).rejects.toMatchObject({ name: 'ApiError', status: 0 })
+  })
+
+  it('goes to the API named at build time, and stops when aborted', async () => {
+    vi.stubEnv('VITE_API_BASE', 'https://api.example.org/')
+    const calls = serve(() => json({ status: 'ok' }))
+    await health()
+    expect(calls[0]!.url).toBe('https://api.example.org/healthz')
+
+    const controller = new AbortController()
+    controller.abort()
+    await expect(health({ signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    })
   })
 })
 

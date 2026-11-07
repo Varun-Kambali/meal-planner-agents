@@ -329,3 +329,14 @@ export function computeMeal(items: LogItem[], options: CallOptions = {}): Promis
   const body: ComputeRequest = { items }
   return postJson('/v1/log/compute', body, options)
 }
+
+// GET /healthz: resolves when the server answers with JSON, and fails otherwise, so a page can
+// tell a server that is up from one that is starting or gone.
+export async function health(options: CallOptions = {}): Promise<void> {
+  const response = await send(
+    '/healthz',
+    { method: 'GET', headers: { Accept: 'application/json' } },
+    options,
+  )
+  await jsonOf<unknown>(response, options)
+}

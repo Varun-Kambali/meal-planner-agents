@@ -1,0 +1,54 @@
+# Builds the browser app and publishes it to GitHub Pages. It does nothing until the repository
+# variable MEAL_PLANNER_API_BASE is set to the API's address (no trailing slash) and Pages is set
+# to build from GitHub Actions: until then the build job is skipped and so is the deploy.
+name: pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "schemas/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    if: vars.MEAL_PLANNER_API_BASE != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+      - run: npm run build
+        env:
+          VITE_API_BASE: ${{ vars.MEAL_PLANNER_API_BASE }}
+          # A project page is served under the repository's name.
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: frontend/dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1

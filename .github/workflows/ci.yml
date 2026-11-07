@@ -49,6 +49,24 @@ jobs:
           docker run -d --name api -p 8000:8000 -e GEMINI_API_KEY=placeholder-no-model-call meal-planner-agents
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8000/healthz; then echo; exit 0; fi
+            # A container that has exited will not start answering.
+            if [ "$(docker inspect -f '{{.State.Running}}' api)" != true ]; then
+              echo "the container is not running" >&2
+              docker logs api
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs api
+          exit 1
+      # The first probe runs after the 30 s interval and each one may take 5 s, so allow 90 s.
+      - name: Container reports healthy
+        run: |
+          for i in $(seq 1 45); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' api)"
+            echo "health: $status"
+            if [ "$status" = healthy ]; then exit 0; fi
+            if [ "$status" = unhealthy ]; then break; fi
             sleep 2
           done
           docker logs api
@@ -111,6 +129,24 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The Pages workflow builds with a base path. A page address, a script, a stylesheet, the
+      # favicon or a font that still starts at the root would 404 there.
+      - name: Check a build under a base path keeps every address under it
+        env:
+          VITE_BASE_PATH: /meal-planner-agents/
+        run: |
+          out="$RUNNER_TEMP/pages-check"
+          npx vite build --outDir "$out" --emptyOutDir
+          grep -q 'src="/meal-planner-agents/assets/' "$out/index.html"
+          grep -q 'href="/meal-planner-agents/favicon.svg"' "$out/index.html"
+          if grep -hE '(src|href)="/' "$out/index.html" | grep -v '="/meal-planner-agents/'; then
+            echo "index.html has an address outside /meal-planner-agents/" >&2
+            exit 1
+          fi
+          if grep -hoE "url\(['\"]?/[^)]*\)" "$out"/assets/*.css | grep -vE "url\(['\"]?/meal-planner-agents/"; then
+            echo "a stylesheet has an address outside /meal-planner-agents/" >&2
+            exit 1
+          fi
   # pa11y-ci with axe over the built site: every screen in frontend/pa11y.json, at desktop and
   # phone width, in the light theme and then the dark one (scripts/a11y.ts). The week and recipe
   # screens open on a recorded week, and the API is a stand-in, so no model is called.

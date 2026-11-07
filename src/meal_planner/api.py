@@ -544,7 +544,10 @@ def _add_middleware(app: FastAPI, settings: Settings) -> None:
         per_path={REPLACE_PATH: settings.max_replace_body_bytes},
     )
     app.add_middleware(
-        RateLimit, limiter=RateLimiter(settings.rate_limit_per_minute), prefix="/v1/"
+        RateLimit,
+        limiter=RateLimiter(settings.rate_limit_per_minute),
+        prefix="/v1/",
+        client_address_header=settings.client_address_header,
     )
     app.add_middleware(RequestContext)
     if settings.cors_origins:

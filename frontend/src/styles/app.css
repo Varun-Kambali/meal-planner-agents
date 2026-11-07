@@ -21,3 +21,13 @@
 .notice p {
   margin-bottom: 0;
 }
+
+/* The demo server's waking message: an output element, which is inline unless told otherwise. */
+.page > output {
+  display: block;
+}
+
+.page > output .notice,
+.page > output .notice > span {
+  display: block;
+}

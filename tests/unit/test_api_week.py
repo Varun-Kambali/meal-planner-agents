@@ -214,6 +214,16 @@ def test_rate_limit_429(tmp_path: Path) -> None:
     assert health.status_code == 200
 
 
+def test_the_rate_limit_counts_the_configured_address_header(tmp_path: Path) -> None:
+    settings = {"rate_limit_per_minute": 1, "client_address_header": "CF-Connecting-IP"}
+    with serving(tmp_path, **settings) as client:
+        first = client.get("/v1/catalogue", headers={"CF-Connecting-IP": "203.0.113.1"})
+        again = client.get("/v1/catalogue", headers={"CF-Connecting-IP": "203.0.113.1"})
+        other = client.get("/v1/catalogue", headers={"CF-Connecting-IP": "203.0.113.2"})
+
+    assert (first.status_code, again.status_code, other.status_code) == (200, 429, 200)
+
+
 def test_a_failure_after_the_stream_starts_ends_with_one_error_event(
     tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:

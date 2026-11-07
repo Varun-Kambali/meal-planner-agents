@@ -74,6 +74,9 @@ class Settings(BaseSettings):
 
     # Requests one client address may make to the /v1 routes in a minute; over it, 429.
     rate_limit_per_minute: int = Field(default=10, ge=1)
+    # The request header that holds the visitor's address when the app runs behind a host's proxy
+    # that sets it itself (CF-Connecting-IP on Render). Empty counts the connection's address.
+    client_address_header: str = ""
     # Browser origins allowed to call the API, separated by commas. Empty adds no CORS headers.
     cors_origins: Annotated[list[str], NoDecode] = []
 

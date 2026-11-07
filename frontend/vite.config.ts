@@ -7,6 +7,8 @@ import { defineConfig } from 'vite'
 const API = 'http://127.0.0.1:8000'
 
 export default defineConfig({
+  // Where the built site is served from: `/` by default, `/<repository>/` on GitHub Pages.
+  base: process.env.VITE_BASE_PATH || '/',
   plugins: [react()],
   build: {
     // Vite inlines small files as data: URLs, which a Content-Security-Policy that allows fonts

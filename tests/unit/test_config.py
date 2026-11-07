@@ -29,6 +29,7 @@ def test_defaults() -> None:
     assert s.max_replace_body_bytes == 131072
     assert s.rate_limit_per_minute == 10
     assert s.cors_origins == []
+    assert s.client_address_header == ""
 
 
 def test_the_accuracy_switches_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
