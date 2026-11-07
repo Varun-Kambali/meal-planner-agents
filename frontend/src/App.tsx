@@ -13,6 +13,7 @@ import { DataSection } from './screens/DataSection'
 import { DayView } from './screens/DayView'
 import { PlanForm } from './screens/PlanForm'
 import { RecipePage } from './screens/RecipePage'
+import { ServerWaking } from './screens/ServerWaking'
 import { StorageError } from './screens/StorageError'
 import { Today } from './screens/Today'
 import { Week } from './screens/Week'
@@ -190,6 +191,7 @@ export function App({ store = browserStore }: { store?: StateStore }) {
         </div>
       </header>
       <main id="main" ref={main} tabIndex={-1} className="page">
+        <ServerWaking />
         {loaded.status === 'loading' && <p>Reading what this browser saved.</p>}
         {loaded.status === 'failed' && (
           <StorageError
