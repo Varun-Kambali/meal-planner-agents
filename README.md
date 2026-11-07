@@ -95,7 +95,7 @@ docker run --rm -p 8000:8000 -e GEMINI_API_KEY meal-planner-agents   # the key i
 
 The API answers on `http://127.0.0.1:8000`; `/healthz` says it is up. The image holds the API and its data, not the browser app, and runs as a user without root. Set `PORT` to serve on another port, as free hosts do. CI builds the image, starts it with a placeholder key and calls `/healthz` and `/v1/catalogue`, neither of which calls a model.
 
-The rate limit counts requests per client address. By default the image trusts no forwarded address, so a client cannot choose the address it is counted under. Behind a host's proxy every visitor would share the proxy's address; the deployment then sets `FORWARDED_ALLOW_IPS` to the proxy's address, which is uvicorn's own setting for which proxies to believe.
+The rate limit counts requests per client address. By default the image trusts no forwarded address, so a client cannot choose the address it is counted under. Behind a host's proxy every visitor would share the proxy's address. On Render, leave `FORWARDED_ALLOW_IPS` unset, because Render's proxy appends to an `X-Forwarded-For` the client sent and its leftmost entry can be forged. Set `MEAL_PLANNER_CLIENT_ADDRESS_HEADER=CF-Connecting-IP` instead: Cloudflare, which sits in front of Render, sets that header itself. The header is read only when the setting names it.
 
 ## Deployment
 

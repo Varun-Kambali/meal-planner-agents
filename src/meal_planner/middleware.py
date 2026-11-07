@@ -145,19 +145,31 @@ class RateLimiter:
 
 
 class RateLimit:
-    """Answers 429 with Retry-After to a client over its allowance on the paths under `prefix`."""
+    """Answers 429 with Retry-After to a client over its allowance on the paths under `prefix`.
 
-    def __init__(self, app: ASGIApp, *, limiter: RateLimiter, prefix: str) -> None:
+    A client is its connection's address, unless `client_address_header` names a header the
+    host's own proxy sets. That header is read only when named: otherwise a visitor could send
+    one and choose the address it is counted under. The address is never logged.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        limiter: RateLimiter,
+        prefix: str,
+        client_address_header: str = "",
+    ) -> None:
         self.app = app
         self.limiter = limiter
         self.prefix = prefix
+        self.client_address_header = client_address_header
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or not scope["path"].startswith(self.prefix):
             await self.app(scope, receive, send)
             return
-        client = scope.get("client")
-        wait = self.limiter.check(client[0] if client else "unknown")
+        wait = self.limiter.check(self._client(scope))
         if wait is not None:
             response = JSONResponse(
                 {"detail": "too many requests, try again later"},
@@ -167,3 +179,11 @@ class RateLimit:
             await response(scope, receive, send)
             return
         await self.app(scope, receive, send)
+
+    def _client(self, scope: Scope) -> str:
+        if self.client_address_header:
+            named = Headers(scope=scope).get(self.client_address_header, "").strip()
+            if named:
+                return named
+        connection = scope.get("client")
+        return connection[0] if connection else "unknown"

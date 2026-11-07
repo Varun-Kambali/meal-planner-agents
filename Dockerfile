@@ -30,9 +30,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 # as `make run-api`, with the access log off because its line holds the query string, which
 # holds a plan's diet and allergens. A host that sets PORT is followed.
 #
-# Client addresses: the rate limit counts per address. uvicorn reads X-Forwarded-For only from
-# the addresses in FORWARDED_ALLOW_IPS, which by default are loopback, so a visitor cannot
-# choose the address the limit counts. Behind a host's proxy every visitor would share the
-# proxy's address, so the deployment sets FORWARDED_ALLOW_IPS to that proxy ('*' only where the
-# app cannot be reached except through it). It is not set here.
+# Client addresses: the rate limit counts per address. On Render leave FORWARDED_ALLOW_IPS
+# unset: its proxy appends to an X-Forwarded-For the client sent, so the leftmost entry can be
+# forged. Set MEAL_PLANNER_CLIENT_ADDRESS_HEADER=CF-Connecting-IP instead, a header Cloudflare
+# in front of Render sets itself.
 CMD ["sh", "-c", "exec uvicorn --factory meal_planner.api:app_factory --host 0.0.0.0 --port \"$PORT\" --no-access-log"]

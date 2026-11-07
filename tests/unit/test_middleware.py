@@ -30,7 +30,7 @@ class Clock:
         return self.now
 
 
-def build(clock: Clock | None = None, rate: int = 3) -> FastAPI:
+def build(clock: Clock | None = None, rate: int = 3, address_header: str = "") -> FastAPI:
     app = FastAPI()
 
     @app.post("/v1/size")
@@ -59,7 +59,9 @@ def build(clock: Clock | None = None, rate: int = 3) -> FastAPI:
 
     app.add_middleware(BodyLimit, limit=LIMIT, per_path={"/v1/big": 1000})
     limiter = RateLimiter(rate, clock=clock or Clock())
-    app.add_middleware(RateLimit, limiter=limiter, prefix="/v1/")
+    app.add_middleware(
+        RateLimit, limiter=limiter, prefix="/v1/", client_address_header=address_header
+    )
     app.add_middleware(RequestContext)
     return app
 
@@ -245,6 +247,51 @@ def test_each_client_address_has_its_own_allowance() -> None:
         assert first.get("/v1/id").status_code == 200
         assert first.get("/v1/id").status_code == 429
         assert second.get("/v1/id").status_code == 200
+
+
+def test_a_host_set_address_header_is_counted_per_value() -> None:
+    app = build(rate=1, address_header="CF-Connecting-IP")
+    with TestClient(app) as client:
+        one = {"CF-Connecting-IP": "203.0.113.1"}
+        two = {"CF-Connecting-IP": "203.0.113.2"}
+
+        assert client.get("/v1/id", headers=one).status_code == 200
+        assert client.get("/v1/id", headers=one).status_code == 429
+        assert client.get("/v1/id", headers=two).status_code == 200
+
+
+def test_the_header_value_is_stripped_before_it_is_counted() -> None:
+    app = build(rate=1, address_header="CF-Connecting-IP")
+    with TestClient(app) as client:
+        padded = {"CF-Connecting-IP": " 203.0.113.1 "}
+        plain = {"CF-Connecting-IP": "203.0.113.1"}
+
+        assert client.get("/v1/id", headers=padded).status_code == 200
+        assert client.get("/v1/id", headers=plain).status_code == 429
+
+
+def test_a_missing_or_empty_address_header_falls_back_to_the_connection_address() -> None:
+    app = build(rate=1, address_header="CF-Connecting-IP")
+    with TestClient(app, client=("10.0.0.1", 5000)) as client:
+        assert client.get("/v1/id").status_code == 200
+        # Absent, then blank: both count against the connection's address.
+        assert client.get("/v1/id").status_code == 429
+        assert client.get("/v1/id", headers={"CF-Connecting-IP": "  "}).status_code == 429
+    with TestClient(app, client=("10.0.0.2", 5000)) as other:
+        assert other.get("/v1/id").status_code == 200
+
+
+def test_without_the_setting_a_client_sent_address_header_is_ignored() -> None:
+    app = build(rate=1)
+    with TestClient(app) as client:
+        sent = {"CF-Connecting-IP": "203.0.113.1"}
+
+        assert client.get("/v1/id", headers=sent).status_code == 200
+        for headers in (
+            {"CF-Connecting-IP": "203.0.113.2"},
+            {"X-Forwarded-For": "203.0.113.3"},
+        ):
+            assert client.get("/v1/id", headers=headers).status_code == 429
 
 
 def test_the_limiter_forgets_clients_that_have_gone_quiet() -> None:
