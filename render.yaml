@@ -1,0 +1,19 @@
+# Render Blueprint for the demo API. This file does nothing until the repository is connected
+# to Render as a Blueprint. GEMINI_API_KEY is asked for then; it must come from a Google AI
+# Studio project with no billing account, so the free quota is the most it can ever spend.
+services:
+  - type: web
+    name: meal-planner-agents
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: checksPass
+    healthCheckPath: /healthz
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MEAL_PLANNER_CORS_ORIGINS
+        value: https://varun-kambali.github.io
+      - key: MEAL_PLANNER_CLIENT_ADDRESS_HEADER
+        value: CF-Connecting-IP
