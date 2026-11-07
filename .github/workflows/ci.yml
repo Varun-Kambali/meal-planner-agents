@@ -54,11 +54,16 @@ jobs:
           docker logs api
           exit 1
       - name: Memory once up
-        run: docker stats --no-stream --format 'once up: {{.MemUsage}} ({{.MemPerc}})' api
+        run: |
+          docker stats --no-stream --format 'once up: {{.MemUsage}} ({{.MemPerc}})' api
       - name: Call the catalogue
-        run: curl -fsS "http://127.0.0.1:8000/v1/catalogue" | head -c 300; echo
+        run: |
+          curl -fsS -o catalogue.json http://127.0.0.1:8000/v1/catalogue
+          head -c 300 catalogue.json
+          echo
       - name: Memory after the catalogue call
-        run: docker stats --no-stream --format 'after the catalogue call: {{.MemUsage}} ({{.MemPerc}})' api
+        run: |
+          docker stats --no-stream --format 'after the catalogue call: {{.MemUsage}} ({{.MemPerc}})' api
       - name: Test the running image
         run: uv run pytest tests/integration/test_container.py --no-cov
         env:
