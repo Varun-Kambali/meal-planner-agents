@@ -59,15 +59,16 @@
 }
 
 /* A screen's heading and the main region take the focus when the screen opens or the skip link
-   is used, so a screen reader starts there; they need no ring. The groups, the form and the list
-   of problems that a problem's link or a removed row moves the focus to keep one, so a sighted
-   keyboard user sees where they are. */
+   is used, so a screen reader starts there; they need no ring. The groups, the form, the list of
+   problems and a question's heading that a problem's link, a removed row or an action moves the
+   focus to keep one, so a sighted keyboard user sees where they are. */
 h1[tabindex='-1']:focus,
-h2[tabindex='-1']:focus,
 main:focus {
   outline: none;
 }
 
+h2[tabindex='-1']:focus,
+h3[tabindex='-1']:focus,
 fieldset[tabindex='-1']:focus,
 form[tabindex='-1']:focus,
 .problems:focus {
@@ -606,6 +607,147 @@ progress::-moz-progress-bar {
     grid-template-columns: 1fr;
     gap: 0;
   }
+}
+
+/* The log: a date's meals, each logged with one tap, and the swap flow */
+
+.day-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-lg);
+}
+
+.day-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+}
+
+.log-meal {
+  max-width: var(--width-text);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.log-meal h2 {
+  font-size: var(--text-subheading);
+}
+
+.log-meal p {
+  margin-bottom: var(--space-xs);
+}
+
+.log-meal .actions {
+  margin: var(--space-sm) 0;
+}
+
+.notice.log-full p {
+  margin-bottom: var(--space-sm);
+}
+
+.panel {
+  margin: var(--space-md) 0 0;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.panel h3 {
+  margin-top: var(--space-md);
+  font-size: var(--text-body);
+}
+
+.foods,
+.choices-found,
+.day-meals {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.foods > li {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.foods .actions {
+  margin: var(--space-xs) 0;
+}
+
+.food-name {
+  margin-bottom: 0;
+}
+
+.item-editor,
+.food-search {
+  margin-top: var(--space-sm);
+}
+
+.item-editor .field,
+.food-search .field {
+  margin-bottom: var(--space-sm);
+}
+
+.food-search label {
+  display: block;
+  margin-bottom: var(--space-xs);
+  font-weight: 600;
+}
+
+.choices-found li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.meal-totals,
+.day-table {
+  width: 100%;
+  max-width: var(--width-table);
+  margin: var(--space-md) 0 var(--space-sm);
+}
+
+.problem {
+  max-width: var(--width-text);
+  margin: var(--space-sm) 0;
+}
+
+.problem p {
+  margin-bottom: var(--space-xs);
+}
+
+/* The day and week views of the log */
+
+.day-table {
+  max-width: var(--width-text);
+}
+
+/* On a phone the four columns fit once the numbers may wrap, so the table never scrolls. */
+@media (max-width: 47.99rem) {
+  .day-table th,
+  .day-table td {
+    padding: var(--space-xs);
+  }
+
+  .day-table .num {
+    white-space: normal;
+  }
+}
+
+.day-meals li {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.day-meals p {
+  margin-bottom: 0;
+}
+
+.summary-days {
+  width: 100%;
+  max-width: var(--width-text);
+  margin-top: var(--space-md);
 }
 
 /* A recipe */

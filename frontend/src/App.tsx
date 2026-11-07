@@ -1,17 +1,22 @@
 // The app shell: it reads what this browser saved, keeps it while the page is open, saves each
 // change, and shows the screen the address names. A week being written belongs to the shell, so
-// it goes on while the person looks at another screen.
+// it goes on while the person looks at another screen, and so do the catalogue and the log's
+// summary, which are asked for once and kept until they are out of date.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { dateWords } from './dates'
 import { saveFile, today } from './download'
 import type { FormError } from './planForm'
 import { useRoute, type Route } from './route'
 import { DataSection } from './screens/DataSection'
+import { DayView } from './screens/DayView'
 import { PlanForm } from './screens/PlanForm'
 import { RecipePage } from './screens/RecipePage'
 import { StorageError } from './screens/StorageError'
+import { Today } from './screens/Today'
 import { Week } from './screens/Week'
+import { WeekView } from './screens/WeekView'
 import type { SaveOutcome } from './session'
 import {
   ValidationFailed,
@@ -23,11 +28,17 @@ import {
   type State,
   type StateStore,
 } from './storage'
+import type { MealLog } from './types'
 import { useCatalogue } from './useCatalogue'
+import { useSummary } from './useSummary'
+import { useToday } from './useToday'
 import { useWeekRun } from './useWeekRun'
 import { DAY_NAMES, messageOf } from './words'
 
 const browserStore: StateStore = { loadState, saveState, readStoredText, discardStoredText }
+
+// The log while nothing has loaded, the same each time so the summary is not asked for again.
+const NO_LOG: MealLog = { version: 1, entries: [] }
 
 type Loaded =
   { status: 'loading' } | { status: 'ready'; state: State } | { status: 'failed'; error: unknown }
@@ -38,6 +49,9 @@ const TITLES: Record<Route['name'], string> = {
   week: 'The week',
   recipe: 'Recipe',
   recipes: 'Recipes for the week',
+  log: 'Log',
+  summary: 'Summary',
+  day: 'Day',
   missing: 'Not found',
 }
 
@@ -105,6 +119,8 @@ export function App({ store = browserStore }: { store?: StateStore }) {
   const run = useWeekRun(state, save, setRefused)
   // Asked for by the first screen that needs it, and kept for the others.
   const catalogue = useCatalogue()
+  const summary = useSummary(state?.rules ?? null, state?.log ?? NO_LOG)
+  const now = useToday()
   // What a run is doing, for the reasons other screens give for waiting on it.
   let running: string | null = null
   if (run.running?.what === 'week') running = 'A week is being written'
@@ -123,6 +139,8 @@ export function App({ store = browserStore }: { store?: StateStore }) {
     )
     title = recipe?.draft.title ?? 'No recipe here'
   }
+  if (route.name === 'log') title = dateWords(route.date ?? now, now)
+  if (route.name === 'day') title = dateWords(route.date, now)
   useEffect(() => {
     document.title = title === TITLES.home ? title : `${title}: Meal planner`
   }, [title])
@@ -139,6 +157,8 @@ export function App({ store = browserStore }: { store?: StateStore }) {
       label: 'Week',
       current: name === 'week' || name === 'recipe' || name === 'recipes',
     },
+    { href: '#/log', label: 'Log', current: name === 'log' },
+    { href: '#/summary', label: 'Summary', current: name === 'summary' || name === 'day' },
   ]
 
   return (
@@ -210,6 +230,17 @@ export function App({ store = browserStore }: { store?: StateStore }) {
             {name === 'recipes' && (
               <RecipePage state={state} day={null} slotId={null} catalogue={catalogue} />
             )}
+            {route.name === 'log' && (
+              <Today
+                key={route.date ?? now}
+                state={state}
+                date={route.date ?? now}
+                today={now}
+                onSave={save}
+              />
+            )}
+            {name === 'summary' && <WeekView state={state} summary={summary} />}
+            {route.name === 'day' && <DayView state={state} date={route.date} summary={summary} />}
             {name === 'missing' && (
               <>
                 <h1 tabIndex={-1} data-screen-title>

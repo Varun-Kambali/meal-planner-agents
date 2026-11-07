@@ -461,7 +461,7 @@
       "type": "object"
     },
     "ReadItem": {
-      "description": "One food of the meal and what became of it.\n\n`matched`: the food and a usable amount were found, and `grams` and `nutrition` are set.\n`needs_amount`: the food was found but the amount is missing, vague, a range, not the number\nits words give, or beyond the limit; `valid_units` lists what could be used to give one.\n`unknown_unit`: the food was found but the unit is not one nutrition-mcp or the catalogue has\nfor it; `valid_units` lists those that are. `missing`: the food is not in nutrition-mcp's\ndata.",
+      "description": "One food of the meal and what became of it.\n\n`matched`: the food and a usable amount were found, and `grams` and `nutrition` are set;\n`valid_units` lists the units another amount of it could be given in.\n`needs_amount`: the food was found but the amount is missing, vague, a range, not the number\nits words give, or beyond the limit; `valid_units` lists what could be used to give one.\n`unknown_unit`: the food was found but the unit is not one nutrition-mcp or the catalogue has\nfor it; `valid_units` lists those that are. `missing`: the food is not in nutrition-mcp's\ndata.",
       "properties": {
         "name": {
           "title": "Name",

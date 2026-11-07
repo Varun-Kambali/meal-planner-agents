@@ -1,6 +1,6 @@
 // How a problem's path finds its field on the page.
 
-import type { FormError } from '../planForm'
+import type { FormError, PlanDraft } from '../planForm'
 
 // The element id of the field a problem's path names: "slots.0.kcal_share" is
 // "f-slots-0-kcal_share".
@@ -14,6 +14,13 @@ export function errorId(path: string): string {
 
 // Problems by the field they belong to.
 export type Errors = Map<string, string[]>
+
+// What each section of the plan form gets: the draft, a way to change it, and the problems by field.
+export interface SectionProps {
+  draft: PlanDraft
+  change: (update: (draft: PlanDraft) => PlanDraft) => void
+  errors: Errors
+}
 
 export function byField(errors: FormError[]): Errors {
   const map: Errors = new Map()

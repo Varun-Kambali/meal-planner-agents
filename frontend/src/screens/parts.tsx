@@ -1,9 +1,11 @@
 // Small pieces the screens share: form fields with their errors, the list of problems at the top
-// of a form, and status words.
+// of a form, status words, and a request that failed with a way to try it again.
 
 import { useId, type ReactNode, type RefObject } from 'react'
 
 import type { FormError } from '../planForm'
+import type { Failure } from '../types'
+import { refusalWords } from '../words'
 import { errorId, fieldId, goToField, type Errors } from './fields'
 
 export function FieldError({ path, errors }: { path: string; errors: Errors }) {
@@ -195,6 +197,12 @@ export function ProblemList(props: ProblemListProps) {
 
 export type Verdict = 'ok' | 'fail' | 'warn' | 'unsettled'
 
+// What a day's checks found: the week's DayReport and the summary's DaySummary both carry it.
+interface DayChecked {
+  failures: Failure[]
+  unsettled: Failure[]
+}
+
 const VERDICT_WORDS: Record<Verdict, string> = {
   ok: 'Meets',
   fail: 'Misses',
@@ -218,4 +226,76 @@ export function Status({
       {children !== undefined && <> {children}</>}
     </>
   )
+}
+
+// A request the API refused or that did not get through: what was not done, why, and a button to
+// ask again. Nothing is asked again without the person's say.
+export function RequestProblem({
+  what,
+  error,
+  onRetry,
+}: {
+  what: string
+  error: unknown
+  onRetry: () => void
+}) {
+  return (
+    <div role="alert" className="problem">
+      <p>
+        {what} {refusalWords(error)}
+      </p>
+      <button type="button" className="button-secondary" onClick={onRetry}>
+        Try again
+      </button>
+    </div>
+  )
+}
+
+// A day's checks: Meets every day target, or what it misses and what can't be told, each with its
+// reason. The week's days and the log's days read the same way.
+export function DayDetail({ report }: { report: DayChecked | undefined }) {
+  if (report === undefined) return <p className="meta">This day has not been checked.</p>
+  if (report.failures.length === 0 && report.unsettled.length === 0) {
+    return (
+      <p>
+        <Status verdict="ok">every day target</Status>
+      </p>
+    )
+  }
+  return (
+    <>
+      {report.failures.length > 0 && (
+        <>
+          <p>
+            <Status verdict="fail" word="Misses:" />
+          </p>
+          <ul className="reasons">
+            {report.failures.map((failure, index) => (
+              <li key={index}>{failure.message}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {report.unsettled.length > 0 && (
+        <>
+          <p>
+            <Status verdict="unsettled" word="Can't tell:" />
+          </p>
+          <ul className="reasons">
+            {report.unsettled.map((check, index) => (
+              <li key={index}>{check.message}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  )
+}
+
+// A day's checks in one word or two, for a table's row of days.
+export function DayWord({ report }: { report: DayChecked | undefined }) {
+  if (report === undefined) return <span className="meta">Not checked</span>
+  if (report.failures.length > 0) return <Status verdict="fail" />
+  if (report.unsettled.length > 0) return <Status verdict="unsettled" />
+  return <Status verdict="ok" />
 }

@@ -101,7 +101,12 @@ async def test_two_rotis_and_dal() -> None:
         "katori",
         150,
     )
-    assert (roti.valid_units, dal.valid_units) == ([], [])
+    # A matched food lists its units too, as the reader would list them for another amount, so
+    # the browser can change the amount or unit without a search.
+    assert (roti.valid_units, dal.valid_units) == (
+        ["g", "roti", "piece", "serving"],
+        ["g", "katori", "serving"],
+    )
     assert result.missing == []
     assert result.text_length == len(text)
     assert result.total is not None

@@ -9,11 +9,11 @@ import { labelOf } from '../planForm'
 import { stepWords, type Progress } from '../progress'
 import { recipeHref } from '../route'
 import type { State } from '../storage'
-import type { CheckedRecipe, DayReport, PlanRules, Slot, WeekResult } from '../types'
+import type { CheckedRecipe, PlanRules, Slot, WeekResult } from '../types'
 import type { Outcome, Running, WeekRun } from '../useWeekRun'
 import { useWide } from '../useWide'
 import { DAYS, DAY_NAMES, reasonWords, shown } from '../words'
-import { Status } from './parts'
+import { DayDetail, DayWord, Status } from './parts'
 
 export interface WeekProps {
   state: State
@@ -113,7 +113,7 @@ export function Week({ state, run }: WeekProps) {
       {week === null ? (
         <p>No week has been written for this plan yet.</p>
       ) : (
-        <WeekView rules={rules} week={week} run={run} />
+        <WeekRecipes rules={rules} week={week} run={run} />
       )}
     </>
   )
@@ -221,7 +221,7 @@ function OutcomeNotice({ outcome, hadWeek }: { outcome: Outcome; hadWeek: boolea
   }
 }
 
-function WeekView({ rules, week, run }: { rules: PlanRules; week: WeekResult; run: WeekRun }) {
+function WeekRecipes({ rules, week, run }: { rules: PlanRules; week: WeekResult; run: WeekRun }) {
   const wide = useWide()
   const total = DAYS.length * rules.slots.length
   const passing = week.recipes.filter((recipe) => recipe.failures.length === 0).length
@@ -335,53 +335,6 @@ function DayByDay({ rules, week, run }: { rules: PlanRules; week: WeekResult; ru
         </div>
       ))}
     </section>
-  )
-}
-
-// A day's checks in one word or two, for the table's row header.
-function DayWord({ report }: { report: DayReport | undefined }) {
-  if (report === undefined) return <span className="meta">Not checked</span>
-  if (report.failures.length > 0) return <Status verdict="fail" />
-  if (report.unsettled.length > 0) return <Status verdict="unsettled" />
-  return <Status verdict="ok" />
-}
-
-function DayDetail({ report }: { report: DayReport | undefined }) {
-  if (report === undefined) return <p className="meta">This day has not been checked.</p>
-  if (report.failures.length === 0 && report.unsettled.length === 0) {
-    return (
-      <p>
-        <Status verdict="ok">every day target</Status>
-      </p>
-    )
-  }
-  return (
-    <>
-      {report.failures.length > 0 && (
-        <>
-          <p>
-            <Status verdict="fail" word="Misses:" />
-          </p>
-          <ul className="reasons">
-            {report.failures.map((failure, index) => (
-              <li key={index}>{failure.message}</li>
-            ))}
-          </ul>
-        </>
-      )}
-      {report.unsettled.length > 0 && (
-        <>
-          <p>
-            <Status verdict="unsettled" word="Can't tell:" />
-          </p>
-          <ul className="reasons">
-            {report.unsettled.map((check, index) => (
-              <li key={index}>{check.message}</li>
-            ))}
-          </ul>
-        </>
-      )}
-    </>
   )
 }
 

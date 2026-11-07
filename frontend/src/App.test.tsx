@@ -21,6 +21,7 @@ import {
   sampleExport,
   sampleState,
 } from './test/helpers'
+import { weekSummary } from './test/tracking'
 
 function seed(state: State): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, ...state }))
@@ -400,5 +401,64 @@ describe('saved data the page cannot open', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Your saved plan could not be opened' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('the log and its summary', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("opens the log on the reader's own date, from the navigation", async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 9, 26, 9, 30) })
+    seed(sampleState())
+    fakeApi({})
+    const user = userEvent.setup()
+    window.location.hash = '#/week'
+    render(<App />)
+
+    await user.click(await screen.findByRole('link', { name: 'Log' }))
+
+    const heading = await screen.findByRole('heading', {
+      level: 1,
+      name: 'Today, Monday 26 October',
+    })
+    await waitFor(() => expect(heading).toHaveFocus())
+    expect(screen.getByRole('link', { name: 'Log' })).toHaveAttribute('aria-current', 'page')
+    expect(document.title).toBe('Monday 26 October: Meal planner')
+    expect(screen.getByRole('region', { name: /^Evening snack/ })).toHaveTextContent(
+      'Logged: a different amount.',
+    )
+  })
+
+  it('asks for the summary once across its views, and again after a meal is logged', async () => {
+    seed(sampleState())
+    const calls = fakeApi({ '/v1/summary': () => json(weekSummary()) })
+    const user = userEvent.setup()
+    window.location.hash = '#/summary'
+    render(<App />)
+    const summaries = (): number => calls.filter((call) => call.path === '/v1/summary').length
+
+    await user.click(await screen.findByRole('link', { name: 'Monday 26 October' }))
+    await screen.findByRole('table', { name: 'Eaten against target' })
+    await user.click(screen.getByRole('link', { name: 'Back to the summary' }))
+    await screen.findByRole('table', { name: 'Days logged' })
+    expect(summaries()).toBe(1)
+    expect(screen.getByRole('link', { name: 'Summary' })).toHaveAttribute('aria-current', 'page')
+
+    window.location.hash = '#/log/2026-10-26'
+    const dinner = await screen.findByRole('region', { name: /^Dinner/ })
+    await user.click(within(dinner).getByRole('button', { name: 'Skipped' }))
+    await waitFor(() => expect(dinner).toHaveTextContent('Logged: skipped.'))
+    await user.click(screen.getByRole('link', { name: 'Summary' }))
+
+    await waitFor(() => expect(summaries()).toBe(2))
+    const sent = calls.filter((call) => call.path === '/v1/summary')[1]!.body as State
+    expect(sent.log.entries.map((entry) => entry.slot_id)).toEqual([
+      'breakfast',
+      'lunch',
+      'snack',
+      'dinner',
+    ])
   })
 })

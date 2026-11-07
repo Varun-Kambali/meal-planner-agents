@@ -188,7 +188,8 @@ class Choices(BaseModel):
 class ReadItem(BaseModel):
     """One food of the meal and what became of it.
 
-    `matched`: the food and a usable amount were found, and `grams` and `nutrition` are set.
+    `matched`: the food and a usable amount were found, and `grams` and `nutrition` are set;
+    `valid_units` lists the units another amount of it could be given in.
     `needs_amount`: the food was found but the amount is missing, vague, a range, not the number
     its words give, or beyond the limit; `valid_units` lists what could be used to give one.
     `unknown_unit`: the food was found but the unit is not one nutrition-mcp or the catalogue has
@@ -313,7 +314,7 @@ async def _read_item(
         unit=unit,
         grams=answer.grams,
         status="matched",
-        valid_units=[],
+        valid_units=valid,
         nutrition=answer,
     )
     return read, meal_item
