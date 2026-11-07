@@ -143,7 +143,7 @@ jobs:
             echo "index.html has an address outside /meal-planner-agents/" >&2
             exit 1
           fi
-          if grep -hoE 'url\(/[^)]*\)' "$out"/assets/*.css | grep -v 'url(/meal-planner-agents/'; then
+          if grep -hoE "url\(['\"]?/[^)]*\)" "$out"/assets/*.css | grep -vE "url\(['\"]?/meal-planner-agents/"; then
             echo "a stylesheet has an address outside /meal-planner-agents/" >&2
             exit 1
           fi
