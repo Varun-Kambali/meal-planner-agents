@@ -281,6 +281,19 @@ def test_a_missing_or_empty_address_header_falls_back_to_the_connection_address(
         assert other.get("/v1/id").status_code == 200
 
 
+def test_a_header_value_is_cut_to_64_characters_before_it_is_counted() -> None:
+    app = build(rate=1, address_header="CF-Connecting-IP")
+    with TestClient(app) as client:
+        first = {"CF-Connecting-IP": "a" * 64 + "x"}
+        same_start = {"CF-Connecting-IP": "a" * 64 + "y"}
+        other = {"CF-Connecting-IP": "a" * 63 + "b"}
+
+        assert client.get("/v1/id", headers=first).status_code == 200
+        # Past 64 characters nothing tells values apart, so a long value cannot make new keys.
+        assert client.get("/v1/id", headers=same_start).status_code == 429
+        assert client.get("/v1/id", headers=other).status_code == 200
+
+
 def test_without_the_setting_a_client_sent_address_header_is_ignored() -> None:
     app = build(rate=1)
     with TestClient(app) as client:

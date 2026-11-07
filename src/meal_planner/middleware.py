@@ -20,6 +20,8 @@ from meal_planner.log import get_logger, request_id_var
 logger = get_logger(__name__)
 
 REQUEST_ID_HEADER = "X-Request-ID"
+# The longest part of an address header that is counted. An IPv6 address is at most 45 characters.
+MAX_ADDRESS_CHARS = 64
 
 
 class RequestContext:
@@ -184,6 +186,6 @@ class RateLimit:
         if self.client_address_header:
             named = Headers(scope=scope).get(self.client_address_header, "").strip()
             if named:
-                return named
+                return named[:MAX_ADDRESS_CHARS]
         connection = scope.get("client")
         return connection[0] if connection else "unknown"
