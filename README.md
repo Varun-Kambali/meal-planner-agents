@@ -99,7 +99,26 @@ The rate limit counts requests per client address. By default the image trusts n
 
 ## Deployment
 
-The public demo is not deployed yet.
+The API runs as a Render free web service in Singapore, built from the Dockerfile as [`render.yaml`](render.yaml) describes. The browser app is built and published to GitHub Pages by the [`pages` workflow](.github/workflows/pages.yml). Your plan, week and log stay in your browser either way; the API stores nothing.
+
+**What a visitor feels of the free host.** Render stops the service after 15 minutes without a request and starts it again on the next one, which takes about a minute. While that happens the page says the demo server is starting and tries again until it answers. After two minutes without an answer it says so and asks the visitor to try again in a few minutes.
+
+**Limits on the demo**, as the code sets them:
+
+- Each visitor may make 10 requests a minute to the `/v1` routes (`MEAL_PLANNER_RATE_LIMIT_PER_MINUTE`). Over that the API answers 429 with a `Retry-After`. A visitor is counted by the address in `CF-Connecting-IP`, which Cloudflare in front of Render sets itself (`MEAL_PLANNER_CLIENT_ADDRESS_HEADER`); a request without it is counted under the connection's address.
+- A request body over 64 KiB is refused with a 413, and over 128 KiB for replacing one recipe, which sends the rest of the week back. A typed meal is at most 500 characters.
+
+**Spend cap.** The model key belongs to a Google AI Studio project with no billing account, so the free tier's quota is the most it can use and nothing can be charged. When that quota is used up, Gemini answers with a rate limit and the API reports it where it happens. For a week, the response is still a 200 stream: the slots the model would not write are listed as unwritten with the reason `rate_limited`, and the page shows them as "the model's rate limit was reached". For a typed meal the API answers 503 with "the model could not be reached (step: read_meal)". Everything that calls no model, such as the summary and the catalogue, keeps working.
+
+**Deploy a copy.**
+
+1. In Render, create a Blueprint from your fork of this repository. It reads `render.yaml`; enter `GEMINI_API_KEY` when asked, from a Google AI Studio project with no billing account.
+2. In your repository's settings, set the Actions variable `MEAL_PLANNER_API_BASE` to the service's address, such as `https://meal-planner-agents.onrender.com`, with no trailing slash.
+3. Set Pages to build from GitHub Actions (Settings, Pages, Source).
+4. Run the `pages` workflow from the Actions tab. It does nothing while the variable is unset.
+5. Change `MEAL_PLANNER_CORS_ORIGINS` in `render.yaml` from `https://varun-kambali.github.io` to your own Pages origin, so the browser lets your page call the API.
+
+The demo link will be added here once it is live.
 
 ## Design decisions
 
