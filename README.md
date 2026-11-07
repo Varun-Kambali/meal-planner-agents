@@ -112,11 +112,11 @@ The API runs as a Render free web service in Singapore, built from the Dockerfil
 
 **Deploy a copy.**
 
-1. In Render, create a Blueprint from your fork of this repository. It reads `render.yaml`; enter `GEMINI_API_KEY` when asked, from a Google AI Studio project with no billing account.
-2. In your repository's settings, set the Actions variable `MEAL_PLANNER_API_BASE` to the service's address, such as `https://meal-planner-agents.onrender.com`, with no trailing slash.
-3. Set Pages to build from GitHub Actions (Settings, Pages, Source).
-4. Run the `pages` workflow from the Actions tab. It does nothing while the variable is unset.
-5. Change `MEAL_PLANNER_CORS_ORIGINS` in `render.yaml` from `https://varun-kambali.github.io` to your own Pages origin, so the browser lets your page call the API.
+1. Change `MEAL_PLANNER_CORS_ORIGINS` in `render.yaml` from `https://varun-kambali.github.io` to your own Pages origin, so the browser lets your page call the API. Do this first: Render reads the file when the service is created.
+2. In Render, create a Blueprint from your fork of this repository. It reads `render.yaml`; enter `GEMINI_API_KEY` when asked, from a Google AI Studio project with no billing account.
+3. In your repository's settings, set the Actions variable `MEAL_PLANNER_API_BASE` to the service's address, such as `https://meal-planner-agents.onrender.com`, with no trailing slash.
+4. Set Pages to build from GitHub Actions (Settings, Pages, Source).
+5. Run the `pages` workflow from the Actions tab. It does nothing while the variable is unset.
 
 The demo link will be added here once it is live.
 
