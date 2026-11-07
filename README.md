@@ -64,7 +64,7 @@ CI replays a recorded slice of three plans and ten meals on every PR, with no ke
 
 ## Status
 
-Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. Milestone 5 has begun with the browser app: its design system, storage in the browser with export and import, a typed API client, the plan form, the week with live progress and replacing one recipe, printable recipe pages, the log (each planned meal in one tap, with a swapped meal read from typed words and confirmed food by food) and the summary of the log by day and week, all checked with pa11y in CI. A deployed demo comes next.
+Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. Milestone 5 has begun with the browser app: its design system, storage in the browser with export and import, a typed API client, the plan form, the week with live progress and replacing one recipe, printable recipe pages, the log (each planned meal in one tap, with a swapped meal read from typed words and confirmed food by food) and the summary of the log by day and week, all checked with pa11y in CI. The Docker image that serves the API is built and called in CI; a deployed demo comes next.
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
@@ -85,6 +85,21 @@ make run-api   # the API on 127.0.0.1:8000
 To trace `week`, `read` and the API in [Langfuse](https://langfuse.com), set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env`. Each run's steps, model calls, tokens, cost and failed checks are sent with the plan's words and the typed text masked; without the keys nothing is sent ([0010](docs/decisions/0010-masked-langfuse-tracing.md)). [`docs/media/trace.png`](docs/media/trace.png) shows a traced week and meal read in Langfuse.
 
 `week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The log in the example is made up, for the same plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Two read-only routes let a screen change a wrongly matched food and show an edited item's numbers: `GET /v1/foods/search` and `POST /v1/log/compute`. Details are in [docs/architecture.md](docs/architecture.md).
+
+### Run with Docker
+
+```bash
+docker build -t meal-planner-agents .
+docker run --rm -p 8000:8000 -e GEMINI_API_KEY meal-planner-agents   # the key is read from your environment
+```
+
+The API answers on `http://127.0.0.1:8000`; `/healthz` says it is up. The image holds the API and its data, not the browser app, and runs as a user without root. Set `PORT` to serve on another port, as free hosts do. CI builds the image, starts it with a placeholder key and calls `/healthz` and `/v1/catalogue`, neither of which calls a model.
+
+The rate limit counts requests per client address. By default the image trusts no forwarded address, so a client cannot choose the address it is counted under. Behind a host's proxy every visitor would share the proxy's address; the deployment then sets `FORWARDED_ALLOW_IPS` to the proxy's address, which is uvicorn's own setting for which proxies to believe.
+
+## Deployment
+
+The public demo is not deployed yet.
 
 ## Design decisions
 

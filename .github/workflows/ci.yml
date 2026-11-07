@@ -31,7 +31,43 @@ jobs:
           # Porcelain status also lists new, untracked schema files, which git diff misses.
           changes="$(git status --porcelain schemas/)"
           if [ -n "$changes" ]; then echo "$changes"; git diff schemas/; exit 1; fi
+  # Builds the image once, starts it as a host would, and calls it over HTTP. The model key is a
+  # placeholder: the startup check only looks that the variable is set, and /healthz and
+  # /v1/catalogue never call a model, so no key and no model call are involved. Memory is printed
+  # so the Linux figure can be set against a 512 MB free instance.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
       - run: docker build -t meal-planner-agents .
+      - name: Start the container
+        run: |
+          docker run -d --name api -p 8000:8000 -e GEMINI_API_KEY=placeholder-no-model-call meal-planner-agents
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/healthz; then echo; exit 0; fi
+            sleep 2
+          done
+          docker logs api
+          exit 1
+      - name: Memory once up
+        run: docker stats --no-stream --format 'once up: {{.MemUsage}} ({{.MemPerc}})' api
+      - name: Call the catalogue
+        run: curl -fsS "http://127.0.0.1:8000/v1/catalogue" | head -c 300; echo
+      - name: Memory after the catalogue call
+        run: docker stats --no-stream --format 'after the catalogue call: {{.MemUsage}} ({{.MemPerc}})' api
+      - name: Test the running image
+        run: uv run pytest tests/integration/test_container.py --no-cov
+        env:
+          MEAL_PLANNER_IMAGE: meal-planner-agents
+      - name: Container runs without root
+        run: test "$(docker exec api id -u)" = 1000
+      - name: Container log
+        if: always()
+        run: docker logs api
   # Replays the recorded smoke slice and holds it to evals/thresholds.toml. It makes no model
   # call, so it needs no key; nutrition-mcp runs here as it does for a user.
   eval-smoke:
