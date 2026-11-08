@@ -20,7 +20,8 @@
     "types:check": "node scripts/generate-types.ts --check",
     "validators": "node scripts/generate-validators.ts",
     "validators:check": "node scripts/generate-validators.ts --check",
-    "a11y": "node scripts/a11y.ts"
+    "a11y": "node scripts/a11y.ts",
+    "demo:gif": "node scripts/demo-gif.ts"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
