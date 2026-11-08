@@ -72,9 +72,14 @@ export function DataSection({
   function exportRules(): void {
     setProblem(null)
     if (state.rules === null) return
-    const name = `meal-planner-rules-${today()}.json`
-    saveFile(new Blob([JSON.stringify(state.rules, null, 2)], { type: 'application/json' }), name)
-    setStatus(`Exported ${name}.`)
+    try {
+      const name = `meal-planner-rules-${today()}.json`
+      saveFile(new Blob([JSON.stringify(state.rules, null, 2)], { type: 'application/json' }), name)
+      setStatus(`Exported ${name}.`)
+    } catch (error) {
+      const message = messageOf(error)
+      setProblem({ message: `The copy could not be made: ${message}.`, problems: [] })
+    }
   }
 
   async function replace(next: State, name: string): Promise<void> {

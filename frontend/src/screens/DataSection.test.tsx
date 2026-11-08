@@ -156,6 +156,21 @@ it('exports the rules alone as a file the page loads again as rules', async () =
   expect(loaded).toEqual({ kind: 'rules', rules: state.rules })
 })
 
+it('says so when the rules file could not be made', async () => {
+  vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    throw new Error('Downloads are blocked')
+  })
+  const user = userEvent.setup()
+  render(<DataSection state={sampleState()} onReplace={saver()} blocked={null} />)
+
+  await user.click(screen.getByRole('button', { name: 'Export the rules only' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'The copy could not be made: Downloads are blocked.',
+  )
+  expect(screen.queryByText(/Exported meal-planner-rules/)).not.toBeInTheDocument()
+})
+
 it('says what is sent to the model, and that the server stores nothing', () => {
   render(<DataSection state={sampleState()} onReplace={saver()} blocked={null} />)
 
