@@ -2,7 +2,7 @@
 
 Work in progress. Writes a week of recipes for the meal plan you already follow, checks every nutrition number and rule in code through [nutrition-mcp](https://github.com/Varun-Kambali/nutrition-mcp), and tracks the meals you eat against the plan.
 
-[![CI](https://github.com/Varun-Kambali/meal-planner-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/Varun-Kambali/meal-planner-agents/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) · **[Case study](docs/case-study.md)**
+[![CI](https://github.com/Varun-Kambali/meal-planner-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/Varun-Kambali/meal-planner-agents/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) · **[Live demo](https://varun-kambali.github.io/meal-planner-agents/)** · **[Case study](docs/case-study.md)**
 
 ## Problem
 
@@ -64,7 +64,7 @@ CI replays a recorded slice of three plans and ten meals on every PR, with no ke
 
 ## Status
 
-Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. Milestone 5 has begun with the browser app: its design system, storage in the browser with export and import, a typed API client, the plan form, the week with live progress and replacing one recipe, printable recipe pages, the log (each planned meal in one tap, with a swapped meal read from typed words and confirmed food by food) and the summary of the log by day and week, all checked with pa11y in CI. The Docker image that serves the API is built and called in CI; a deployed demo comes next.
+Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking (reading a typed meal, and day and week totals), and evals and tracing. They run from the command line and from an HTTP API on your own machine; the eval results are above, and a run can be traced to Langfuse. Milestone 5 has begun with the browser app: its design system, storage in the browser with export and import, a typed API client, the plan form, the week with live progress and replacing one recipe, printable recipe pages, the log (each planned meal in one tap, with a swapped meal read from typed words and confirmed food by food) and the summary of the log by day and week, all checked with pa11y in CI. The Docker image that serves the API is built and called in CI, and it runs the [live demo](https://varun-kambali.github.io/meal-planner-agents/).
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
@@ -118,7 +118,7 @@ The API runs as a Render free web service in Singapore, built from the Dockerfil
 4. Set Pages to build from GitHub Actions (Settings, Pages, Source).
 5. Run the `pages` workflow from the Actions tab. It does nothing while the variable is unset.
 
-The demo link will be added here once it is live.
+The demo is live at [https://varun-kambali.github.io/meal-planner-agents/](https://varun-kambali.github.io/meal-planner-agents/), with the API at https://meal-planner-agents.onrender.com. After 15 minutes without use, the first request takes about a minute while the server starts.
 
 ## Design decisions
 
