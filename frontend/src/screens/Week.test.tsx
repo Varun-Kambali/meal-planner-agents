@@ -121,6 +121,52 @@ describe('the week', () => {
     expect(saved().week).toEqual(failingWeek())
   })
 
+  it('keeps the week it had, and says why, when a new week writes no recipe', async () => {
+    const before = failingWeek()
+    seed({ ...sampleState(), week: before })
+    const run = new FakeStream()
+    fakeApi({ '/v1/week': () => run.response })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Write a new week' }))
+    // The stream still ends in week_done, with every meal named as not written.
+    const empty = sampleWeek()
+    empty.recipes = []
+    empty.days = []
+    empty.unwritten = [
+      ['mon', 'breakfast', 'rate_limited'],
+      ['mon', 'lunch', 'rate_limited'],
+    ]
+    run.send({ kind: 'week_done', week: empty })
+    run.end()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      "No recipe could be written: the model's rate limit was reached.",
+    )
+    expect(alert).toHaveTextContent('The week you had is unchanged.')
+    expect(screen.queryByText('The week is written.')).not.toBeInTheDocument()
+    expect(cell('Monday', 'Lunch')).toHaveTextContent('Paneer rice box')
+    expect(saved().week).toEqual(before)
+  })
+
+  it('saves a new week that writes some recipes and leaves some meals unwritten', async () => {
+    seed({ ...sampleState(), week: sampleWeek() })
+    const run = new FakeStream()
+    fakeApi({ '/v1/week': () => run.response })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Write a new week' }))
+    run.send({ kind: 'week_done', week: failingWeek() })
+    run.end()
+
+    expect(await screen.findByText('The week is written.')).toBeInTheDocument()
+    expect(saved().week).toEqual(failingWeek())
+    expect(cell('Tuesday', 'Lunch')).toHaveTextContent('Could not write')
+  })
+
   it('says the run stopped, and keeps the week it had, when the stream ends in an error', async () => {
     const before = failingWeek()
     seed({ ...sampleState(), week: before })

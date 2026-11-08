@@ -113,6 +113,18 @@ export function useWeekRun(
         let week: WeekResult
         if (what.what === 'week') {
           week = await streamWeek(rules, onEvent, { signal: abort.signal })
+          // Every meal unwritten (the model's rate limit, say): the stream still ends in
+          // week_done, and saving it would replace the week the person has with an empty one.
+          if (week.recipes.length === 0) {
+            const first = week.unwritten[0]?.[2]
+            const why = first === undefined ? '' : `: ${reasonWords(first)}`
+            setOutcome({
+              kind: 'failed',
+              run: what,
+              message: `No recipe could be written${why}.`,
+            })
+            return
+          }
         } else {
           const before = start.week!
           const result = await replaceRecipe(rules, before, what.day, what.slotId, onEvent, {
