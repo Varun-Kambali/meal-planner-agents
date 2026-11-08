@@ -21,7 +21,7 @@ def client() -> Iterator[TestClient]:
 
 
 def test_a_search_for_dal_returns_food_ids_with_units(client: TestClient) -> None:
-    response = client.get("/v1/foods/search", params={"q": "dal"})
+    response = client.post("/v1/foods/search", json={"q": "dal"})
 
     assert response.status_code == 200
     foods = response.json()
@@ -35,7 +35,7 @@ def test_a_search_for_dal_returns_food_ids_with_units(client: TestClient) -> Non
 
 def test_the_units_of_a_search_are_the_servers_then_the_catalogues(client: TestClient) -> None:
     """The server has the egg in grams only; the catalogue's piece is offered after them."""
-    response = client.get("/v1/foods/search", params={"q": "egg", "limit": 3})
+    response = client.post("/v1/foods/search", json={"q": "egg", "limit": 3})
 
     units = {food["id"]: food["units"] for food in response.json()}
     assert units["egg"] == ["g", "piece"]
@@ -43,7 +43,7 @@ def test_the_units_of_a_search_are_the_servers_then_the_catalogues(client: TestC
 
 
 def test_a_food_the_data_lacks_is_an_empty_list(client: TestClient) -> None:
-    response = client.get("/v1/foods/search", params={"q": "pulao"})
+    response = client.post("/v1/foods/search", json={"q": "pulao"})
 
     assert (response.status_code, response.json()) == (200, [])
 

@@ -1,5 +1,5 @@
-"""GET /v1/foods/search: the foods nutrition-mcp has under a name, for the screen that changes a
-wrongly matched food.
+"""POST /v1/foods/search: the foods nutrition-mcp has under a name, for the screen that changes a
+wrongly matched food. The query is in the body, never the URL, so no request line holds it.
 
 The app is the one the reader tests use: nutrition-mcp holds the foods in reader_helpers, and the
 catalogue gives the egg a `piece` that nutrition-mcp lacks. No test scripts a model, because the
@@ -29,7 +29,7 @@ def searched(nutrition: ReaderNutrition) -> list[str]:
 
 def test_a_name_comes_back_as_foods_with_the_units_an_amount_can_use(tmp_path: Path) -> None:
     with serving_foods(tmp_path) as client:
-        response = client.get(SEARCH, params={"q": "roti"})
+        response = client.post(SEARCH, json={"q": "roti"})
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
@@ -48,8 +48,8 @@ def test_the_units_are_the_ones_the_reader_lists_nutrition_mcps_then_the_catalog
 ) -> None:
     """nutrition-mcp has the egg in grams only. The catalogue's piece works, so it is offered."""
     with serving_foods(tmp_path) as client:
-        egg = client.get(SEARCH, params={"q": "egg"}).json()
-        pav = client.get(SEARCH, params={"q": "pav"}).json()
+        egg = client.post(SEARCH, json={"q": "egg"}).json()
+        pav = client.post(SEARCH, json={"q": "pav"}).json()
 
     assert [(f["id"], f["kind"], f["units"]) for f in egg] == [
         ("egg", "ingredient", ["g", "piece"]),
@@ -61,14 +61,14 @@ def test_the_units_are_the_ones_the_reader_lists_nutrition_mcps_then_the_catalog
 
 def test_the_results_are_nutrition_mcps_in_its_order(tmp_path: Path) -> None:
     with serving_foods(tmp_path) as client:
-        response = client.get(SEARCH, params={"q": "dal"})
+        response = client.post(SEARCH, json={"q": "dal"})
 
     assert [f["id"] for f in response.json()] == ["dal_tadka", "toor_dal", "moong_dal"]
 
 
 def test_a_name_nutrition_mcp_lacks_is_an_empty_list_not_a_guess(tmp_path: Path) -> None:
     with serving_foods(tmp_path) as client:
-        response = client.get(SEARCH, params={"q": "pulao"})
+        response = client.post(SEARCH, json={"q": "pulao"})
 
     assert response.status_code == 200
     assert response.json() == []
@@ -80,9 +80,9 @@ def test_the_search_asks_nutrition_mcp_for_five_foods_unless_told_otherwise(
     nutrition = AskedForLimit()
 
     with serving_foods(tmp_path, nutrition) as client:
-        default = client.get(SEARCH, params={"q": "dal"})
-        two = client.get(SEARCH, params={"q": "dal", "limit": 2})
-        most = client.get(SEARCH, params={"q": "dal", "limit": 50})
+        default = client.post(SEARCH, json={"q": "dal"})
+        two = client.post(SEARCH, json={"q": "dal", "limit": 2})
+        most = client.post(SEARCH, json={"q": "dal", "limit": 50})
 
     assert [len(r.json()) for r in (default, two, most)] == [3, 2, 3]
     assert nutrition.limits == [5, 2, 50]
@@ -100,15 +100,17 @@ class AskedForLimit(ReaderNutrition):
         return await super().search(query, kind, limit)
 
 
-@pytest.mark.parametrize("limit", ["0", "-1", "51", "many", "2.5", ""])
-def test_a_limit_outside_one_to_fifty_is_422_naming_the_limit(tmp_path: Path, limit: str) -> None:
+@pytest.mark.parametrize("limit", [0, -1, 51, "many", 2.5, ""])
+def test_a_limit_outside_one_to_fifty_is_422_naming_the_limit(
+    tmp_path: Path, limit: object
+) -> None:
     nutrition = ReaderNutrition()
 
     with serving_foods(tmp_path, nutrition) as client:
-        response = client.get(SEARCH, params={"q": "dal", "limit": limit})
+        response = client.post(SEARCH, json={"q": "dal", "limit": limit})
 
     assert response.status_code == 422
-    assert [p["loc"] for p in response.json()["detail"]] == [["query", "limit"]]
+    assert [p["loc"] for p in response.json()["detail"]] == [["body", "limit"]]
     assert searched(nutrition) == []
 
 
@@ -116,7 +118,7 @@ def test_the_search_sees_the_text_without_the_spaces_around_it(tmp_path: Path) -
     nutrition = ReaderNutrition()
 
     with serving_foods(tmp_path, nutrition) as client:
-        response = client.get(SEARCH, params={"q": "  roti \n"})
+        response = client.post(SEARCH, json={"q": "  roti \n"})
 
     assert response.status_code == 200
     assert searched(nutrition) == ["roti"]
@@ -136,16 +138,16 @@ def test_the_search_sees_the_text_without_the_spaces_around_it(tmp_path: Path) -
     ],
 )
 def test_a_blank_unsearchable_or_long_query_is_422_without_asking_nutrition_mcp(
-    tmp_path: Path, params: dict[str, str], said: str
+    tmp_path: Path, params: dict[str, object], said: str
 ) -> None:
     nutrition = ReaderNutrition()
 
     with serving_foods(tmp_path, nutrition) as client:
-        response = client.get(SEARCH, params=params)
+        response = client.post(SEARCH, json=params)
 
     assert response.status_code == 422
     (problem,) = response.json()["detail"]
-    assert problem == {"loc": ["query", "q"], "msg": said}
+    assert problem == {"loc": ["body", "q"], "msg": said}
     assert searched(nutrition) == []
 
 
@@ -153,25 +155,25 @@ def test_a_blank_unsearchable_or_long_query_is_422_without_asking_nutrition_mcp(
     ("params", "problems"),
     [
         (
-            {"q": "  ", "limit": "0"},
+            {"q": "  ", "limit": 0},
             [
-                (["query", "q"], "type a food name: the text is blank"),
-                (["query", "limit"], "Input should be greater than or equal to 1"),
+                (["body", "q"], "type a food name: the text is blank"),
+                (["body", "limit"], "Input should be greater than or equal to 1"),
             ],
         ),
         (
-            {"q": "x" * 101, "limit": "51"},
+            {"q": "x" * 101, "limit": 51},
             [
-                (["query", "q"], "the text has 101 characters and the most is 100"),
-                (["query", "limit"], "Input should be less than or equal to 50"),
+                (["body", "q"], "the text has 101 characters and the most is 100"),
+                (["body", "limit"], "Input should be less than or equal to 50"),
             ],
         ),
         (
             {"limit": "many"},
             [
-                (["query", "q"], "Field required"),
+                (["body", "q"], "Field required"),
                 (
-                    ["query", "limit"],
+                    ["body", "limit"],
                     "Input should be a valid integer, unable to parse string as an integer",
                 ),
             ],
@@ -179,12 +181,12 @@ def test_a_blank_unsearchable_or_long_query_is_422_without_asking_nutrition_mcp(
     ],
 )
 def test_a_bad_query_and_a_bad_limit_are_both_reported(
-    tmp_path: Path, params: dict[str, str], problems: list[tuple[list[str], str]]
+    tmp_path: Path, params: dict[str, object], problems: list[tuple[list[str], str]]
 ) -> None:
     nutrition = ReaderNutrition()
 
     with serving_foods(tmp_path, nutrition) as client:
-        response = client.get(SEARCH, params=params)
+        response = client.post(SEARCH, json=params)
 
     assert response.status_code == 422
     assert [(p["loc"], p["msg"]) for p in response.json()["detail"]] == problems
@@ -197,7 +199,7 @@ def test_a_query_of_the_longest_length_is_searched_and_spaces_around_it_are_not_
     nutrition = ReaderNutrition()
 
     with serving_foods(tmp_path, nutrition) as client:
-        response = client.get(SEARCH, params={"q": " " + "x" * 100 + "  "})
+        response = client.post(SEARCH, json={"q": " " + "x" * 100 + "  "})
 
     assert response.status_code == 200
     assert searched(nutrition) == ["x" * 100]
@@ -205,10 +207,29 @@ def test_a_query_of_the_longest_length_is_searched_and_spaces_around_it_are_not_
 
 def test_a_query_over_the_limit_does_not_come_back_in_the_422(tmp_path: Path) -> None:
     with serving_foods(tmp_path) as client:
-        response = client.get(SEARCH, params={"q": MARK * 20})
+        response = client.post(SEARCH, json={"q": MARK * 20})
 
     assert response.status_code == 422
     assert MARK not in response.text
+
+
+def test_the_query_is_not_read_from_the_url(tmp_path: Path) -> None:
+    """There is no GET route: what is typed never travels in a request line."""
+    nutrition = ReaderNutrition()
+
+    with serving_foods(tmp_path, nutrition) as client:
+        response = client.get(SEARCH, params={"q": "roti"})
+
+    assert response.status_code == 405
+    assert searched(nutrition) == []
+
+
+def test_a_field_the_search_does_not_take_is_422(tmp_path: Path) -> None:
+    with serving_foods(tmp_path) as client:
+        response = client.post(SEARCH, json={"q": "roti", "kind": "dish"})
+
+    assert response.status_code == 422
+    assert [p["loc"] for p in response.json()["detail"]] == [["body", "kind"]]
 
 
 # The limits every /v1 route has
@@ -216,8 +237,8 @@ def test_a_query_over_the_limit_does_not_come_back_in_the_422(tmp_path: Path) ->
 
 def test_the_search_route_is_rate_limited(tmp_path: Path) -> None:
     with serving_foods(tmp_path, rate_limit_per_minute=1) as client:
-        first = client.get(SEARCH, params={"q": "roti"})
-        second = client.get(SEARCH, params={"q": "roti"})
+        first = client.post(SEARCH, json={"q": "roti"})
+        second = client.post(SEARCH, json={"q": "roti"})
 
     assert (first.status_code, second.status_code) == (200, 429)
     assert 1 <= int(second.headers["retry-after"]) <= 60
@@ -227,8 +248,8 @@ def test_the_search_calls_no_model(tmp_path: Path) -> None:
     model = FakeModel({})
 
     with serving_foods(tmp_path, model=model) as client:
-        client.get(SEARCH, params={"q": "roti"})
-        client.get(SEARCH, params={"q": "pulao"})
+        client.post(SEARCH, json={"q": "roti"})
+        client.post(SEARCH, json={"q": "pulao"})
 
     assert model.calls == []
 
@@ -256,7 +277,7 @@ def test_nutrition_mcp_being_down_is_a_503_naming_the_step(
     tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
     with serving_foods(tmp_path, SearchDown()) as client:
-        response = client.get(SEARCH, params={"q": "roti"})
+        response = client.post(SEARCH, json={"q": "roti"})
 
     assert response.status_code == 503
     assert response.json() == {"detail": "nutrition-mcp could not be reached (step: nutrition)"}
@@ -269,7 +290,7 @@ def test_nutrition_mcp_being_down_is_a_503_naming_the_step(
 
 def test_an_answer_that_cannot_be_read_is_a_502_naming_the_step(tmp_path: Path) -> None:
     with serving_foods(tmp_path, SearchUnreadable()) as client:
-        response = client.get(SEARCH, params={"q": "roti"})
+        response = client.post(SEARCH, json={"q": "roti"})
 
     assert response.status_code == 502
     assert response.json() == {
@@ -313,7 +334,7 @@ def test_no_typed_text_in_logs(
     status: int,
 ) -> None:
     with serving_foods(tmp_path, nutrition()) as client:
-        response = client.get(SEARCH, params={"q": f"roti {MARK}"})
+        response = client.post(SEARCH, json={"q": f"roti {MARK}"})
 
     assert response.status_code == status
     assert MARK not in response.text
@@ -328,9 +349,9 @@ def test_no_typed_text_in_logs_when_the_query_is_rejected(
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     with serving_foods(tmp_path) as client:
-        too_long = client.get(SEARCH, params={"q": MARK * 20})
-        no_letters = client.get(SEARCH, params={"q": "?!" + "!" * 10})
-        bad_limit = client.get(SEARCH, params={"q": MARK, "limit": MARK})
+        too_long = client.post(SEARCH, json={"q": MARK * 20})
+        no_letters = client.post(SEARCH, json={"q": "?!" + "!" * 10})
+        bad_limit = client.post(SEARCH, json={"q": MARK, "limit": MARK})
 
     assert [r.status_code for r in (too_long, no_letters, bad_limit)] == [422, 422, 422]
     assert MARK not in too_long.text + bad_limit.text

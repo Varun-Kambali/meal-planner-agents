@@ -71,7 +71,7 @@ def main() -> None:
             {"food_id": item["food_id"], "amount": item["amount"], "unit": item["unit"]}
             for item in found
         ]
-        search = checked(client.get("/v1/foods/search", params={"q": SEARCHED}))
+        search = checked(client.post("/v1/foods/search", json={"q": SEARCHED}))
         swapped = [*eaten, {"food_id": search[0]["id"], "amount": 100, "unit": "g"}]
         compute = checked(client.post("/v1/log/compute", json={"items": swapped}))
         half_dinner = planned(week, "mon", "dinner", 0.5)

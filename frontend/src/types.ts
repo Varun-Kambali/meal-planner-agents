@@ -496,6 +496,14 @@ export interface ReplaceRequest {
   slot_id: string
 }
 /**
+ * The body of a food search. What is typed travels in the body and not the URL, so that no
+ * request line a proxy keeps holds it.
+ */
+export interface SearchRequest {
+  q: string
+  limit: number
+}
+/**
  * A model call gave nothing usable. `final` is false when the slot will be tried again.
  */
 export interface SlotFailed {

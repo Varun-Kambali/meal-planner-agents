@@ -28,6 +28,7 @@ API_SCHEMAS = [
     "api/read-request.json",
     "api/read-result.json",
     "api/replace-request.json",
+    "api/search-request.json",
     "api/stream-event.json",
     "api/summary-request.json",
     "api/week-summary.json",

@@ -344,7 +344,7 @@ describe('the swap flow when a request fails', () => {
     await user.click(await within(chapati).findByRole('button', { name: 'Use Paneer' }))
 
     expect(calls.filter((call) => call.path.startsWith('/v1/foods/search'))).toEqual([
-      expect.objectContaining({ path: '/v1/foods/search?q=paneer' }),
+      expect.objectContaining({ path: '/v1/foods/search', body: { q: 'paneer' } }),
     ])
     const amount = within(chapati).getByLabelText('Amount')
     expect(amount).toHaveFocus()
