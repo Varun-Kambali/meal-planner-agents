@@ -149,6 +149,11 @@ export function DataSection({
         Your plan, its week of recipes and your meal log are saved in this browser only. Clearing
         this browser&apos;s data deletes them, so export a copy to keep one.
       </p>
+      <p>
+        The plan&apos;s rules, and the words typed for a swapped meal, are sent to the model
+        (Google&apos;s Gemini API, on a free-tier key in the demo) to write recipes and read meals.
+        This app&apos;s server stores nothing.
+      </p>
       <div className="actions">
         <button
           type="button"

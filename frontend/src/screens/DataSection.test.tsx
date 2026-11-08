@@ -155,3 +155,12 @@ it('exports the rules alone as a file the page loads again as rules', async () =
   const loaded = await loadFile(new Blob([await files[0]!.text()]))
   expect(loaded).toEqual({ kind: 'rules', rules: state.rules })
 })
+
+it('says what is sent to the model, and that the server stores nothing', () => {
+  render(<DataSection state={sampleState()} onReplace={saver()} blocked={null} />)
+
+  const notice = screen.getByRole('region', { name: 'Your data' })
+  expect(notice).toHaveTextContent('are sent to the model')
+  expect(notice).toHaveTextContent('Gemini API')
+  expect(notice).toHaveTextContent('stores nothing')
+})
