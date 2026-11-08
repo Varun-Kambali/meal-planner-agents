@@ -18,8 +18,9 @@ import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { Server } from 'node:http'
 
-import puppeteer, { type Page } from 'puppeteer'
+import puppeteer, { type Browser, type Page } from 'puppeteer'
 
 import { ORIGIN, serve } from './a11y-server.ts'
 
@@ -155,10 +156,15 @@ async function main(): Promise<void> {
   if (!existsSync(path.resolve(here, '../dist/index.html'))) {
     throw new Error('dist/ is missing: run npm run build first')
   }
+  await run('ffmpeg', ['-version']).catch(() => {
+    throw new Error('ffmpeg not found: install it (brew install ffmpeg) and try again')
+  })
   const frames = await mkdtemp(path.join(tmpdir(), 'demo-gif-'))
-  const server = await serve()
-  const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] })
+  let server: Server | undefined
+  let browser: Browser | undefined
   try {
+    server = await serve()
+    browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox'] })
     const page = await browser.newPage()
     await page.setViewport({ width: WIDTH, height: HEIGHT })
     await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }])
@@ -200,8 +206,8 @@ async function main(): Promise<void> {
     )
     if (size > MAX_BYTES) throw new Error('the GIF is over 5 MB: shorten the path or the scroll')
   } finally {
-    await browser.close().catch(() => undefined)
-    server.close()
+    await browser?.close().catch(() => undefined)
+    server?.close()
     if (process.env.DEMO_GIF_KEEP_FRAMES === undefined) {
       await rm(frames, { recursive: true, force: true })
     } else console.log(`frames kept in ${frames}`)
