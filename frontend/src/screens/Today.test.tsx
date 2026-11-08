@@ -3,7 +3,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { SaveOutcome } from '../session'
+import type { SaveOutcome, Update } from '../session'
 import { StorageUnavailable, ValidationFailed, type State } from '../storage'
 import { catchDownloads, fakeApi, json, sampleState } from '../test/helpers'
 import { computeReply, readReply } from '../test/tracking'
@@ -24,7 +24,8 @@ function Harness({
 }) {
   const [state, setState] = useState(start)
   // As the shell does, the state changes once the browser has saved it.
-  const save = async (next: State): Promise<SaveOutcome> => {
+  const save = async (update: Update): Promise<SaveOutcome> => {
+    const next = update(state)
     saves.push(next)
     const result = await outcome(next)
     if (result.ok || !(result.error instanceof ValidationFailed)) setState(next)
@@ -344,7 +345,7 @@ describe('the swap flow when a request fails', () => {
     await user.click(await within(chapati).findByRole('button', { name: 'Use Paneer' }))
 
     expect(calls.filter((call) => call.path.startsWith('/v1/foods/search'))).toEqual([
-      expect.objectContaining({ path: '/v1/foods/search?q=paneer' }),
+      expect.objectContaining({ path: '/v1/foods/search', body: { q: 'paneer' } }),
     ])
     const amount = within(chapati).getByLabelText('Amount')
     expect(amount).toHaveFocus()

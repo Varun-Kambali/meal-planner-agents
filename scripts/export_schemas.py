@@ -24,6 +24,7 @@ from meal_planner.api import (
     ComputeRequest,
     ReadRequest,
     ReplaceRequest,
+    SearchRequest,
     SummaryRequest,
 )
 from meal_planner.foods import FoodOption
@@ -47,6 +48,7 @@ SCHEMAS: dict[str, tuple[Any, str | None]] = {
     "api/read-result": (ReadResult, None),
     "api/summary-request": (SummaryRequest, None),
     "api/week-summary": (WeekSummary, None),
+    "api/search-request": (SearchRequest, None),
     "api/food-search": (list[FoodOption], "FoodSearchResult"),
     "api/compute-request": (ComputeRequest, None),
     "api/meal-result": (MealResult, None),

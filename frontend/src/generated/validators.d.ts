@@ -5,3 +5,5 @@ import type { ValidateFunction } from 'ajv/dist/2020'
 export declare const exported: ValidateFunction
 // What this browser saved: the same format, with no plan rules until they are saved.
 export declare const stored: ValidateFunction
+// A plan-rules file, in the format of schemas/plan-rules.json.
+export declare const rulesFile: ValidateFunction

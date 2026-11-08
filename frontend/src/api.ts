@@ -16,6 +16,7 @@ import type {
   ReadRequest,
   ReadResult,
   ReplaceRequest,
+  SearchRequest,
   StreamError,
   StreamEvent,
   SummaryRequest,
@@ -314,14 +315,17 @@ export function catalogue(
   return getJson(`/v1/catalogue${search}`, options)
 }
 
-// GET /v1/foods/search: the foods nutrition-mcp has under a name, with the units each takes.
+// POST /v1/foods/search: the foods nutrition-mcp has under a name, with the units each takes.
+// The name travels in the body, never the URL, so no request line a proxy keeps holds it.
 export function searchFoods(
   q: string,
   options: CallOptions & { limit?: number } = {},
 ): Promise<FoodSearchResult> {
-  const query = new URLSearchParams({ q })
-  if (options.limit !== undefined) query.set('limit', String(options.limit))
-  return getJson(`/v1/foods/search?${query.toString()}`, options)
+  // The generated type has the limit required, as the server always has one; the server's own
+  // default (5) is used when none is given.
+  const body: Pick<SearchRequest, 'q'> & Partial<SearchRequest> =
+    options.limit === undefined ? { q } : { q, limit: options.limit }
+  return postJson('/v1/foods/search', body, options)
 }
 
 // POST /v1/log/compute: each food's numbers and the meal's total, for a meal being edited.

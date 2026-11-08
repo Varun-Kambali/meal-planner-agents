@@ -20,11 +20,28 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: { '/v1': API, '/healthz': API },
+    // The tests read the server's plan files (tests/fixtures/plans) to check that they load.
+    fs: { allow: ['.', '../tests/fixtures'] },
   },
   test: {
     environment: 'jsdom',
     restoreMocks: true,
     unstubGlobals: true,
     setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      // The core logic: what the app keeps, checks, works out and asks the API. Each file has
+      // to reach the thresholds on its own, so a well-covered file cannot cover for another.
+      include: [
+        'src/storage.ts',
+        'src/validate.ts',
+        'src/mealLog.ts',
+        'src/swap.ts',
+        'src/planForm.ts',
+        'src/api.ts',
+      ],
+      reporter: ['text'],
+      thresholds: { perFile: true, statements: 80, branches: 80, functions: 80, lines: 80 },
+    },
   },
 })

@@ -754,7 +754,7 @@ def test_the_api_opens_no_span_for_the_food_search_or_the_meal_compute(
     rotis = {"food_id": "chapati", "amount": 2, "unit": "roti"}
 
     with serving_foods(tmp_path, **keyed()) as client:
-        search = client.get("/v1/foods/search", params={"q": f"roti {MARK}"})
+        search = client.post("/v1/foods/search", json={"q": f"roti {MARK}"})
         compute = client.post("/v1/log/compute", json={"items": [rotis]})
         refused = client.post("/v1/log/compute", json={"items": [rotis | {"unit": MARK}]})
 

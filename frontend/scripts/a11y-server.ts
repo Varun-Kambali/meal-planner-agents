@@ -8,7 +8,7 @@
 //   screen to test.
 // - GET /v1/catalogue lists the foods of that week, so the plan form's food lists load.
 // - POST /v1/week refuses the plan with a 422, so the week screen's refusal can be checked.
-// - POST /v1/log/read, GET /v1/foods/search, POST /v1/log/compute and POST /v1/summary answer
+// - POST /v1/log/read, POST /v1/foods/search, POST /v1/log/compute and POST /v1/summary answer
 //   with the API's recorded replies, whatever they are asked, so the log and summary screens can
 //   be checked with real data. A typed meal of REFUSED_MEAL is refused as the rate limit refuses
 //   it, so a failed request's alert can be checked too.
@@ -95,7 +95,7 @@ export async function serve(): Promise<Server> {
   // Each recorded reply by the method and path it answers.
   const replies: Record<string, string> = {
     'POST /v1/log/read': JSON.stringify(tracking.read.reply),
-    'GET /v1/foods/search': JSON.stringify(tracking.search.reply),
+    'POST /v1/foods/search': JSON.stringify(tracking.search.reply),
     'POST /v1/log/compute': JSON.stringify(tracking.compute.reply),
     'POST /v1/summary': JSON.stringify(tracking.summary),
   }

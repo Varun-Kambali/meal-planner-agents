@@ -3,7 +3,9 @@
 // about a minute. Until it answers, a page that said nothing would look broken.
 //
 // The first call gets 4 seconds. If it fails, the person is told, and the call is made again (15
-// seconds each, 3 seconds apart) until one answers or 120 seconds have passed in all.
+// seconds each, 3 seconds apart) until one answers or 120 seconds have passed in all. Then the
+// notice says the server did not answer, and the calls go on 30 seconds apart, so the notice
+// clears itself when the server comes up.
 
 import { useEffect, useState } from 'react'
 
@@ -15,6 +17,7 @@ const FIRST_TIMEOUT_MS = 4_000
 const RETRY_TIMEOUT_MS = 15_000
 const RETRY_GAP_MS = 3_000
 const GIVE_UP_MS = 120_000
+const SLOW_GAP_MS = 30_000
 
 // True if the server answered within `timeoutMs`, or until `stop` fires.
 function answers(timeoutMs: number, stop: AbortSignal): Promise<boolean> {
@@ -52,8 +55,9 @@ export function useServerWake(): Wake {
     // Read inside the effect, so that a test can set it; Vite fixes it at build time.
     if (!import.meta.env.VITE_API_BASE) return
     const stop = new AbortController()
+    let slow = false
     const giveUp = setTimeout(() => {
-      stop.abort()
+      slow = true
       setWake((now) => (now === 'up' ? now : 'gave_up'))
     }, GIVE_UP_MS)
 
@@ -67,9 +71,10 @@ export function useServerWake(): Wake {
           setWake('up')
           return
         }
-        // The same value again changes nothing, so the message is announced once.
-        setWake('starting')
-        await pause(RETRY_GAP_MS, stop.signal)
+        // The same value again changes nothing, so the message is announced once. Once it has
+        // said the server did not answer, it is not changed back to "starting".
+        setWake((now) => (now === 'gave_up' ? now : 'starting'))
+        await pause(slow ? SLOW_GAP_MS : RETRY_GAP_MS, stop.signal)
         if (stop.signal.aborted) return
         timeout = RETRY_TIMEOUT_MS
       }

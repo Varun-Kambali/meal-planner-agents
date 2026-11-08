@@ -14,7 +14,7 @@ import {
 } from './api'
 import { fromServer, sameRules, type FormError } from './planForm'
 import { advance, startProgress, type Progress } from './progress'
-import type { SaveOutcome } from './session'
+import type { Save } from './session'
 import { ValidationFailed, type State } from './storage'
 import type { WeekResult } from './types'
 import { isAbort } from './useCalls'
@@ -78,7 +78,7 @@ function failure(error: unknown, run: Running): Outcome {
 
 export function useWeekRun(
   state: State | null,
-  save: (state: State) => Promise<SaveOutcome>,
+  save: Save,
   onRefused: (errors: FormError[]) => void,
 ): WeekRun {
   const [running, setRunning] = useState<Running | null>(null)
@@ -113,6 +113,18 @@ export function useWeekRun(
         let week: WeekResult
         if (what.what === 'week') {
           week = await streamWeek(rules, onEvent, { signal: abort.signal })
+          // Every meal unwritten (the model's rate limit, say): the stream still ends in
+          // week_done, and saving it would replace the week the person has with an empty one.
+          if (week.recipes.length === 0) {
+            const first = week.unwritten[0]?.[2]
+            const why = first === undefined ? '' : `: ${reasonWords(first)}`
+            setOutcome({
+              kind: 'failed',
+              run: what,
+              message: `No recipe could be written${why}.`,
+            })
+            return
+          }
         } else {
           const before = start.week!
           const result = await replaceRecipe(rules, before, what.day, what.slotId, onEvent, {
@@ -140,20 +152,32 @@ export function useWeekRun(
         }
         // The plan, or the week a replacement was written into, may have been replaced since the
         // run began. A week written for other rules is not saved over them.
-        const now = latest.current ?? start
-        if (!sameRules(now.rules, rules) || (what.what === 'replace' && now.week !== start.week)) {
-          const written =
+        const unchanged = (s: State): boolean =>
+          sameRules(s.rules, rules) && (what.what === 'week' || s.week === start.week)
+        const planChanged: Outcome = {
+          kind: 'failed',
+          run: what,
+          message: `The plan changed while ${
             what.what === 'week'
               ? 'the week was being written, so this week'
               : 'the recipe was being written, so it'
-          setOutcome({
-            kind: 'failed',
-            run: what,
-            message: `The plan changed while ${written} was not kept.`,
-          })
+          } was not kept.`,
+        }
+        if (!unchanged(latest.current ?? start)) {
+          setOutcome(planChanged)
           return
         }
-        const saved = await save({ ...now, rules, week })
+        // The save is applied when its turn comes, to the state then, so a meal saved meanwhile
+        // is kept. The check runs again on that state.
+        const applied = { kept: true }
+        const saved = await save((current) => {
+          applied.kept = unchanged(current)
+          return applied.kept ? { ...current, week } : current
+        })
+        if (!applied.kept) {
+          setOutcome(planChanged)
+          return
+        }
         // A save the browser could not make (StorageUnavailable, say) still keeps the week on the
         // page, and the shell says it was not saved. One that would not load again keeps nothing.
         if (!saved.ok && saved.error instanceof ValidationFailed) {

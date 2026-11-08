@@ -5,7 +5,16 @@
 // Every save to IndexedDB removes the localStorage copy, so a copy in localStorage is always the
 // newer of the two: it is there only when the last save could not reach IndexedDB.
 
-import { ValidationFailed, checkExport, checkStored, type State } from './validate'
+import { withoutSlots } from './mealLog'
+import type { PlanRules } from './types'
+import {
+  ValidationFailed,
+  checkExport,
+  checkRulesFile,
+  checkStored,
+  fitsRulesFile,
+  type State,
+} from './validate'
 
 export { ValidationFailed, type FieldProblem, type State } from './validate'
 
@@ -307,4 +316,51 @@ export function exportFile(state: State): Blob {
 export async function importFile(file: Blob): Promise<State> {
   const { rules, week, log } = checkExport(parsed(await file.text()))
   return { rules, week, log }
+}
+
+// What a file turned out to hold: a whole export, or only plan rules.
+export type Loaded = { kind: 'export'; state: State } | { kind: 'rules'; rules: PlanRules }
+
+// A file the person chose: an export of this app, or a plan-rules file (the format
+// `meal-planner week` reads, which a coach can write). A file that fits the rules format and not
+// the export format is rules only. One that fits neither is refused with the export format's
+// problems, since that is the file this page writes.
+export async function loadFile(file: Blob): Promise<Loaded> {
+  const data = parsed(await file.text())
+  try {
+    const { rules, week, log } = checkExport(data)
+    return { kind: 'export', state: { rules, week, log } }
+  } catch (error) {
+    if (!(error instanceof ValidationFailed) || !fitsRulesFile(data)) throw error
+    return { kind: 'rules', rules: checkRulesFile(data) }
+  }
+}
+
+// The state after loading plan rules over `current`: the week is empty, since it was written for
+// other rules, and the log is kept when it still fits them. When it does not, only because it has
+// entries for meals the rules lack, those are dropped and `removed` says which and how many, so
+// the person can be asked first.
+export interface WithRules {
+  state: State
+  removed: { slotIds: string[]; entries: number } | null
+}
+
+export function withRules(current: State, rules: PlanRules): WithRules {
+  const whole = { rules, week: null, log: current.log }
+  try {
+    checkStored({ version: 1, ...whole })
+    return { state: whole, removed: null }
+  } catch (error) {
+    if (!(error instanceof ValidationFailed)) throw error
+    const gone = [...new Set(current.log.entries.map((entry) => entry.slot_id))].filter(
+      (id) => !rules.slots.some((slot) => slot.id === id),
+    )
+    const log = withoutSlots(current.log, gone)
+    // Anything else wrong with the log is still wrong without those entries: refuse.
+    checkStored({ version: 1, rules, week: null, log })
+    return {
+      state: { rules, week: null, log },
+      removed: { slotIds: gone, entries: current.log.entries.length - log.entries.length },
+    }
+  }
 }

@@ -2,7 +2,7 @@
 // into nutrition-mcp's foods and amounts, and the person confirms or changes each food before the
 // meal is saved. Saving waits while a food needs an amount or a unit. A changed food's numbers
 // come from POST /v1/log/compute when it is confirmed, and "Change food" searches nutrition-mcp
-// (GET /v1/foods/search) when its form is sent, never as the person types: every /v1/ route
+// (POST /v1/foods/search) when its form is sent, never as the person types: every /v1/ route
 // shares one rate limit. A food the data lacks is listed as missing, left out of the totals and
 // not saved; it is never replaced by another food.
 

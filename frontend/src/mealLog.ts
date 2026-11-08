@@ -25,6 +25,11 @@ export function withEntry(log: MealLog, entry: LogEntry): MealLog {
   return { ...log, entries }
 }
 
+// The log without its entries for the given meals.
+export function withoutSlots(log: MealLog, slotIds: readonly string[]): MealLog {
+  return { ...log, entries: log.entries.filter((entry) => !slotIds.includes(entry.slot_id)) }
+}
+
 export interface Span {
   first: string
   last: string

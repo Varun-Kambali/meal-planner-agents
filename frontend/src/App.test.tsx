@@ -20,6 +20,7 @@ import {
   json,
   sampleExport,
   sampleState,
+  sampleWeek,
 } from './test/helpers'
 import { weekSummary } from './test/tracking'
 
@@ -459,6 +460,44 @@ describe('the log and its summary', () => {
       'lunch',
       'snack',
       'dinner',
+    ])
+  })
+
+  it('keeps a meal logged while a week is being written, and the week', async () => {
+    const start: State = { ...sampleState(), week: null, log: { version: 1, entries: [] } }
+    let kept: State = start
+    let writes = 0
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const store = memoryStore(start, {
+      // The browser's first write, the meal's, is slow; the week's comes while it is going.
+      saveState: async (next) => {
+        writes += 1
+        if (writes === 1) await gate
+        kept = next
+      },
+    })
+    const run = new FakeStream()
+    fakeApi({ '/v1/week': () => run.response })
+    const user = userEvent.setup()
+    window.location.hash = '#/week'
+    render(<App store={store} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Write the week' }))
+    window.location.hash = '#/log/2026-11-02'
+    const breakfast = await screen.findByRole('region', { name: /^Breakfast/ })
+    await user.click(within(breakfast).getByRole('button', { name: 'Skipped' }))
+    await waitFor(() => expect(writes).toBe(1))
+    run.send({ kind: 'week_done', week: sampleWeek() })
+    run.end()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    release()
+
+    await waitFor(() => expect(breakfast).toHaveTextContent('Logged: skipped.'))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(kept.week).toEqual(sampleWeek())
+    expect(kept.log.entries.map((entry) => [entry.slot_id, entry.status])).toEqual([
+      ['breakfast', 'skipped'],
     ])
   })
 })

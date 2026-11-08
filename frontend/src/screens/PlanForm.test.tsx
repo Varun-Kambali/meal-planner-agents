@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { fromServer } from '../planForm'
-import type { SaveOutcome } from '../session'
+import type { SaveOutcome, Update } from '../session'
 import { emptyState, StorageUnavailable, type State } from '../storage'
-import { CATALOGUE, fakeApi, json, sampleState } from '../test/helpers'
+import { CATALOGUE, catchDownloads, fakeApi, json, sampleState } from '../test/helpers'
 import { useCatalogue } from '../useCatalogue'
 import { PlanForm, type PlanFormProps } from './PlanForm'
 
@@ -23,7 +23,9 @@ function show(
   options: { onSave?: ReturnType<typeof saver>; refused?: ReturnType<typeof fromServer> } = {},
 ) {
   const onSave = options.onSave ?? saver()
-  render(<Form state={state} refused={options.refused ?? []} onSave={onSave} blocked={null} />)
+  // As the shell does: the change is applied to the state, and the mock sees the result.
+  const save = (update: Update): Promise<SaveOutcome> => onSave(update(state))
+  render(<Form state={state} refused={options.refused ?? []} onSave={save} blocked={null} />)
   return onSave
 }
 
@@ -200,6 +202,78 @@ describe('the plan form', () => {
     expect(onSave).toHaveBeenCalledTimes(1)
     expect(onSave.mock.calls[0]![0].week).toBeNull()
     expect(onSave.mock.calls[0]![0].rules!.name).toBe('Office weekday, lighter')
+  })
+
+  // The sample plan without its snack, whose log entry is the one the plan no longer covers.
+  async function dropSnack(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    await user.click(screen.getByRole('button', { name: 'Remove meal 3' }))
+    for (const [label, value] of [
+      ["Share of the day's calories (%)", '45'],
+      ["Share of the day's protein (%)", '45'],
+    ] as const) {
+      const field = within(group('Meal 3')).getByLabelText(label)
+      await user.clear(field)
+      await user.type(field, value)
+    }
+    await user.click(screen.getByRole('button', { name: 'Save the plan' }))
+  }
+
+  it('offers to remove the logged meals of a meal the plan drops, and removes only those', async () => {
+    fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })
+    const user = userEvent.setup()
+    const state: State = { ...sampleState(), week: null }
+    const onSave = show(state)
+
+    await dropSnack(user)
+
+    expect(onSave).not.toHaveBeenCalled()
+    const offer = screen.getByRole('region', { name: 'This plan drops meals you have logged' })
+    expect(within(offer).getByRole('heading', { level: 2 })).toHaveFocus()
+    expect(offer).toHaveTextContent('the file keeps them')
+    expect(within(offer).getByRole('button', { name: 'Export a copy first' })).toBeInTheDocument()
+    await user.click(
+      within(offer).getByRole('button', {
+        name: 'Save and remove the 1 logged meal for Evening snack',
+      }),
+    )
+
+    expect(onSave).toHaveBeenCalledTimes(1)
+    const saved = onSave.mock.calls[0]![0]
+    expect(saved.rules!.slots.map((slot) => slot.id)).toEqual(['breakfast', 'lunch', 'dinner'])
+    expect(saved.log.entries.map((entry) => entry.slot_id)).toEqual(['breakfast', 'lunch'])
+    expect(await screen.findByText('Plan saved in this browser.')).toBeInTheDocument()
+  })
+
+  it('changes nothing when the offer to remove logged meals is turned down', async () => {
+    fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })
+    const user = userEvent.setup()
+    const onSave = show({ ...sampleState(), week: null })
+
+    await dropSnack(user)
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }))
+
+    expect(onSave).not.toHaveBeenCalled()
+    expect(
+      screen.queryByRole('region', { name: 'This plan drops meals you have logged' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('exports the whole state, log included, from the offer to remove logged meals', async () => {
+    fakeApi({ '/v1/catalogue': () => json(CATALOGUE) })
+    const files = catchDownloads()
+    const user = userEvent.setup()
+    show({ ...sampleState(), week: null })
+
+    await dropSnack(user)
+    await user.click(screen.getByRole('button', { name: 'Export a copy first' }))
+
+    expect(files).toHaveLength(1)
+    const exported = JSON.parse(await files[0]!.text()) as State
+    expect(exported.log.entries.map((entry) => entry.slot_id)).toEqual([
+      'breakfast',
+      'lunch',
+      'snack',
+    ])
   })
 
   it('saves an unchanged plan without touching its week', async () => {

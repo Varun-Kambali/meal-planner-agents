@@ -34,6 +34,8 @@ export function FoodSearch({
   async function find(): Promise<void> {
     if (query.trim() === '') {
       setProblem('Type a food name first.')
+      // As the swap flow's own blank check does, so the person can start typing.
+      input.current?.focus()
       return
     }
     setProblem(null)

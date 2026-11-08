@@ -37,7 +37,7 @@ async def food_options(
 ) -> list[FoodOption]:
     """The foods nutrition-mcp finds for `query`, best match first; none when it has none.
 
-    The caller has checked the query (`problems.food_query_problems`) and the limit. Raises
+    The caller has checked the query (`problems.food_query_problem`) and the limit. Raises
     NutritionUnusable when nutrition-mcp cannot be used; its message holds nothing of the query.
     """
     try:

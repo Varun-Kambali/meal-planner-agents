@@ -819,6 +819,14 @@ progress::-moz-progress-bar {
     display: none;
   }
 
+  /* Notices (the demo server starting, a change not saved) are for the screen. The longer
+     selectors beat the rules in app.css that make the waking notice's parts blocks. */
+  .notice,
+  .page > output .notice,
+  .page > output .notice > span {
+    display: none;
+  }
+
   .print-only {
     display: block;
   }

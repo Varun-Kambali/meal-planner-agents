@@ -95,12 +95,9 @@ class SummaryRequest(_Body):
     log: MealLog
 
 
-class SearchQuery(BaseModel):
-    """The query string of a food search.
-
-    It is a model so that FastAPI checks every parameter and reports every problem at once, as
-    the routes with a body do, and not only the first.
-    """
+class SearchRequest(_Body):
+    """The body of a food search. What is typed travels in the body and not the URL, so that no
+    request line a proxy keeps holds it."""
 
     q: str
     limit: int = Field(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT)
@@ -468,14 +465,14 @@ async def summarise_log(
         raise _nutrition_failed("summary", exc) from exc
 
 
-@router.get(SEARCH_PATH, response_model=list[FoodOption])
+@router.post(SEARCH_PATH, response_model=list[FoodOption])
 async def search_foods(
-    query: Annotated[SearchQuery, Query()], services: Annotated[Services, Depends(_services)]
+    body: SearchRequest, services: Annotated[Services, Depends(_services)]
 ) -> list[FoodOption]:
     """The foods nutrition-mcp has under a name, with the units an amount of each can use."""
     try:
         return await food_options(
-            query.q, query.limit, nutrition=services.nutrition, catalogue=services.catalogue
+            body.q, body.limit, nutrition=services.nutrition, catalogue=services.catalogue
         )
     except NutritionUnusable as exc:
         raise _nutrition_failed("food_search", exc) from exc

@@ -9,12 +9,13 @@ import { ServerWaking } from './ServerWaking'
 type Step = 'ok' | 'network' | 'html' | 'hang'
 
 // A fetch that answers /healthz as the steps say. A hanging call ends when it is aborted.
-function host(...steps: Step[]): { calls: number } {
-  const seen = { calls: 0 }
+function host(...steps: Step[]): { calls: number; up: boolean } {
+  // `up` makes every call from now on answer, whatever the steps say.
+  const seen = { calls: 0, up: false }
   vi.stubGlobal(
     'fetch',
     vi.fn(async (_url: string, init: RequestInit = {}) => {
-      const step = steps[Math.min(seen.calls, steps.length - 1)]!
+      const step = seen.up ? 'ok' : steps[Math.min(seen.calls, steps.length - 1)]!
       seen.calls += 1
       if (step === 'network') throw new TypeError('Failed to fetch')
       if (step === 'html') return new Response('<html>starting</html>', { status: 200 })
@@ -128,7 +129,7 @@ describe('the waking-server message', () => {
     expect(screen.getByText(/demo server is starting/i)).toBe(first)
   })
 
-  it('gives up after 120 seconds with a message to try again later, and stops asking', async () => {
+  it('says after 120 seconds that the server did not answer, and keeps asking every 30 seconds', async () => {
     const seen = host('network')
 
     render(<ServerWaking />)
@@ -138,10 +139,27 @@ describe('the waking-server message', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent(GAVE_UP)
     expect(screen.getByRole('status')).toHaveTextContent('few minutes')
+    // Three seconds apart would be 30 calls in 90 seconds; 30 seconds apart is three.
     const calls = seen.calls
-    await pass(60_000)
-    expect(seen.calls).toBe(calls)
+    await pass(90_000)
+    expect(seen.calls - calls).toBeGreaterThanOrEqual(2)
+    expect(seen.calls - calls).toBeLessThanOrEqual(4)
     expect(screen.getByRole('status')).toHaveTextContent(GAVE_UP)
+  })
+
+  it('clears the message by itself when the server answers after it gave up', async () => {
+    const seen = host('network')
+
+    render(<ServerWaking />)
+    await pass(125_000)
+    expect(screen.getByRole('status')).toHaveTextContent(GAVE_UP)
+    seen.up = true
+    await pass(31_000)
+
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    const calls = seen.calls
+    await pass(120_000)
+    expect(seen.calls).toBe(calls)
   })
 
   it('gives up on a call that is still hanging at 120 seconds', async () => {

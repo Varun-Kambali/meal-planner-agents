@@ -2,7 +2,7 @@
 // before saving (planForm.ts), and shows the problems the API found when a week was written,
 // each under its field.
 
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react'
 
 import {
   FIELD_LABELS,
@@ -15,9 +15,12 @@ import {
   sameRules,
   type FormError,
   type PlanDraft,
+  type Removal,
 } from '../planForm'
-import type { SaveOutcome } from '../session'
-import { ValidationFailed, type State } from '../storage'
+import { saveFile, today } from '../download'
+import { withoutSlots } from '../mealLog'
+import type { Save } from '../session'
+import { ValidationFailed, exportFile, type State } from '../storage'
 import type { PlanRules } from '../types'
 import type { SharedCatalogue } from '../useCatalogue'
 import { ALLERGENS, DAYS, DAY_NAMES, DIETS, GEAR, messageOf } from '../words'
@@ -31,7 +34,7 @@ export interface PlanFormProps {
   state: State
   // The API's problems with the saved rules, from the last time a week was asked for.
   refused: FormError[]
-  onSave: (state: State) => Promise<SaveOutcome>
+  onSave: Save
   // Why saving has to wait, such as a week being written for the saved plan.
   blocked: string | null
   // The catalogue the shell holds, for the lists of foods (useCatalogue).
@@ -81,6 +84,9 @@ export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFor
   const [errors, setErrors] = useState<FormError[]>([])
   const [saving, setSaving] = useState<Saving>({ status: 'idle' })
   const [pending, setPending] = useState<PlanRules | null>(null)
+  // Logged meals the plan drops, offered for removal; and why the copy of the file could not be made.
+  const [removal, setRemoval] = useState<Removal | null>(null)
+  const [exportProblem, setExportProblem] = useState<string | null>(null)
   const summary = useRef<HTMLElement>(null)
   const question = useRef<HTMLHeadingElement>(null)
   const focusSummary = useRef(false)
@@ -99,8 +105,8 @@ export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFor
   }, [errors])
 
   useEffect(() => {
-    if (pending !== null) question.current?.focus()
-  }, [pending])
+    if (pending !== null || removal !== null) question.current?.focus()
+  }, [pending, removal])
 
   const paths = fieldPaths(draft)
   const place = (path: string): string => nearest(path, paths)
@@ -109,13 +115,24 @@ export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFor
   )
   const change = (update: (draft: PlanDraft) => PlanDraft): void => {
     setDraft(update)
+    setRemoval(null)
     setSaving((current) => (current.status === 'saved' ? { status: 'idle' } : current))
   }
 
-  async function commit(rules: PlanRules, clearWeek: boolean): Promise<void> {
+  async function commit(
+    rules: PlanRules,
+    clearWeek: boolean,
+    removeSlots: readonly string[] = [],
+  ): Promise<void> {
     setPending(null)
+    setRemoval(null)
     setSaving({ status: 'saving' })
-    const outcome = await onSave({ ...state, rules, week: clearWeek ? null : state.week })
+    const outcome = await onSave((current) => ({
+      ...current,
+      rules,
+      week: clearWeek ? null : current.week,
+      log: removeSlots.length === 0 ? current.log : withoutSlots(current.log, removeSlots),
+    }))
     if (outcome.ok) {
       setErrors([])
       setSaving({ status: 'saved' })
@@ -143,10 +160,18 @@ export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFor
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
     const built = buildRules(draft, state.log)
+    setRemoval(null)
+    setExportProblem(null)
     if (built.rules === null) {
+      setSaving({ status: 'idle' })
+      if (built.removal !== undefined) {
+        // The offer says it all, so the list of problems is not shown as well.
+        setErrors([])
+        setRemoval(built.removal)
+        return
+      }
       focusSummary.current = true
       setErrors(built.errors)
-      setSaving({ status: 'idle' })
       return
     }
     setErrors([])
@@ -294,6 +319,17 @@ export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFor
         </div>
         <SaveStatus saving={saving} />
       </form>
+      {removal !== null && (
+        <RemovalOffer
+          removal={removal}
+          state={state}
+          headingRef={question}
+          problem={exportProblem}
+          onExportProblem={setExportProblem}
+          onRemove={() => void commit(removal.rules, state.week !== null, removal.slotIds)}
+          onCancel={() => setRemoval(null)}
+        />
+      )}
       {pending !== null && (
         <section className="notice" aria-labelledby="clear-week-heading">
           <h2 id="clear-week-heading" ref={question} tabIndex={-1}>
@@ -319,6 +355,74 @@ export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFor
         </section>
       )}
     </>
+  )
+}
+
+// "Lunch", "Lunch and Snack", "Breakfast, Lunch and Snack".
+function listed(names: string[]): string {
+  if (names.length < 2) return names.join('')
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
+// The plan drops a meal the log has entries for. Nothing is removed until the person says so, and
+// the file they can export first keeps the entries.
+function RemovalOffer({
+  removal,
+  state,
+  headingRef,
+  problem,
+  onExportProblem,
+  onRemove,
+  onCancel,
+}: {
+  removal: Removal
+  state: State
+  headingRef: RefObject<HTMLHeadingElement | null>
+  problem: string | null
+  onExportProblem: (message: string | null) => void
+  onRemove: () => void
+  onCancel: () => void
+}) {
+  const names = removal.slotIds.map(
+    (id) => state.rules?.slots.find((slot) => slot.id === id)?.name ?? id,
+  )
+  const meals = `${removal.entries} logged ${removal.entries === 1 ? 'meal' : 'meals'}`
+  return (
+    <section className="notice" aria-labelledby="drop-meals-heading">
+      <h2 id="drop-meals-heading" ref={headingRef} tabIndex={-1}>
+        This plan drops meals you have logged
+      </h2>
+      <p>
+        Your meal log has {meals} for {listed(names)}, which this plan no longer has. Saving the
+        plan removes {removal.entries === 1 ? 'it' : 'them'} from the log
+        {state.week !== null &&
+          ', and clears the written week, which was checked against the plan as it was'}
+        . Export a copy first: the file keeps them.
+      </p>
+      <div className="actions">
+        <button type="button" className="button-primary" onClick={onRemove}>
+          Save and remove the {meals} for {listed(names)}
+        </button>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() => {
+            try {
+              saveFile(exportFile(state), `meal-planner-${today()}.json`)
+              onExportProblem(null)
+            } catch (error) {
+              onExportProblem(messageOf(error))
+            }
+          }}
+        >
+          Export a copy first
+        </button>
+        <button type="button" className="button-secondary" onClick={onCancel}>
+          Keep editing
+        </button>
+      </div>
+      {problem !== null && <p>The copy could not be made: {problem}.</p>}
+    </section>
   )
 }
 

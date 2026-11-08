@@ -5,6 +5,7 @@
 
 import type { Allergen, DayKey, Diet } from './api'
 import type { DayType, MealLog, NutrientTarget, PlanRules, Problem, Slot } from './types'
+import { withoutSlots } from './mealLog'
 import { ValidationFailed, checkStored, type FieldProblem } from './validate'
 import { DAYS, DAY_NAMES, type CookWhen, type Gear, type NutrientKey } from './words'
 
@@ -242,7 +243,16 @@ function shareSumMessage(field: keyof typeof SHARE_NAMES, total: number): string
   return `${SHARE_NAMES[field]} shares add up to ${shown}% of the day; they must add up to 100%.`
 }
 
-export type Built = { rules: PlanRules; errors: [] } | { rules: null; errors: FormError[] }
+// Meals the plan drops that the log has entries for. When that is the only thing wrong with the
+// plan, the rules are given too, so that the person can save them with those entries removed.
+export interface Removal {
+  rules: PlanRules
+  slotIds: string[]
+  entries: number
+}
+
+export type Built =
+  { rules: PlanRules; errors: [] } | { rules: null; errors: FormError[]; removal?: Removal }
 
 // The rules the draft describes, or every problem found. The form's own checks come first, in
 // words about what was typed; then the checks the import and the server make (validate.ts),
@@ -352,7 +362,22 @@ export function buildRules(draft: PlanDraft, log: MealLog): Built {
     checkStored({ version: 1, rules, week: null, log })
   } catch (error) {
     if (!(error instanceof ValidationFailed)) throw error
-    return { rules: null, errors: fromStored(error.problems) }
+    const problems = fromStored(error.problems)
+    // Entries for meals the plan no longer has: if removing them is all it takes, say so.
+    const gone = [...new Set(log.entries.map((entry) => entry.slot_id))].filter(
+      (id) => !slots.some((slot) => slot.id === id),
+    )
+    if (gone.length > 0) {
+      const kept = withoutSlots(log, gone)
+      try {
+        checkStored({ version: 1, rules, week: null, log: kept })
+        const removal = { rules, slotIds: gone, entries: log.entries.length - kept.entries.length }
+        return { rules: null, errors: problems, removal }
+      } catch (again) {
+        if (!(again instanceof ValidationFailed)) throw again
+      }
+    }
+    return { rules: null, errors: problems }
   }
   return { rules, errors: [] }
 }

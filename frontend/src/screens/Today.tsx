@@ -9,7 +9,7 @@ import { addDays, dateWords, weekdayOf } from '../dates'
 import { saveFile, today as fileDate } from '../download'
 import { entryAt, followable, recipeItems, tooLong, withEntry, type MealStatus } from '../mealLog'
 import { dayHref, logHref, recipeHref } from '../route'
-import type { SaveOutcome } from '../session'
+import type { Save, SaveOutcome, Update } from '../session'
 import { ValidationFailed, exportFile, type State } from '../storage'
 import type { CheckedRecipe, LogEntry, LogItem, Slot } from '../types'
 import { MEAL_STATUSES, messageOf } from '../words'
@@ -22,7 +22,7 @@ export interface TodayProps {
   date: string
   // The reader's own date, so the screen can say which date is today.
   today: string
-  onSave: (state: State) => Promise<SaveOutcome>
+  onSave: Save
 }
 
 const BUTTONS: [MealStatus, string][] = [
@@ -95,7 +95,7 @@ export function Today({ state, date, today, onSave }: TodayProps) {
 
   // Saves the state; true once it is saved or kept on the page. One the browser refuses because
   // it would not load again is said to under the meal, and nothing changes.
-  async function commit(next: State, entry: LogEntry): Promise<boolean> {
+  async function commit(update: Update, entry: LogEntry): Promise<boolean> {
     if (savingNow.current) return false
     savingNow.current = true
     setSaving(true)
@@ -103,7 +103,7 @@ export function Today({ state, date, today, onSave }: TodayProps) {
     setSaid('Saving.')
     let outcome: SaveOutcome
     try {
-      outcome = await onSave(next)
+      outcome = await onSave(update)
     } finally {
       savingNow.current = false
       setSaving(false)
@@ -131,7 +131,7 @@ export function Today({ state, date, today, onSave }: TodayProps) {
       setWaiting({ entry, span, exported: null, problem: null })
       return false
     }
-    return commit({ ...state, log: withEntry(log, entry) }, entry)
+    return commit((current) => ({ ...current, log: withEntry(current.log, entry) }), entry)
   }
 
   function exportLog(): void {
@@ -148,7 +148,7 @@ export function Today({ state, date, today, onSave }: TodayProps) {
   async function startNewLog(): Promise<void> {
     if (waiting === null || waiting.exported === null) return
     const done = await commit(
-      { ...state, log: { version: 1, entries: [waiting.entry] } },
+      (current) => ({ ...current, log: { version: 1, entries: [waiting.entry] } }),
       waiting.entry,
     )
     if (done) setWaiting(null)

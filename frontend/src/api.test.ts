@@ -370,12 +370,22 @@ describe('the JSON routes', () => {
     expect(calls[0]!.url).toBe('/v1/catalogue')
   })
 
-  it('searches foods by name, with the text in the query string', async () => {
+  it('searches foods by name, with the text in the body and none in the URL', async () => {
     const found = [{ id: 'idli', name: 'Idli', kind: 'dish', units: ['g', 'piece'] }]
     const calls = serve(() => json(found))
 
     await expect(searchFoods('idli & sambar', { limit: 10 })).resolves.toEqual(found)
-    expect(calls[0]!.url).toBe('/v1/foods/search?q=idli+%26+sambar&limit=10')
+    expect(calls[0]!.url).toBe('/v1/foods/search')
+    expect(calls[0]!.method).toBe('POST')
+    expect(calls[0]!.body).toEqual({ q: 'idli & sambar', limit: 10 })
+  })
+
+  it('leaves the limit out of the body when none is given', async () => {
+    const calls = serve(() => json([]))
+
+    await searchFoods('dal')
+
+    expect(calls[0]!.body).toEqual({ q: 'dal' })
   })
 
   it('works out a meal as it is edited', async () => {
@@ -525,6 +535,6 @@ describe('errors', () => {
 
     await searchFoods('dal')
 
-    expect(calls[0]!.url).toBe('https://api.example.org/v1/foods/search?q=dal')
+    expect(calls[0]!.url).toBe('https://api.example.org/v1/foods/search')
   })
 })

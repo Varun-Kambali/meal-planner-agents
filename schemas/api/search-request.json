@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The body of a food search. What is typed travels in the body and not the URL, so that no\nrequest line a proxy keeps holds it.",
+  "properties": {
+    "q": {
+      "title": "Q",
+      "type": "string"
+    },
+    "limit": {
+      "default": 5,
+      "maximum": 50,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "q"
+  ],
+  "title": "SearchRequest",
+  "type": "object"
+}

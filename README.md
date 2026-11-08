@@ -68,7 +68,7 @@ Milestones 1 to 4 of 5 are built: the foundations, the recipe pipeline, tracking
 
 ```bash
 git clone https://github.com/Varun-Kambali/meal-planner-agents && cd meal-planner-agents
-make setup   # needs uv and Node 24 or later
+make setup   # needs uv and Node 26 or later (the version CI tests)
 make test
 npm --prefix frontend test
 ```
@@ -84,7 +84,7 @@ make run-api   # the API on 127.0.0.1:8000
 
 To trace `week`, `read` and the API in [Langfuse](https://langfuse.com), set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env`. Each run's steps, model calls, tokens, cost and failed checks are sent with the plan's words and the typed text masked; without the keys nothing is sent ([0010](docs/decisions/0010-masked-langfuse-tracing.md)). [`docs/media/trace.png`](docs/media/trace.png) shows a traced week and meal read in Langfuse.
 
-`week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The log in the example is made up, for the same plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Two read-only routes let a screen change a wrongly matched food and show an edited item's numbers: `GET /v1/foods/search` and `POST /v1/log/compute`. Details are in [docs/architecture.md](docs/architecture.md).
+`week` writes a week of recipes for a rules file, `read` turns a typed meal into foods and numbers, and `summary` adds up a meal log against the plan. The log in the example is made up, for the same plan. The API does the same through `POST /v1/week` (streamed, with `POST /v1/week/replace` to write one recipe again), `POST /v1/log/read` and `POST /v1/summary`. Two routes that call no model let a screen change a wrongly matched food and show an edited item's numbers: `POST /v1/foods/search` and `POST /v1/log/compute`. Details are in [docs/architecture.md](docs/architecture.md).
 
 ### Run with Docker
 
@@ -99,7 +99,7 @@ The rate limit counts requests per client address. By default the image trusts n
 
 ## Deployment
 
-The API runs as a Render free web service in Singapore, built from the Dockerfile as [`render.yaml`](render.yaml) describes. The browser app is built and published to GitHub Pages by the [`pages` workflow](.github/workflows/pages.yml). Your plan, week and log stay in your browser either way; the API stores nothing.
+The API runs as a Render free web service in Singapore, built from the Dockerfile as [`render.yaml`](render.yaml) describes. The browser app is built and published to GitHub Pages by the [`pages` workflow](.github/workflows/pages.yml). Your plan, week and log stay in your browser either way; the API stores nothing. The plan's rules, and the words typed for a swapped meal, are sent to the model (Google's Gemini API, on a free-tier key in the demo) to write recipes and read meals; nothing is stored by this app's server.
 
 **What a visitor feels of the free host.** Render stops the service after 15 minutes without a request and starts it again on the next one, which takes about a minute. While that happens the page says the demo server is starting and tries again until it answers. After two minutes without an answer it says so and asks the visitor to try again in a few minutes.
 
