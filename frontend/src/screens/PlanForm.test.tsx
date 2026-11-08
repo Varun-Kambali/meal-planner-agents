@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { fromServer } from '../planForm'
-import type { SaveOutcome } from '../session'
+import type { SaveOutcome, Update } from '../session'
 import { emptyState, StorageUnavailable, type State } from '../storage'
 import { CATALOGUE, fakeApi, json, sampleState } from '../test/helpers'
 import { useCatalogue } from '../useCatalogue'
@@ -23,7 +23,9 @@ function show(
   options: { onSave?: ReturnType<typeof saver>; refused?: ReturnType<typeof fromServer> } = {},
 ) {
   const onSave = options.onSave ?? saver()
-  render(<Form state={state} refused={options.refused ?? []} onSave={onSave} blocked={null} />)
+  // As the shell does: the change is applied to the state, and the mock sees the result.
+  const save = (update: Update): Promise<SaveOutcome> => onSave(update(state))
+  render(<Form state={state} refused={options.refused ?? []} onSave={save} blocked={null} />)
   return onSave
 }
 

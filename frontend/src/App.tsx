@@ -18,7 +18,7 @@ import { StorageError } from './screens/StorageError'
 import { Today } from './screens/Today'
 import { Week } from './screens/Week'
 import { WeekView } from './screens/WeekView'
-import type { SaveOutcome } from './session'
+import type { SaveOutcome, Update } from './session'
 import {
   ValidationFailed,
   discardStoredText,
@@ -69,12 +69,21 @@ export function App({ store = browserStore }: { store?: StateStore }) {
   const [generation, setGeneration] = useState(0)
   const { route, moves } = useRoute()
 
+  // The state as the last save left it, which the next save starts from. Not React state: a save
+  // asked for before the last one has rendered must still see what it saved.
+  const current = useRef<State | null>(null)
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
+  const keep = useCallback((state: State): void => {
+    current.current = state
+    setLoaded({ status: 'ready', state })
+  }, [])
+
   const load = useCallback((): void => {
     store.loadState().then(
-      (state) => setLoaded({ status: 'ready', state }),
+      (state) => keep(state),
       (error: unknown) => setLoaded({ status: 'failed', error }),
     )
-  }, [store])
+  }, [store, keep])
   useEffect(() => {
     load()
   }, [load])
@@ -82,24 +91,39 @@ export function App({ store = browserStore }: { store?: StateStore }) {
   // Keeps the state on the page whether or not the browser saved it, except a state that would
   // not load again, which the caller is told about and nothing changes.
   const save = useCallback(
-    async (next: State): Promise<SaveOutcome> => {
-      try {
-        await store.saveState(next)
-      } catch (error) {
-        if (error instanceof ValidationFailed) return { ok: false, error }
-        setLoaded({ status: 'ready', state: next })
-        setUnsaved(messageOf(error))
-        return { ok: false, error }
+    (update: Update): Promise<SaveOutcome> => {
+      // One save at a time: each takes the state the one before it left, so none is lost.
+      const apply = async (): Promise<SaveOutcome> => {
+        const base = current.current
+        if (base === null) return { ok: false, error: new Error('nothing has been loaded yet') }
+        let next: State
+        try {
+          next = update(base)
+        } catch (error) {
+          return { ok: false, error }
+        }
+        if (next === base) return { ok: true }
+        try {
+          await store.saveState(next)
+        } catch (error) {
+          if (error instanceof ValidationFailed) return { ok: false, error }
+          keep(next)
+          setUnsaved(messageOf(error))
+          return { ok: false, error }
+        }
+        keep(next)
+        setUnsaved(null)
+        return { ok: true }
       }
-      setLoaded({ status: 'ready', state: next })
-      setUnsaved(null)
-      return { ok: true }
+      const turn = queue.current.then(apply)
+      queue.current = turn
+      return turn
     },
-    [store],
+    [store, keep],
   )
   const savePlan = useCallback(
-    async (next: State): Promise<SaveOutcome> => {
-      const outcome = await save(next)
+    async (update: Update): Promise<SaveOutcome> => {
+      const outcome = await save(update)
       if (outcome.ok) setRefused([])
       return outcome
     },
@@ -107,7 +131,7 @@ export function App({ store = browserStore }: { store?: StateStore }) {
   )
   const replaceAll = useCallback(
     async (next: State): Promise<SaveOutcome> => {
-      const outcome = await savePlan(next)
+      const outcome = await savePlan(() => next)
       if (outcome.ok || !(outcome.error instanceof ValidationFailed)) {
         setGeneration((n) => n + 1)
       }

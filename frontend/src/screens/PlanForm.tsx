@@ -16,7 +16,7 @@ import {
   type FormError,
   type PlanDraft,
 } from '../planForm'
-import type { SaveOutcome } from '../session'
+import type { Save } from '../session'
 import { ValidationFailed, type State } from '../storage'
 import type { PlanRules } from '../types'
 import type { SharedCatalogue } from '../useCatalogue'
@@ -31,7 +31,7 @@ export interface PlanFormProps {
   state: State
   // The API's problems with the saved rules, from the last time a week was asked for.
   refused: FormError[]
-  onSave: (state: State) => Promise<SaveOutcome>
+  onSave: Save
   // Why saving has to wait, such as a week being written for the saved plan.
   blocked: string | null
   // The catalogue the shell holds, for the lists of foods (useCatalogue).
@@ -115,7 +115,11 @@ export function PlanForm({ state, refused, onSave, blocked, catalogue }: PlanFor
   async function commit(rules: PlanRules, clearWeek: boolean): Promise<void> {
     setPending(null)
     setSaving({ status: 'saving' })
-    const outcome = await onSave({ ...state, rules, week: clearWeek ? null : state.week })
+    const outcome = await onSave((current) => ({
+      ...current,
+      rules,
+      week: clearWeek ? null : current.week,
+    }))
     if (outcome.ok) {
       setErrors([])
       setSaving({ status: 'saved' })
