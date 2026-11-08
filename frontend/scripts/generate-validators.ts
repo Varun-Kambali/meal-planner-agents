@@ -1,11 +1,13 @@
-// Writes src/generated/validators.js: the import checks for schemas/export.json, compiled to
-// plain functions ahead of time with Ajv's standalone code generation. Compiling in the browser
-// would need `new Function`, which a Content-Security-Policy without 'unsafe-eval' refuses on
-// every page load. Run `npm run validators` after the schemas change; `npm run validators:check`
-// fails when the file is out of date, and CI runs it.
+// Writes src/generated/validators.js: the import checks for schemas/export.json and
+// schemas/plan-rules.json, compiled to plain functions ahead of time with Ajv's standalone code
+// generation. Compiling in the browser would need `new Function`, which a Content-Security-Policy
+// without 'unsafe-eval' refuses on every page load. Run `npm run validators` after the schemas
+// change; `npm run validators:check` fails when the file is out of date, and CI runs it.
 //
-// Two validators: `exported`, for a file a person loads, and `stored`, for what this browser
-// saved, which is the same format with no plan rules until they are saved.
+// Three validators: `exported`, for a file a person loads, `stored`, for what this browser
+// saved, which is the same format with no plan rules until they are saved, and `rulesFile`, for a
+// plan-rules file (schemas/plan-rules.json), the format `meal-planner week` reads and a coach
+// can write.
 
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -18,9 +20,10 @@ import { formats } from '../src/schema-runtime.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SCHEMA = path.resolve(here, '../../schemas/export.json')
+const RULES_SCHEMA = path.resolve(here, '../../schemas/plan-rules.json')
 const OUT = path.resolve(here, '../src/generated/validators.js')
 
-const BANNER = `// Generated from schemas/export.json by frontend/scripts/generate-validators.ts. Do not edit
+const BANNER = `// Generated from schemas/export.json and schemas/plan-rules.json by frontend/scripts/generate-validators.ts. Do not edit
 // by hand: run \`npm run types\` and \`npm run validators\` in frontend/ after the schemas change.
 /* eslint-disable */
 `
@@ -62,8 +65,13 @@ async function generate(): Promise<string> {
     code: { source: true, esm: true, formats: _`require("./schema-runtime").formats` },
   })
   ajv.addSchema(JSON.parse(await readFile(SCHEMA, 'utf8')), 'export.json')
+  ajv.addSchema(JSON.parse(await readFile(RULES_SCHEMA, 'utf8')), 'plan-rules.json')
   ajv.addSchema(STORED)
-  let code = standaloneCode(ajv, { exported: 'export.json', stored: 'stored' })
+  let code = standaloneCode(ajv, {
+    exported: 'export.json',
+    stored: 'stored',
+    rulesFile: 'plan-rules.json',
+  })
   for (const [call, name] of Object.entries(RUNTIME)) code = code.replaceAll(call, name)
   // An ES module is strict already, and after the import the directive would do nothing.
   code = code.replace(/^"use strict";/, '')

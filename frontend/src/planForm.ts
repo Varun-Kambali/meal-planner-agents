@@ -5,6 +5,7 @@
 
 import type { Allergen, DayKey, Diet } from './api'
 import type { DayType, MealLog, NutrientTarget, PlanRules, Problem, Slot } from './types'
+import { withoutSlots } from './mealLog'
 import { ValidationFailed, checkStored, type FieldProblem } from './validate'
 import { DAYS, DAY_NAMES, type CookWhen, type Gear, type NutrientKey } from './words'
 
@@ -252,11 +253,6 @@ export interface Removal {
 
 export type Built =
   { rules: PlanRules; errors: [] } | { rules: null; errors: FormError[]; removal?: Removal }
-
-// The log without its entries for the given meals.
-export function withoutSlots(log: MealLog, slotIds: readonly string[]): MealLog {
-  return { ...log, entries: log.entries.filter((entry) => !slotIds.includes(entry.slot_id)) }
-}
 
 // The rules the draft describes, or every problem found. The form's own checks come first, in
 // words about what was typed; then the checks the import and the server make (validate.ts),

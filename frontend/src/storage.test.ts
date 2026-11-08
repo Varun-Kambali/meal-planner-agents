@@ -10,8 +10,10 @@ import {
   exportFile,
   emptyState,
   importFile,
+  loadFile,
   type State,
 } from './storage'
+import officeWeekday from '../../tests/fixtures/plans/office_weekday.json?raw'
 import sample from './test/export-sample.json'
 import invalidExports from './test/invalid-exports.json'
 import type { Export } from './types'
@@ -79,6 +81,57 @@ function throwingLocalStorage(): Storage {
 
 beforeEach(() => {
   localStorage.clear()
+})
+
+describe('loading a file', () => {
+  it('takes a plan-rules file as rules only', async () => {
+    const loaded = await loadFile(fileOf(officeWeekday, 'office_weekday.json'))
+
+    expect(loaded.kind).toBe('rules')
+    expect(loaded.kind === 'rules' && loaded.rules.name).toBe('Office weekday')
+    expect(loaded.kind === 'rules' && loaded.rules.slots.map((slot) => slot.id)).toEqual([
+      'breakfast',
+      'lunch',
+      'snack',
+      'dinner',
+    ])
+  })
+
+  it('takes an export as the whole state, as before', async () => {
+    const loaded = await loadFile(fileOf(exported()))
+
+    expect(loaded).toEqual({ kind: 'export', state: stateOf(exported()) })
+  })
+
+  it('runs the checks the form runs on the rules of a rules file', async () => {
+    const rules = JSON.parse(officeWeekday) as { slots: { kcal_share: number }[] }
+    rules.slots[0]!.kcal_share = 0.5
+
+    const error = await rejection(loadFile(fileOf(rules)))
+
+    expect(paths(error)).toEqual(['/slots'])
+    expect(error.problems[0]?.message).toMatch(/kcal_share values must add up to 1/)
+  })
+
+  it('refuses a rules file with a blank name, with its path in the file', async () => {
+    const rules = { ...(JSON.parse(officeWeekday) as object), name: '   ' }
+
+    const error = await rejection(loadFile(fileOf(rules)))
+
+    expect(paths(error)).toEqual(['/name'])
+  })
+
+  it('refuses a file that fits neither format, with the export format errors', async () => {
+    const error = await rejection(loadFile(fileOf({ hello: 'world' })))
+
+    expect(paths(error).sort()).toEqual(['/hello', '/log', '/rules', '/version', '/week'])
+  })
+
+  it('refuses a file that is not JSON', async () => {
+    const error = await rejection(loadFile(fileOf('not json')))
+
+    expect(error.problems[0]?.message).toMatch(/^is not JSON/)
+  })
 })
 
 describe('import', () => {

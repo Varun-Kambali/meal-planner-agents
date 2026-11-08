@@ -10,7 +10,7 @@
 
 import type { ErrorObject, ValidateFunction } from 'ajv/dist/2020'
 
-import { exported, stored } from './generated/validators.js'
+import { exported, rulesFile, stored } from './generated/validators.js'
 import type { Export, MealLog, PlanRules, WeekResult } from './types'
 
 export interface FieldProblem {
@@ -70,6 +70,21 @@ export function checkExport(data: unknown): Export {
     ...logProblems(file.log, file.rules),
   ])
   return file
+}
+
+// Whether data fits the plan-rules format (schemas/plan-rules.json), the file `meal-planner week`
+// reads, apart from the checks the schema cannot say.
+export function fitsRulesFile(data: unknown): boolean {
+  return errorsOf(rulesFile, data).length === 0
+}
+
+// A plan-rules file, checked as the plan form checks its rules: the schema, a name that is not
+// blank, and the rules a schema cannot say. Problems are placed in the file, such as /slots.
+export function checkRulesFile(data: unknown): PlanRules {
+  throwIfAny(schemaProblems(errorsOf(rulesFile, data)))
+  const rules = data as PlanRules
+  throwIfAny([...blankProblems(rules, null, ''), ...ruleProblems(rules, '')])
+  return rules
 }
 
 // What this browser saved, checked the same way; it may have no plan rules yet.
@@ -196,22 +211,24 @@ function schemaProblems(errors: ErrorObject[]): FieldProblem[] {
 // The server strips the whitespace from these strings before it checks their length (Name and
 // Label in rules.py, Title, Cuisine and Step in recipes.py), which JSON Schema cannot say: "   "
 // fits the schema's minLength of 1 and is still blank to the server.
-function blankProblems(rules: PlanRules | null, week: WeekResult | null): FieldProblem[] {
+function blankProblems(
+  rules: PlanRules | null,
+  week: WeekResult | null,
+  at = '/rules',
+): FieldProblem[] {
   const strings: [string, string][] = []
   if (rules !== null) {
-    strings.push(['/rules/name', rules.name])
+    strings.push([`${at}/name`, rules.name])
     rules.day_types.forEach((dayType, i) =>
-      strings.push([`/rules/day_types/${i}/name`, dayType.name]),
+      strings.push([`${at}/day_types/${i}/name`, dayType.name]),
     )
-    rules.slots.forEach((slot, i) => strings.push([`/rules/slots/${i}/name`, slot.name]))
-    rules.food.cuisines.forEach((cuisine, i) =>
-      strings.push([`/rules/food/cuisines/${i}`, cuisine]),
-    )
+    rules.slots.forEach((slot, i) => strings.push([`${at}/slots/${i}/name`, slot.name]))
+    rules.food.cuisines.forEach((cuisine, i) => strings.push([`${at}/food/cuisines/${i}`, cuisine]))
   }
   week?.recipes.forEach(({ draft }, i) => {
-    const at = `/week/recipes/${i}/draft`
-    strings.push([`${at}/title`, draft.title], [`${at}/cuisine`, draft.cuisine])
-    draft.steps.forEach((step, j) => strings.push([`${at}/steps/${j}`, step]))
+    const recipe = `/week/recipes/${i}/draft`
+    strings.push([`${recipe}/title`, draft.title], [`${recipe}/cuisine`, draft.cuisine])
+    draft.steps.forEach((step, j) => strings.push([`${recipe}/steps/${j}`, step]))
   })
   return strings
     .filter(([, text]) => text.trim() === '')

@@ -5,12 +5,28 @@ import { useId, useState, type ChangeEvent } from 'react'
 
 import { saveFile, today } from '../download'
 import type { SaveOutcome } from '../session'
-import { ValidationFailed, exportFile, importFile, type FieldProblem, type State } from '../storage'
+import {
+  ValidationFailed,
+  exportFile,
+  loadFile,
+  withRules,
+  type FieldProblem,
+  type State,
+} from '../storage'
 import { messageOf, sentence } from '../words'
 
 interface Problem {
   message: string
   problems: FieldProblem[]
+}
+
+interface Pending {
+  state: State
+  name: string
+  // What the file holds and what loading it does.
+  about: string
+  // Set when loading removes logged meals, which makes the export first worth offering.
+  removes: boolean
 }
 
 function described(state: State): string {
@@ -35,7 +51,8 @@ export function DataSection({
   blocked: string | null
 }) {
   const [problem, setProblem] = useState<Problem | null>(null)
-  const [pending, setPending] = useState<{ state: State; name: string } | null>(null)
+  // A loaded file waiting for the person's yes: the state it would make, and what to say about it.
+  const [pending, setPending] = useState<Pending | null>(null)
   const [status, setStatus] = useState('')
   const inputId = useId()
   const exportHint = useId()
@@ -50,6 +67,14 @@ export function DataSection({
       const message = messageOf(error)
       setProblem({ message: `The copy could not be made: ${message}.`, problems: [] })
     }
+  }
+
+  function exportRules(): void {
+    setProblem(null)
+    if (state.rules === null) return
+    const name = `meal-planner-rules-${today()}.json`
+    saveFile(new Blob([JSON.stringify(state.rules, null, 2)], { type: 'application/json' }), name)
+    setStatus(`Exported ${name}.`)
   }
 
   async function replace(next: State, name: string): Promise<void> {
@@ -71,9 +96,36 @@ export function DataSection({
     if (file === undefined) return
     setProblem(null)
     setStatus('')
-    let next: State
+    let next: Pending
     try {
-      next = await importFile(file)
+      const loaded = await loadFile(file)
+      if (loaded.kind === 'export') {
+        next = {
+          state: loaded.state,
+          name: file.name,
+          about: `${file.name} has ${described(loaded.state)}. Loading it replaces ${described(state)}. Export a copy first to keep them.`,
+          removes: false,
+        }
+      } else {
+        // Rules only: the week was written for other rules, and the log is kept if it fits.
+        const { state: made, removed } = withRules(state, loaded.rules)
+        const names = (removed?.slotIds ?? []).map(
+          (id) => state.rules?.slots.find((slot) => slot.id === id)?.name ?? id,
+        )
+        let log = ''
+        if (removed !== null) {
+          const meals = `${removed.entries} logged ${removed.entries === 1 ? 'meal' : 'meals'}`
+          log = ` ${meals} for ${names.join(', ')} will be removed, since the plan has no such meal.`
+        } else if (state.log.entries.length > 0) {
+          log = ' The meal log is kept.'
+        }
+        next = {
+          state: made,
+          name: file.name,
+          about: `${file.name} has only the rules of the plan ${loaded.rules.name}. The week will be empty, since it was written for other rules.${log} Loading it replaces ${described(state)}. Export a copy first to keep them.`,
+          removes: removed !== null,
+        }
+      }
     } catch (error) {
       if (error instanceof ValidationFailed) {
         setProblem({
@@ -86,8 +138,8 @@ export function DataSection({
       }
       return
     }
-    if (isEmpty(state)) await replace(next, file.name)
-    else setPending({ state: next, name: file.name })
+    if (isEmpty(state)) await replace(next.state, file.name)
+    else setPending(next)
   }
 
   return (
@@ -107,6 +159,15 @@ export function DataSection({
         >
           Export a copy
         </button>
+        <button
+          type="button"
+          className="button-secondary"
+          disabled={state.rules === null}
+          aria-describedby={state.rules === null ? exportHint : undefined}
+          onClick={exportRules}
+        >
+          Export the rules only
+        </button>
         {state.rules === null && (
           <p id={exportHint} className="hint">
             There is nothing to export until a plan is saved.
@@ -116,7 +177,8 @@ export function DataSection({
       <div className="field">
         <label htmlFor={inputId}>Load a file</label>
         <p id={`${inputId}-hint`} className="hint">
-          A copy exported from this app, or a plan file from a coach.
+          A copy exported from this app, or a plan-rules file from a coach, which loads the rules
+          only.
         </p>
         {blocked !== null && (
           <p id={`${inputId}-blocked`} className="hint">
@@ -138,10 +200,7 @@ export function DataSection({
       {pending !== null && (
         <section className="confirm" aria-labelledby="replace-heading">
           <h3 id="replace-heading">Replace what this browser saved?</h3>
-          <p>
-            {pending.name} has {described(pending.state)}. Loading it replaces {described(state)}.
-            Export a copy first to keep them.
-          </p>
+          <p>{pending.about}</p>
           <div className="actions">
             <button
               type="button"
@@ -153,6 +212,11 @@ export function DataSection({
             >
               Replace with the file
             </button>
+            {pending.removes && (
+              <button type="button" className="button-secondary" onClick={exportCopy}>
+                Export a copy first
+              </button>
+            )}
             <button type="button" className="button-secondary" onClick={() => setPending(null)}>
               Cancel
             </button>

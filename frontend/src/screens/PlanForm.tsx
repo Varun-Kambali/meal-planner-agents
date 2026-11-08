@@ -13,12 +13,12 @@ import {
   fromStored,
   labelOf,
   sameRules,
-  withoutSlots,
   type FormError,
   type PlanDraft,
   type Removal,
 } from '../planForm'
 import { saveFile, today } from '../download'
+import { withoutSlots } from '../mealLog'
 import type { Save } from '../session'
 import { ValidationFailed, exportFile, type State } from '../storage'
 import type { PlanRules } from '../types'

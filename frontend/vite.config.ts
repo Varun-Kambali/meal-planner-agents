@@ -20,6 +20,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: { '/v1': API, '/healthz': API },
+    // The tests read the server's plan files (tests/fixtures/plans) to check that they load.
+    fs: { allow: ['.', '../tests/fixtures'] },
   },
   test: {
     environment: 'jsdom',
