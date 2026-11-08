@@ -143,4 +143,27 @@ describe('building the rules', () => {
       /^Your meal log does not fit this plan: .*no slot 'lunch'/,
     )
   })
+
+  it('offers to remove the log entries for a dropped meal when that is the only problem', () => {
+    const { rules, log } = sampleState()
+    const draft = draftOf(rules)
+    draft.slots = draft.slots.filter((slot) => slot.id !== 'lunch')
+    draft.slots[0]!.kcal_share = '55'
+    draft.slots[0]!.protein_share = '55'
+
+    const built = buildRules(draft, log)
+
+    expect(built.rules).toBeNull()
+    expect(built.rules === null && built.removal).toMatchObject({ slotIds: ['lunch'], entries: 1 })
+  })
+
+  it('offers no removal when the plan has another problem too', () => {
+    const { rules, log } = sampleState()
+    const draft = draftOf(rules)
+    draft.slots = draft.slots.filter((slot) => slot.id !== 'lunch')
+
+    const built = buildRules(draft, log)
+
+    expect(built.rules === null && built.removal).toBeUndefined()
+  })
 })
