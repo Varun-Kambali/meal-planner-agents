@@ -194,6 +194,38 @@
       ]
     },
     {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=desktop&screen=plan-drops-meals",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/plan",
+        "wait for element #main h1 to be visible",
+        "wait for element #f-food-liked_foods option + option to be added",
+        "click element fieldset:has(#f-slots-2-name) > button.button-text",
+        "set field #f-slots-2-kcal_share to 40",
+        "set field #f-slots-2-protein_share to 40",
+        "click element button[type=submit].button-primary",
+        "wait for element #drop-meals-heading to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=desktop&screen=plan-replaces-week",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/plan",
+        "wait for element #main h1 to be visible",
+        "wait for element #f-food-liked_foods option + option to be added",
+        "set field #f-name to Office weekday, lighter",
+        "click element button[type=submit].button-primary",
+        "wait for element .notice h2 to be visible"
+      ]
+    },
+    {
       "url": "http://127.0.0.1:4173/?view=phone&screen=plan-empty#/plan",
       "viewport": {
         "width": 375,
@@ -390,6 +422,40 @@
         "set field .panel textarea to a meal past the rate limit",
         "click element .panel form button[type=submit]",
         "wait for element .panel [role=alert] to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=phone&screen=plan-drops-meals",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/plan",
+        "wait for element #main h1 to be visible",
+        "wait for element #f-food-liked_foods option + option to be added",
+        "click element fieldset:has(#f-slots-2-name) > button.button-text",
+        "set field #f-slots-2-kcal_share to 40",
+        "set field #f-slots-2-protein_share to 40",
+        "click element button[type=submit].button-primary",
+        "wait for element #drop-meals-heading to be visible"
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:4173/__seed/tracking?view=phone&screen=plan-replaces-week",
+      "viewport": {
+        "width": 375,
+        "height": 812,
+        "isMobile": true
+      },
+      "actions": [
+        "navigate to http://127.0.0.1:4173/#/plan",
+        "wait for element #main h1 to be visible",
+        "wait for element #f-food-liked_foods option + option to be added",
+        "set field #f-name to Office weekday, lighter",
+        "click element button[type=submit].button-primary",
+        "wait for element .notice h2 to be visible"
       ]
     }
   ]
