@@ -127,7 +127,8 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
-      - run: npm test
+      # Vitest with coverage: the core logic files each need 80% (vite.config.ts).
+      - run: npm run test:coverage
       - run: npm run build
       # The Pages workflow builds with a base path. A page address, a script, a stylesheet, the
       # favicon or a font that still starts at the root would 404 there.

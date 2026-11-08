@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildRules, draftOf, fromServer } from './planForm'
+import { buildRules, draftOf, fromServer, labelOf } from './planForm'
 import { sampleState } from './test/helpers'
 import type { MealLog, PlanRules } from './types'
 
@@ -165,5 +165,100 @@ describe('building the rules', () => {
     const built = buildRules(draft, log)
 
     expect(built.rules === null && built.removal).toBeUndefined()
+  })
+})
+
+describe('what the form checks before the rules are saved', () => {
+  function problemsOf(change: (draft: ReturnType<typeof draftOf>) => void): Record<string, string> {
+    const { rules, log } = sampleState()
+    const draft = draftOf(rules)
+    change(draft)
+    const built = buildRules(draft, log)
+    expect(built.rules).toBeNull()
+    return Object.fromEntries(built.errors.map((error) => [error.path, error.message]))
+  }
+
+  it('asks for a name wherever one is blank', () => {
+    const found = problemsOf((draft) => {
+      draft.name = ' '
+      draft.dayTypes[0]!.name = ''
+      draft.slots[0]!.name = '  '
+    })
+
+    expect(found).toMatchObject({
+      name: 'Give the plan a name.',
+      'day_types.0.name': 'Give the day type a name.',
+      'slots.0.name': 'Give the meal a name.',
+    })
+  })
+
+  it('says what is wrong with a number that is empty, not a number, or not whole', () => {
+    const found = problemsOf((draft) => {
+      draft.dayTypes[0]!.kcal = ''
+      draft.dayTypes[0]!.protein_g = 'lots'
+      draft.slots[0]!.max_active_min = ''
+      draft.slots[0]!.max_total_min = '12.5'
+    })
+
+    expect(found).toMatchObject({
+      'day_types.0.kcal': 'Enter a number.',
+      'day_types.0.protein_g': 'Enter a number, such as 2650.',
+      'slots.0.max_active_min': 'Enter a number of minutes.',
+      'slots.0.max_total_min': 'Enter a whole number of minutes.',
+    })
+  })
+
+  it('checks an extra target, a meal share, the time and the kind of dish', () => {
+    const found = problemsOf((draft) => {
+      draft.dayTypes[0]!.extra = [{ key: 'x', nutrient: '', kind: 'min', value: '' }]
+      draft.slots[0]!.kcal_share = '0'
+      draft.slots[0]!.protein_share = '120'
+      draft.slots[1]!.eat_at = ''
+      draft.slots[1]!.style = ' '
+    })
+
+    expect(found).toMatchObject({
+      'day_types.0.extra.0.nutrient': 'Choose a nutrient.',
+      'day_types.0.extra.0.value': 'Enter a number.',
+      'slots.0.kcal_share': 'Enter a percentage above 0% up to 100%.',
+      'slots.0.protein_share': 'Enter a percentage from 0% up to 100%.',
+      'slots.1.eat_at': 'Enter the time this meal is eaten.',
+      'slots.1.style': 'Say what kind of dish it is.',
+    })
+  })
+
+  it('asks for gear, a diet, a cuisine and a shopping day, and for at most ten cuisines', () => {
+    const none = problemsOf((draft) => {
+      draft.gear = []
+      draft.diet = ''
+      draft.cuisines = ''
+      draft.shoppingDays = []
+    })
+    const many = problemsOf((draft) => {
+      draft.cuisines = Array.from({ length: 11 }, (_, i) => `Cuisine ${i}`).join('\n')
+    })
+
+    expect(none).toMatchObject({
+      gear: 'Choose at least one thing you cook with.',
+      'food.diet': 'Choose a diet.',
+      'food.cuisines': 'Name at least one cuisine.',
+      shopping_days: 'Choose at least one day.',
+    })
+    expect(many['food.cuisines']).toBe('Name at most 10 cuisines; there are 11.')
+  })
+})
+
+describe('what a problem is called in the list at the top of the form', () => {
+  it('names the field, the meal, the day type and the day', () => {
+    expect(labelOf('name')).toBe('Plan name')
+    expect(labelOf('week.tue')).toBe('The week, Tuesday')
+    expect(labelOf('day_types.1')).toBe('Day type 2')
+    expect(labelOf('day_types.1.name')).toBe('Day type 2, name')
+    expect(labelOf('day_types.0.kcal')).toMatch(/^Day type 1, /)
+    expect(labelOf('day_types.0.extra')).toBe('Day type 1, other daily targets')
+    expect(labelOf('day_types.0.extra.1')).toBe('Day type 1, other target 2')
+    expect(labelOf('slots.2')).toBe('Meal 3')
+    expect(labelOf('slots.2.style')).toMatch(/^Meal 3, /)
+    expect(labelOf('nonsense')).toBe('')
   })
 })
