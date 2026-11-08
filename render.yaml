@@ -6,7 +6,9 @@ services:
     name: meal-planner-agents
     runtime: docker
     plan: free
-    region: singapore
+    # Ohio, not Singapore: a free service there never woke after its first sleep (requests hung
+    # with no logs until the next deploy), as Render's community reports for some regions.
+    region: ohio
     branch: main
     autoDeployTrigger: checksPass
     healthCheckPath: /healthz
