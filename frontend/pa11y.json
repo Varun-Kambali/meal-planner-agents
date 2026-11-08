@@ -222,7 +222,7 @@
         "wait for element #f-food-liked_foods option + option to be added",
         "set field #f-name to Office weekday, lighter",
         "click element button[type=submit].button-primary",
-        "wait for element .notice h2 to be visible"
+        "wait for element #clear-week-heading to be visible"
       ]
     },
     {
@@ -455,7 +455,7 @@
         "wait for element #f-food-liked_foods option + option to be added",
         "set field #f-name to Office weekday, lighter",
         "click element button[type=submit].button-primary",
-        "wait for element .notice h2 to be visible"
+        "wait for element #clear-week-heading to be visible"
       ]
     }
   ]
