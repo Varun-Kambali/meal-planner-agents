@@ -177,5 +177,6 @@ it('says what is sent to the model, and that the server stores nothing', () => {
   const notice = screen.getByRole('region', { name: 'Your data' })
   expect(notice).toHaveTextContent('are sent to the model')
   expect(notice).toHaveTextContent('Gemini API')
+  expect(notice).toHaveTextContent('let it use what is sent to improve its products')
   expect(notice).toHaveTextContent('stores nothing')
 })

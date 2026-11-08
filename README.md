@@ -99,7 +99,7 @@ The rate limit counts requests per client address. By default the image trusts n
 
 ## Deployment
 
-The API runs as a Render free web service in Singapore, built from the Dockerfile as [`render.yaml`](render.yaml) describes. The browser app is built and published to GitHub Pages by the [`pages` workflow](.github/workflows/pages.yml). Your plan, week and log stay in your browser either way; the API stores nothing. The plan's rules, and the words typed for a swapped meal, are sent to the model (Google's Gemini API, on a free-tier key in the demo) to write recipes and read meals; nothing is stored by this app's server.
+The API runs as a Render free web service in Singapore, built from the Dockerfile as [`render.yaml`](render.yaml) describes. The browser app is built and published to GitHub Pages by the [`pages` workflow](.github/workflows/pages.yml). Your plan, week and log stay in your browser either way. The plan's rules, and the words typed for a swapped meal, are sent to the model (Google's Gemini API, on a free-tier key in the demo) to write recipes and read meals. Google's terms for its free tier let it use what is sent to improve its products. The API stores nothing.
 
 **What a visitor feels of the free host.** Render stops the service after 15 minutes without a request and starts it again on the next one, which takes about a minute. While that happens the page says the demo server is starting and tries again until it answers. After two minutes without an answer it says so and asks the visitor to try again in a few minutes.
 

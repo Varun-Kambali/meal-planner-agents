@@ -157,7 +157,8 @@ export function DataSection({
       <p>
         The plan&apos;s rules, and the words typed for a swapped meal, are sent to the model
         (Google&apos;s Gemini API, on a free-tier key in the demo) to write recipes and read meals.
-        This app&apos;s server stores nothing.
+        Google&apos;s terms for its free tier let it use what is sent to improve its products. This
+        app&apos;s server stores nothing.
       </p>
       <div className="actions">
         <button
