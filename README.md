@@ -10,7 +10,7 @@ The browser app on a week the pipeline wrote, replayed from recorded model repli
 
 ## Problem
 
-Following a meal plan means turning every slot of it into something to cook: a recipe that hits the slot's numbers, uses the gear you own, fits the time you have, and doesn't taste like yesterday's. Doing that by hand for a week takes a long time. Recipes online are written for someone else's kitchen, and chat assistants guess the nutrition numbers. Details are in the [case study](docs/case-study.md).
+Following a meal plan means turning every slot of it into something to cook: a recipe that hits the slot's numbers, uses the gear you own, fits the time you have, and doesn't taste like yesterday's. Recipes online are written for someone else's kitchen, and chat assistants guess the nutrition numbers. Details are in the [case study](docs/case-study.md).
 
 ## Solution
 
@@ -61,7 +61,7 @@ The newest full run of `make eval`: model gemini/gemini-3.1-flash-lite, commit 5
 | Cost per meal at list price (mean) | $0.000304 | $0.000318 | $0.000303 |
 | Seconds per meal (p95) | 43.7 | 16.7 | 43.7 |
 
-What this shows: the single call misses slot calories on most recipes, because it guesses grams. Portion fitting in code gets the pipeline to 258 recipes at the first attempt, and repair takes it to 479. Days are the weak point: 72 of 140 pass. 28 more cannot be settled, all on fibre: a food in the day, most often moong dal, curry leaves or moth beans, has no fibre value in the food data, so the check can show the day neither meeting its target nor missing it, and no recipe is rewritten for it ([0009](docs/decisions/0009-unsettled-day-checks.md)). Saturated fat fails the most days (21), each over the cap on the values the data has. The pipeline spends 12.6 model calls a week to the baseline's one. One meal read timed out at the model's API and counts as failed: its three foods count as not found and its calories as a full miss. Cost is LiteLLM's list price for the paid tier; the free tier billed nothing.
+What this shows: the single call misses slot calories on most recipes (460 of 553). The pipeline, with portion fitting and nutrient hints, passes 258 recipes at the first attempt against the single call's 46, and repair takes it to 479. The run does not separate portion fitting from the pipeline's other differences (the hints, a call per slot, its own prompt); [0005](docs/decisions/0005-code-fits-portions.md) gives the reasoning for fitting. Days are the weak point: 72 of 140 pass. 28 more cannot be settled, all on fibre: a food in the day, most often moong dal, curry leaves or moth beans, has no fibre value in the food data, so the check can show the day neither meeting its target nor missing it, and no recipe is rewritten for it ([0009](docs/decisions/0009-unsettled-day-checks.md)). For the pipeline, saturated fat fails the most days (21), each over the cap on the values the data has. The pipeline spends 12.6 model calls a week to the baseline's one. One meal read timed out at the model's API and counts as failed: its three foods count as not found and its calories as a full miss. Cost is LiteLLM's list price for the paid tier; the free tier billed nothing.
 
 What it does not show: this is one run of one free-tier model on synthetic plans and meals, so the spread between runs is unknown. An earlier full run, from before a day check could be unsettled, is in [`evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_b593c44.json`](evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_b593c44.json); the [case study](docs/case-study.md) says what changed between the two.
 
@@ -200,7 +200,7 @@ CI runs all of them on every PR and every push to `main`, in six jobs: `check` (
 
 The API runs as a Render free web service in Ohio, built from the Dockerfile as [`render.yaml`](render.yaml) describes. The browser app is built and published to GitHub Pages by the [`pages` workflow](.github/workflows/pages.yml). Your plan, week and log stay in your browser either way. The plan's rules, and the words typed for a swapped meal, are sent to the model (Google's Gemini API, on a free-tier key in the demo) to write recipes and read meals. Google's terms for its free tier let it use what is sent to improve its products. The API stores nothing. Why this host and region is in [0011](docs/decisions/0011-demo-on-render-and-pages.md).
 
-**What a visitor feels of the free host.** Render stops the service after 15 minutes without a request and starts it again on the next one. Render gives about a minute for that; the Ohio service's wake has not been timed yet, and the first service, in Singapore, never woke after a sleep. While the server starts, the page says the demo server is starting and tries again until it answers. After two minutes without an answer it says so, asks the visitor to try again in a few minutes, and keeps checking every 30 seconds.
+**What a visitor feels of the free host.** Render stops the service after 15 minutes without a request and starts it again on the next one, which takes about 70 seconds (one test: 71.4 s after 16 idle minutes). The first service, in Singapore, never woke after a sleep. While the server starts, the page says the demo server is starting and tries again until it answers. After two minutes without an answer it says so, asks the visitor to try again in a few minutes, and keeps checking every 30 seconds.
 
 **Limits on the demo**, as the code sets them:
 
@@ -275,16 +275,15 @@ docs/                     case study, requirements, architecture, data notes, de
 - The log holds 7 consecutive days; a meal past that starts a new log once the old one is exported, and the old one then lives only in that file.
 - Two open tabs overwrite each other's saves.
 - Clearing the browser loses the data unless it was exported.
-- Loading a rules file the same as the saved rules still clears the week.
-- A rules file with one mistake is refused with the export format's problems, which are harder to read than the rules format's would be.
+- Loading a rules file always clears the week, even when its rules are the ones already saved, and a rules file with one mistake is refused with the export format's problems, which are harder to read than the rules format's would be.
 - The share eaten as planned counts a meal with no log entry as not as planned.
-- A day total that is a lower bound can show without "at least" where the check on it passes, because the server does not mark that case yet.
+- When a food in a day has no value for a nutrient and the day still meets that nutrient's floor, the day view shows the total without "at least", so it can read as complete.
 
 **The demo**
 - Every visitor shares one free model quota, and the rate limit counts requests, not model calls, so one visitor can use a large part of it.
 - `/healthz` does not check nutrition-mcp, so if it stops, the health check stays green while the `/v1` routes answer 503 until the service sleeps and starts again.
 - The rate limit's count is in memory, so a restart starts it again.
-- The Ohio service's wake after a sleep has not been timed.
+- The Ohio service's wake has been timed once (71.4 s), which shows it can wake, not that it always will.
 - The Pages workflow deploys on a push to `main` without waiting for CI, which matters only for a push that skips a PR.
 - Traces keep ids and numbers (targets, food ids, grams); only words are masked.
 
@@ -292,7 +291,7 @@ Next: the food-data review that settles the fibre days, a process-wide cap on mo
 
 ## What I learned
 
-- **Arithmetic belongs in code even inside a generation loop.** The single call guessed grams and passed 46 of 553 recipes. Scaling grams in code and showing the writer nutrition per 100 g got 258 through at the first attempt, before any repair, and repair took it to 479 ([0005](docs/decisions/0005-code-fits-portions.md), [results file](evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_50aab53.json)).
+- **Arithmetic belongs in code even inside a generation loop.** The single call passed 46 of 553 recipes, most of the rest missing their slot's calories. The pipeline, which scales grams in code and shows the writer nutrition per 100 g, passed 258 at the first attempt and 479 after repair ([results file](evals/results/2026-10-27_gemini-gemini-3.1-flash-lite_50aab53.json)). That run does not measure fitting on its own; why fitting is in code is in [0005](docs/decisions/0005-code-fits-portions.md).
 - **A check that cannot tell has to say so.** Counting a missing value as zero would let days pass on numbers nobody measured, and failing those days, as the first full run did, published days as failing that could not be judged. A third verdict showed 28 of 140 days the data cannot settle, and repair no longer rewrites recipes for a gap in the data ([0009](docs/decisions/0009-unsettled-day-checks.md)).
 - **An eval can gate CI only when it gives the same answer twice.** A live run varies, so thresholds on it would need wide margins. Replaying recorded replies through the real checks gives the same numbers on every run, so the thresholds sit within one recipe of the replay ([0008](docs/decisions/0008-smoke-replay-gates-every-pr.md)).
 - **What to mask is decided by the field, not by how a string looks.** A cuisine such as `south_indian` looks like an id, so a pattern cannot tell it from one. Masking every string except those under a short list of id fields kept the plan's words out of the first real traces ([0010](docs/decisions/0010-masked-langfuse-tracing.md)).
