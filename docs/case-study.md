@@ -48,19 +48,23 @@ Out of scope for v1, and why:
 
 ## How: design and trade-offs
 
-A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. Two more routes read a typed meal and add up a meal log ([diagram](architecture.md)).
+A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. Two more routes read a typed meal and add up a meal log. A React app keeps the plan, the week and the log in the browser and shows only numbers the API returns. The demo runs the API on Render and the app on GitHub Pages ([diagram](architecture.md)).
 
 The decisions that mattered:
 
-1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The first idea also covered shopping, prep and rotation: several products. Starting from the user's plan keeps v1 to the part that took longest.
-2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost: its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost: no variety. One call per slot sits between one per recipe, where no call sees the others, and the eval's single-call baseline.
-3. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)). They come from USDA FoodData Central. Editing nutrition-mcp would tie this project to its releases, and a second source would split where numbers come from.
-4. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would mean login and food logs on a public demo; browser storage with a file export leaves nothing to leak.
-5. **Code fits portions, and the writer is shown nutrition** ([0005](decisions/0005-code-fits-portions.md)). The writer guessed grams, and repair guessed again. Now code scales an off-target recipe's grams by one factor and nutrition-mcp works out its nutrients again, and the writer sees each ingredient's nutrition per 100 g. More repair rounds lost: they spend calls on arithmetic. A gram solver lost: it would replace the writer's proportions.
-6. **The model reads the meal; code checks amounts and units** ([0006](decisions/0006-reading-a-typed-meal.md)). The model lists the typed foods, amounts and units, nutrition-mcp's search finds each food, and a second call picks among its options when a name is left open. Code settles the unit, and a vague amount or a range asks the person. The model returning ids and grams lost: the grams would be guesses. Matching without a model lost: it cannot split "2 rotis, a bowl of dal and 2 eggs".
-7. **The log holds foods and amounts, never numbers** ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)). The server works out every eaten meal again with nutrition-mcp, so a number in an edited or old file is never trusted.
-8. **A day check that cannot tell says so** ([0009](decisions/0009-unsettled-day-checks.md)). It passes, fails or is unsettled, and only a failure goes to repair, since no rewrite supplies a missing value. A food's total fat bounds its saturated fat. Counting a missing value as 0 lost: days would pass on numbers nobody measured.
-9. **Traces are made by this code, masked, and off without keys** ([0010](decisions/0010-masked-langfuse-tracing.md)). Every string but an id is masked before it reaches Langfuse. LiteLLM's and LangChain's callbacks lost: they send prompts and replies as they are.
+1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The first idea also covered shopping, prep and rotation: several products.
+2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost: its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost on variety.
+3. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)), from USDA FoodData Central. Editing nutrition-mcp would tie this project to its releases.
+4. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would put logins and food logs on a public demo.
+5. **Code fits portions** ([0005](decisions/0005-code-fits-portions.md)). The writer guessed grams and repair guessed again; now code scales an off-target recipe by one factor. More repair rounds lost: they spend calls on arithmetic.
+6. **The model reads the meal; code checks amounts and units** ([0006](decisions/0006-reading-a-typed-meal.md)). The model returning ids and grams lost: the grams would be guesses. Matching without a model cannot split "2 rotis, a bowl of dal and 2 eggs".
+7. **The log holds foods and amounts, never numbers** ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)), so a number in an edited file is never trusted.
+8. **A day check that cannot tell says so** ([0009](decisions/0009-unsettled-day-checks.md)). It passes, fails or is unsettled, and only a failure goes to repair. Counting a missing value as 0 lost: days would pass on numbers nobody measured.
+9. **Traces are made by this code and masked** ([0010](decisions/0010-masked-langfuse-tracing.md)). LiteLLM's and LangChain's callbacks lost: they send prompts and replies as they are.
+10. **Household measures are worked out after fitting, never in a prompt** ([0013](decisions/0013-household-measures-in-code.md)). Asking the writer would change every prompt and the smoke recording, and describe grams that fitting then changes.
+11. **The browser repeats the server's file checks** ([0014](decisions/0014-browser-file-checks-compiled-ahead.md)), so a bad file is refused when it is loaded, with the place of each problem. Compiling its validators in the page lost: that needs `eval`.
+12. **The demo runs on Render and GitHub Pages** ([0011](decisions/0011-demo-on-render-and-pages.md)). Free Docker Spaces are gone. The first service, in Singapore, never woke after a sleep, so I moved it to Ohio.
+13. **The rate limit counts `CF-Connecting-IP`** ([0012](decisions/0012-count-visitors-by-cf-connecting-ip.md)). Render's proxy keeps an `X-Forwarded-For` the client sent, so trusting it would let a visitor choose its own count.
 
 ## Results
 
@@ -84,19 +88,16 @@ The single call guesses grams and misses slot calories on most recipes. Portion 
 
 ## Limits, and what better inputs would change
 
-- **Time is the model's claim,** checked against the slot's limits, never measured.
-- **A style like "no-cook" is free text** that no code checks, though the prompts call it binding.
-- **Missing values leave days unsettled:** 28 of the 140, because several dals or curry leaves have no fibre value.
+- **Time is the model's claim,** checked against the slot's limits, never measured. A style like "no-cook" is free text no code checks.
+- **Missing values leave days unsettled:** 28 of 140, because a few dals and curry leaves have no fibre value. Better data settles them with no code change.
 - **Scaling is uniform,** so an egg can land on a fraction of a piece.
-- **A household measure with no sourced weight is not converted:** for a bowl or a pav the reader asks for a katori or grams.
-- **Which dish a general name means is the model's pick:** in the reading eval, 80 of the reader's 82 foods were the labelled ones.
-- **An amount counts only if its words are in what was typed,** so one the model rewrites asks the person.
+- **The reader asks** when a measure has no sourced weight (a bowl, a pav), and counts an amount only if its words were typed. Which dish a general name means is the model's pick: 80 of its 82 foods were the labelled ones. A food read wrongly can be changed, not removed.
+- **Glycemic load is often unknown, and the catalogue limits variety.** A larger licensed table fixes both without code changes.
+- **Traces keep ids and numbers;** only words are masked.
+- **Free-tier models.** A stronger model is a setting, and the eval measures what it buys.
+- **The browser holds everything,** so clearing it loses what was not exported, two open tabs overwrite each other, and the log holds 7 days before a new one starts.
+- **The demo shares one free quota,** and the rate limit counts requests, not calls, so one visitor can use much of it. `/healthz` does not ask nutrition-mcp, and the Ohio service's wake has not been timed.
 - **The as-planned share counts a meal with no entry as not as planned.**
-- **Glycemic load is often unknown.** USDA foods carry none; a licensed table would add it.
-- **The catalogue limits variety.** A larger licensed table widens it without code changes.
-- **Traces keep ids and numbers:** the plan's, and the foods and grams read from a meal; only words are masked.
-- **Free-tier models.** A stronger model is a config change, and the eval measures what it buys.
-- **Browser storage.** Clearing the browser loses the data unless it was exported.
 
 ## What I learned
 
