@@ -48,7 +48,7 @@ Out of scope for v1, and why:
 
 ## How: design and trade-offs
 
-A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. Two more routes read a typed meal and add up a meal log. A React app keeps the plan, the week and the log in the browser and shows only numbers the API returns. The demo runs the API on Render and the app on GitHub Pages ([diagram](architecture.md)).
+A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. Two more routes read a typed meal and add up a meal log. A React app keeps the plan, the week and the log in the browser. The demo runs the API on Render and the app on GitHub Pages ([diagram](architecture.md)).
 
 The decisions that mattered:
 
@@ -64,7 +64,7 @@ The decisions that mattered:
 10. **Household measures are worked out after fitting, never in a prompt** ([0013](decisions/0013-household-measures-in-code.md)). Asking the writer would change every prompt and the smoke recording, and describe grams that fitting then changes.
 11. **The browser repeats the server's file checks** ([0014](decisions/0014-browser-file-checks-compiled-ahead.md)), so a bad file is refused when it is loaded, with the place of each problem. Compiling its validators in the page lost: that needs `eval`.
 12. **The demo runs on Render and GitHub Pages** ([0011](decisions/0011-demo-on-render-and-pages.md)). Free Docker Spaces are gone. The first service, in Singapore, never woke after a sleep, so I moved it to Ohio.
-13. **The rate limit counts `CF-Connecting-IP`** ([0012](decisions/0012-count-visitors-by-cf-connecting-ip.md)). Render's proxy keeps an `X-Forwarded-For` the client sent, so trusting it would let a visitor choose its own count.
+13. **The rate limit counts `CF-Connecting-IP`** ([0012](decisions/0012-count-visitors-by-cf-connecting-ip.md)). Render's proxy keeps a client-sent `X-Forwarded-For`, which a visitor could forge to choose its count.
 
 ## Results
 
@@ -84,7 +84,7 @@ The newest full run (gemini-3.1-flash-lite, commit 50aab53) covered 20 synthetic
 | Asked when it should (share) | 93.8% (15 of 16) |
 | Calorie error against the label (MAPE) | 6.4% over 42 meals |
 
-The single call guesses grams and misses slot calories on most recipes. Portion fitting gets the pipeline to 258 at the first attempt, and repair to 479. Days are the weak point (see Limits). An earlier run, before checks could be unsettled, passed 52 days on 14.2 calls a week. One read timed out at the API; it and the five meals the reader cannot reach today make most of the calorie error. One run of one free model on synthetic data, so the spread between runs is unknown.
+The single call misses slot calories on most recipes (460 of 553). The pipeline, with portion fitting and nutrient hints, passes 258 at the first attempt and 479 after repair; the run does not isolate fitting. Days are the weak point (see Limits). An earlier run, before checks could be unsettled, passed 52 days on 14.2 calls a week. One read timed out at the API; it and the five meals the reader cannot reach today make most of the calorie error. One run of one free model on synthetic data, so the spread between runs is unknown.
 
 ## Limits, and what better inputs would change
 
@@ -96,7 +96,7 @@ The single call guesses grams and misses slot calories on most recipes. Portion 
 - **Traces keep ids and numbers;** only words are masked.
 - **Free-tier models.** A stronger model is a setting, and the eval measures what it buys.
 - **The browser holds everything,** so clearing it loses what was not exported, two open tabs overwrite each other, and the log holds 7 days before a new one starts.
-- **The demo shares one free quota,** and the rate limit counts requests, not calls, so one visitor can use much of it. `/healthz` does not ask nutrition-mcp, and the Ohio service's wake has not been timed.
+- **The demo shares one free quota,** and the rate limit counts requests, not calls, so one visitor can use much of it. `/healthz` does not ask nutrition-mcp, and the one timed wake took 71.4 s.
 - **The as-planned share counts a meal with no entry as not as planned.**
 
 ## What I learned
