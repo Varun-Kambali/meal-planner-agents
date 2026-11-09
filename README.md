@@ -70,7 +70,7 @@ CI replays a recorded slice of three plans and ten meals on every PR, with no ke
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
   subgraph pages[Browser, app served by GitHub Pages]
     App[React app]
     Store[(IndexedDB: rules, week, meal log)]
