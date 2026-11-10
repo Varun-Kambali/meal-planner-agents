@@ -1,7 +1,7 @@
 {
   "name": "meal-planner-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "engines": {
     "node": ">=26"
@@ -20,7 +20,8 @@
     "types:check": "node scripts/generate-types.ts --check",
     "validators": "node scripts/generate-validators.ts",
     "validators:check": "node scripts/generate-validators.ts --check",
-    "a11y": "node scripts/a11y.ts"
+    "a11y": "node scripts/a11y.ts",
+    "demo:gif": "node scripts/demo-gif.ts"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
@@ -44,6 +45,7 @@
     "oxlint": "^1.91.0",
     "pa11y-ci": "^5.0.0",
     "prettier": "^3.9.10",
+    "puppeteer": "^25.16.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"

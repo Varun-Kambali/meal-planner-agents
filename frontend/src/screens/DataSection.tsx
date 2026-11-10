@@ -72,9 +72,14 @@ export function DataSection({
   function exportRules(): void {
     setProblem(null)
     if (state.rules === null) return
-    const name = `meal-planner-rules-${today()}.json`
-    saveFile(new Blob([JSON.stringify(state.rules, null, 2)], { type: 'application/json' }), name)
-    setStatus(`Exported ${name}.`)
+    try {
+      const name = `meal-planner-rules-${today()}.json`
+      saveFile(new Blob([JSON.stringify(state.rules, null, 2)], { type: 'application/json' }), name)
+      setStatus(`Exported ${name}.`)
+    } catch (error) {
+      const message = messageOf(error)
+      setProblem({ message: `The copy could not be made: ${message}.`, problems: [] })
+    }
   }
 
   async function replace(next: State, name: string): Promise<void> {
@@ -152,7 +157,8 @@ export function DataSection({
       <p>
         The plan&apos;s rules, and the words typed for a swapped meal, are sent to the model
         (Google&apos;s Gemini API, on a free-tier key in the demo) to write recipes and read meals.
-        This app&apos;s server stores nothing.
+        Google&apos;s terms for its free tier let it use what is sent to improve its products. This
+        app&apos;s server stores nothing.
       </p>
       <div className="actions">
         <button

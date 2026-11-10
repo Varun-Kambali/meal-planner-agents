@@ -20,7 +20,6 @@ import { formats } from '../src/schema-runtime.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SCHEMA = path.resolve(here, '../../schemas/export.json')
-const RULES_SCHEMA = path.resolve(here, '../../schemas/plan-rules.json')
 const OUT = path.resolve(here, '../src/generated/validators.js')
 
 const BANNER = `// Generated from schemas/export.json and schemas/plan-rules.json by frontend/scripts/generate-validators.ts. Do not edit
@@ -46,6 +45,12 @@ const STORED = {
   },
 }
 
+// A plan-rules file is the PlanRules definition of export.json (schemas/plan-rules.json is that
+// definition on its own; scripts/export_schemas.py writes both from the same model and
+// tests/unit/test_export_schemas.py keeps them current), so it points at the copy the
+// other validators already hold instead of compiling it a second time.
+const RULES_FILE = { $id: 'rules-file', $ref: 'export.json#/$defs/PlanRules' }
+
 // What the generated code would `require`, and the name it is imported under instead, since the
 // module runs in the browser as an ES module.
 const RUNTIME: Record<string, string> = {
@@ -59,18 +64,20 @@ async function generate(): Promise<string> {
     // Fills in a field the server has a default for, so the data matches its type.
     useDefaults: true,
     strict: true,
+    // A $ref becomes a call to one shared function, not a copy of the schema at each use.
+    inlineRefs: false,
     // validate.ts words each problem itself from its keyword and parameters.
     messages: false,
     formats,
     code: { source: true, esm: true, formats: _`require("./schema-runtime").formats` },
   })
   ajv.addSchema(JSON.parse(await readFile(SCHEMA, 'utf8')), 'export.json')
-  ajv.addSchema(JSON.parse(await readFile(RULES_SCHEMA, 'utf8')), 'plan-rules.json')
   ajv.addSchema(STORED)
+  ajv.addSchema(RULES_FILE)
   let code = standaloneCode(ajv, {
     exported: 'export.json',
     stored: 'stored',
-    rulesFile: 'plan-rules.json',
+    rulesFile: 'rules-file',
   })
   for (const [call, name] of Object.entries(RUNTIME)) code = code.replaceAll(call, name)
   // An ES module is strict already, and after the import the directive would do nothing.
