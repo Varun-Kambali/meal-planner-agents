@@ -1,6 +1,6 @@
 # Requirements
 
-Status: done for v1.0.0 except the hand review of the food matches (the food file box under Data, which is Varun's), 2026-11-09. Agreed at kickoff, 2026-10-21. The reasoning behind the project is in [case-study.md](case-study.md); the design is in [architecture.md](architecture.md).
+Status: done for v1.0.0 except the hand review of the food matches (the food file box under Data, which is Varun's), 2026-11-10. Agreed at kickoff, 2026-10-21. The reasoning behind the project is in [case-study.md](case-study.md); the design is in [architecture.md](architecture.md).
 
 ## Problem
 
