@@ -1,6 +1,6 @@
 # Case study: meal-planner-agents
 
-Written at kickoff on 2026-10-21, updated 2026-10-24 for the recipe pipeline.
+Written at kickoff on 2026-10-21, updated at each milestone, and final for v1.0.0 on 2026-11-10.
 
 ## Why: the problem
 
@@ -24,13 +24,13 @@ nutrition-mcp was the first half: sourced, computed nutrition numbers for the fo
 
 ## What: the solution
 
-meal-planner-agents takes the rules of a meal plan the user already follows and writes a week of recipes that fit them: one per slot per day, all different, each checked against the plan in code. Then it tracks the week: the user marks each meal as eaten, changed, swapped or skipped, types what they had when they went off plan, and sees each day and the week against the targets. Every nutrition number comes from nutrition-mcp over MCP, never from the model.
+meal-planner-agents takes the rules of a meal plan the user already follows and writes a week of recipes that fit them: one per slot per day, each checked in code against the plan and against the others in its slot. Then it tracks the week: the user marks each meal as eaten, changed, swapped or skipped, types what they had when they went off plan, and sees each day and the week against the targets. Every nutrition number comes from nutrition-mcp over MCP, never from the model.
 
 In scope for v1:
 
 - **Plan rules:** day types with targets, slots with their style and time limits, kitchen gear, food rules, cuisines to draw on, shopping days.
-- **A week of recipes** that are easy to cook with little oil, use few ingredients, and draw on Indian, Japanese and Mediterranean cooking as the rules ask.
-- **Hard checks in code:** slot and day targets, allergens and excluded foods, gear, time, variety within a slot, and a no-waste check.
+- **A week of recipes** the writer is asked to keep easy, with little oil and few ingredients, drawing on Indian, Japanese and Mediterranean cooking as the rules ask.
+- **Checks in code:** slot and day targets, allergens and excluded foods, gear, time and variety within a slot, plus a no-waste warning.
 - **Tracking** with one tap per meal, typed swaps read into foods and amounts, and day and week views.
 - **Evals** of the recipes against a single-call baseline, and of the meal reader against labelled meals.
 
@@ -48,23 +48,22 @@ Out of scope for v1, and why:
 
 ## How: design and trade-offs
 
-A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one model call (slots in parallel), gets the numbers from nutrition-mcp, checks in plain Python, and sends failing recipes back with their failures, at most 3 times. Two more routes read a typed meal and add up a meal log. A React app keeps the plan, the week and the log in the browser. The demo runs the API on Render and the app on GitHub Pages ([diagram](architecture.md)).
+A stateless FastAPI service runs a LangGraph graph: it expands the rules into slots, writes each slot's 7 recipes in one call (slots in parallel), gets the numbers from nutrition-mcp, checks in Python, and sends failures back at most 3 times. Other routes read a typed meal and add up a log. A React app keeps the plan, week and log in the browser. The demo runs the API on Render and the app on GitHub Pages ([diagram](architecture.md)).
 
 The decisions that mattered:
 
-1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The first idea also covered shopping, prep and rotation: several products.
+1. **Follow an existing plan instead of writing one** ([0001](decisions/0001-follow-an-existing-plan.md)). The first idea, with shopping, prep and rotation, was several products.
 2. **The model writes, code checks** ([0002](decisions/0002-model-writes-code-checks.md)). A model checking its own recipe lost: its arithmetic is the problem nutrition-mcp measured. A fixed list of dishes lost on variety.
 3. **New foods go through nutrition-mcp's dataset folder** ([0003](decisions/0003-foods-through-nutrition-mcp-datasets.md)), from USDA FoodData Central. Editing nutrition-mcp would tie this project to its releases.
 4. **The user's data stays in the browser** ([0004](decisions/0004-user-data-in-the-browser.md)). Accounts and a database would put logins and food logs on a public demo.
-5. **Code fits portions** ([0005](decisions/0005-code-fits-portions.md)). The writer guessed grams and repair guessed again; now code scales an off-target recipe by one factor. More repair rounds lost: they spend calls on arithmetic.
-6. **The model reads the meal; code checks amounts and units** ([0006](decisions/0006-reading-a-typed-meal.md)). The model returning ids and grams lost: the grams would be guesses. Matching without a model cannot split "2 rotis, a bowl of dal and 2 eggs".
+5. **Code fits portions** ([0005](decisions/0005-code-fits-portions.md)): it scales an off-target recipe by one factor. More repair rounds lost: they spend calls on arithmetic.
+6. **The model reads the meal; code checks amounts and units** ([0006](decisions/0006-reading-a-typed-meal.md)). Model grams would be guesses; matching without a model cannot split "2 rotis and a bowl of dal".
 7. **The log holds foods and amounts, never numbers** ([0007](decisions/0007-the-log-holds-foods-and-amounts.md)), so a number in an edited file is never trusted.
-8. **A day check that cannot tell says so** ([0009](decisions/0009-unsettled-day-checks.md)). It passes, fails or is unsettled, and only a failure goes to repair. Counting a missing value as 0 lost: days would pass on numbers nobody measured.
+8. **A day check that cannot tell says so** ([0009](decisions/0009-unsettled-day-checks.md)). Counting a missing value as 0 lost: days would pass on unmeasured numbers.
 9. **Traces are made by this code and masked** ([0010](decisions/0010-masked-langfuse-tracing.md)). LiteLLM's and LangChain's callbacks lost: they send prompts and replies as they are.
-10. **Household measures are worked out after fitting, never in a prompt** ([0013](decisions/0013-household-measures-in-code.md)). Asking the writer would change every prompt and the smoke recording, and describe grams that fitting then changes.
-11. **The browser repeats the server's file checks** ([0014](decisions/0014-browser-file-checks-compiled-ahead.md)), so a bad file is refused when it is loaded, with the place of each problem. Compiling its validators in the page lost: that needs `eval`.
-12. **The demo runs on Render and GitHub Pages** ([0011](decisions/0011-demo-on-render-and-pages.md)). Free Docker Spaces are gone. The first service, in Singapore, never woke after a sleep, so I moved it to Ohio.
-13. **The rate limit counts `CF-Connecting-IP`** ([0012](decisions/0012-count-visitors-by-cf-connecting-ip.md)). Render's proxy keeps a client-sent `X-Forwarded-For`, which a visitor could forge to choose its count.
+10. **Household measures are worked out in code after fitting** ([0013](decisions/0013-household-measures-in-code.md)). The writer would describe grams that fitting then changes.
+11. **The browser repeats the server's file checks** ([0014](decisions/0014-browser-file-checks-compiled-ahead.md)), so a bad file is refused on load, problem by problem.
+12. **The demo runs on Render in Ohio and on GitHub Pages** ([0011](decisions/0011-demo-on-render-and-pages.md)), counting visitors by `CF-Connecting-IP` ([0012](decisions/0012-count-visitors-by-cf-connecting-ip.md)). Free Docker Spaces are gone, Singapore never woke after a sleep, and Render keeps a forgeable `X-Forwarded-For`.
 
 ## Results
 
@@ -84,21 +83,23 @@ The newest full run (gemini-3.1-flash-lite, commit 50aab53) covered 20 synthetic
 | Asked when it should (share) | 93.8% (15 of 16) |
 | Calorie error against the label (MAPE) | 6.4% over 42 meals |
 
-The single call misses slot calories on most recipes (460 of 553). The pipeline, with portion fitting and nutrient hints, passes 258 at the first attempt and 479 after repair; the run does not isolate fitting. Days are the weak point (see Limits). An earlier run, before checks could be unsettled, passed 52 days on 14.2 calls a week. One read timed out at the API; it and the five meals the reader cannot reach today make most of the calorie error. One run of one free model on synthetic data, so the spread between runs is unknown.
+The single call misses slot calories on 460 of 553 recipes. The pipeline, with portion fitting and nutrient hints, passes 258 at the first attempt and 479 after repair. Days are the weak point (see Limits). A timed-out read and five meals the reader cannot reach make most of the calorie error. One run of one free model on synthetic data, so the spread between runs is unknown.
 
 ## Limits, and what better inputs would change
 
-- **Time is the model's claim,** checked against the slot's limits, never measured. A style like "no-cook" is free text no code checks.
-- **Missing values leave days unsettled:** 28 of 140, because a few dals and curry leaves have no fibre value. Better data settles them with no code change.
+- **Time is the model's claim,** checked against the slot's limits, never measured. A style like "no-cook" is unchecked free text.
+- **The food data limits the app:** 28 of 140 days stay unsettled because a few dals and curry leaves have no fibre value, glycemic load is often unknown, and the catalogue limits variety. A larger licensed table fixes all three with no code change.
 - **Scaling is uniform,** so an egg can land on a fraction of a piece.
-- **The reader asks** when a measure has no sourced weight (a bowl, a pav), and counts an amount only if its words were typed. Which dish a general name means is the model's pick: 80 of its 82 foods were the labelled ones. A food read wrongly can be changed, not removed.
-- **Glycemic load is often unknown, and the catalogue limits variety.** A larger licensed table fixes both without code changes.
+- **The reader asks** when a measure has no sourced weight (a bowl, a pav). Which dish a general name means is the model's pick: 80 of its 82 foods were the labelled ones. A food read wrongly can be changed, not removed.
 - **Traces keep ids and numbers;** only words are masked.
 - **Free-tier models.** A stronger model is a setting, and the eval measures what it buys.
 - **The browser holds everything,** so clearing it loses what was not exported, two open tabs overwrite each other, and the log holds 7 days before a new one starts.
-- **The demo shares one free quota,** and the rate limit counts requests, not calls, so one visitor can use much of it. `/healthz` does not ask nutrition-mcp, and the one timed wake took 71.4 s.
+- **The demo shares one free quota,** and the rate limit counts requests, not calls, so one visitor can use much of it. `/healthz` does not ask nutrition-mcp, and a wake took 71.4 s.
 - **The as-planned share counts a meal with no entry as not as planned.**
 
 ## What I learned
 
-[Written as the milestones land.]
+- **Let the model choose and let code count.** The single call passed 46 of 553 recipes; the pipeline, with code doing the grams and the checks, passed 479. That run doesn't isolate portion fitting, and I'd want that test before claiming more.
+- **When a check fails, look at the data first.** In the first full run, 38 of the 88 failing days failed only on checks the food data could not settle. Repair can't fix a missing value, so a check that can't tell now says so.
+- **An eval gates CI only if it answers the same way twice,** so the smoke eval replays recorded model replies.
+- **Deploying is part of the product.** The Singapore server hung after its first sleep, and only a timed cold start showed it.
