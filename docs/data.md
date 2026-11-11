@@ -4,7 +4,7 @@ nutrition-mcp bundles Indian dishes and 66 raw ingredients. The plans this proje
 
 ## Source
 
-Every row is a USDA FoodData Central record from the SR Legacy dataset (public domain), source id `usda_fdc_sr_legacy` in `data/foods/sources.yaml`. nutrition-mcp's bundled data already uses the id `usda_fdc` for the same dataset, and a source id has to be unique across every folder nutrition-mcp loads, so the food file has its own entry. No row uses a Branded (label) record, a Survey (FNDDS) record or an Indian brand's label values.
+Every row is a USDA FoodData Central record from the SR Legacy dataset (public domain), source id `usda_fdc_sr_legacy` in `data/foods/sources.yaml`. nutrition-mcp's bundled data already uses the id `usda_fdc` for the same dataset, and a source id has to be unique across every folder nutrition-mcp loads, so the food file has its own entry. No nutrient row uses a Branded (label) record, a Survey (FNDDS) record or an Indian brand's label values; two catalogue measures take a portion weight from a Survey record (see Household measures).
 
 ## Building the food file
 
@@ -36,7 +36,7 @@ The build stops on an id that clashes with nutrition-mcp's bundled data, a repea
 3. **Unenriched and unfortified where USDA has both**, as nutrition-mcp does. Fortification of Indian oats and milk varies by brand, and an addition that may not be in the food should not be counted.
 4. **The variety sold in India where USDA splits a food.** The orange is the mandarin (santra, Nagpur orange, kinnow). The lettuce is iceberg. The mushroom is the white button mushroom, not UV-treated.
 
-The full list, as reviewed against each record on 2026-10-23:
+The full list. Each match was checked against its record when the file was built (2026-10-23) and again on 2026-11-11, when all 33 records were fetched and compared with this table and `ingredients.csv`:
 
 | Food | FDC ID | FDC description | Diet | Why this record |
 |---|---|---|---|---|
@@ -109,6 +109,10 @@ The measures that were in the catalogue before the food file were checked agains
 | `green_chilli`, piece | 6 | 170497: 1 pepper, 45 g | Kept as a household estimate: the record's pepper is a larger variety than an Indian green chilli |
 | `potato`, piece | 150 | None; the bundled row is from CoFID | Kept as a household estimate |
 
+## Allergens
+
+The catalogue's allergen groups follow the EU list of allergens a label must declare (Regulation (EU) No 1169/2011, Annex II), in the ten groups the plan form offers: gluten, milk, egg, peanut, tree nuts, soy, fish, crustaceans, sesame and mustard. Coconut is not tagged as a tree nut: the EU list names the tree nuts one by one without it, and the US FDA took it off its tree-nut list in January 2025. Two foods carry groups their record does not show: whey protein is tagged soy as well as milk, because many powders add soy lecithin, and kimchi is tagged fish and crustaceans (see Values to read with care).
+
 ## What is missing
 
 **No glycemic index.** USDA has no GI, so no row here has one, and a meal with any of these foods has no glycemic load. nutrition-mcp reports it as missing, and the day view says so instead of estimating it.
@@ -129,6 +133,7 @@ A dish or meal with one of these foods reports the nutrient as incomplete and na
 - `kimchi`: neither record says whether it holds fish sauce or salted shrimp, and most kimchi on sale holds one or both. So the food is tagged `non_veg`, and the catalogue gives it the fish and crustacean allergens: a wrong tag on the safe side only leaves kimchi out of a plan, while a missing one would let it into a vegetarian or fish-free one. A vegan kimchi would need its own row. The record also has 0 mg vitamin C.
 - `tofu`: firm tofu varies. 172448 has 9 g protein and 201 mg calcium per 100 g; the denser 172475 has 17 g and 683 mg. A pack that lists about 15 g protein is closer to 172475.
 - `whey_protein`: unflavoured. Flavoured powders add sugar or sweetener, and brands differ. The catalogue tags it soy as well as milk, because many whey powders add soy lecithin.
+- `greek_yogurt`: plain and low fat, as the record is. Brands sold in India differ in fat and protein, so a pack's label can differ from these values.
 - `mozzarella`: tagged veg on the assumption of a microbial or vegetable rennet.
 - `honey`: tagged veg, not vegan, because vegans usually leave honey out.
 - `peanut_butter`: salted, with the sugar commercial peanut butter carries (10.49 g sugars per 100 g against 4.72 g in raw peanuts).
