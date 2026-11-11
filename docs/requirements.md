@@ -1,6 +1,6 @@
 # Requirements
 
-Status: done for v1.0.0 except the hand review of the food matches (the food file box under Data, which is Varun's), 2026-11-10. Agreed at kickoff, 2026-10-21. The reasoning behind the project is in [case-study.md](case-study.md); the design is in [architecture.md](architecture.md).
+Status: done, v1.0.0, 2026-11-10. The food matches were reviewed again on 2026-11-11. Agreed at kickoff, 2026-10-21. The reasoning behind the project is in [case-study.md](case-study.md); the design is in [architecture.md](architecture.md).
 
 ## Problem
 
@@ -58,7 +58,7 @@ v1 is done when a person could rely on it: every MVP box below is ticked, it run
 
 ### Data
 
-- [ ] **This project's food file:** the ingredients the plans need that nutrition-mcp lacks (oats, most fruit, olive oil, seeds, whey, chicken, tofu and others), taken from USDA FoodData Central (public domain) in nutrition-mcp's custom-dataset format and loaded through `NUTRITION_MCP_DATA_DIRS`. Each row records its FoodData Central record. Every match is reviewed by hand. A food with no good match is left out; no value is invented.
+- [x] **This project's food file:** the ingredients the plans need that nutrition-mcp lacks (oats, most fruit, olive oil, seeds, whey, chicken, tofu and others), taken from USDA FoodData Central (public domain) in nutrition-mcp's custom-dataset format and loaded through `NUTRITION_MCP_DATA_DIRS`. Each row records its FoodData Central record. Every match is reviewed by hand. A food with no good match is left out; no value is invented.
 - [x] **Catalogue:** for every ingredient the writer may use, its id, display name, shop category, allergen groups, a typical pack size, how many days it keeps once opened, and grams per household measure (piece, tbsp, cup) from USDA portion data where nutrition-mcp has no measure for it, so "2 eggs" or "1 tbsp chia" can be turned into grams. No nutrition values live here. At startup every id is checked against nutrition-mcp, so a typo stops startup with the id named.
 - [x] **The user's data stays in their browser:** plan rules, the week's recipes and the meal log, with export and import as one JSON file. The log stores food ids and amounts; the server recomputes numbers from nutrition-mcp when it builds a summary. The server stores nothing about the user.
 
